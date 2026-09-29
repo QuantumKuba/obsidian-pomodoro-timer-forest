@@ -18,7 +18,8 @@ $: log = $gamificationStore.dailyLogs[selectedDateKey]
 $: trees = log?.trees || []
 $: grown = trees.filter((t) => t.status === 'mature').length
 $: withered = trees.length - grown
-$: sceneHtml = renderGrove(trees, $gamificationStore.activeBiome, { date: $clockMinute, idPrefix: sceneId, still: $settings.lowFps })
+$: skySlot = Math.floor($clockMinute.getTime() / 300_000)
+$: sceneHtml = renderGrove(trees, $gamificationStore.activeBiome, { date: new Date(skySlot * 300_000), idPrefix: sceneId, still: $settings.lowFps })
 $: focusTree = trees.find((t) => t.id === focusTreeId) || null
 
 // Last 4 weeks, oldest first, for the activity strip

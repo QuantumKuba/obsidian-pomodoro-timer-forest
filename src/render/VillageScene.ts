@@ -107,6 +107,11 @@ function hash(...n: (number | string)[]): number {
 
 const f = (n: number) => Math.round(n * 10) / 10
 
+/** Seconds since local midnight — shared phase origin for every animation. */
+function wallClock(): number {
+    return (Date.now() / 1000) % 86400
+}
+
 /** Nest a 0..64 sprite so its ground point (32,56) lands on (cx, cy). */
 function placeSprite(svg: string, cx: number, cy: number, scale: number, anchorY = 56, boxW = 64, boxH = boxW): string {
     const x = cx - (boxW / 2) * scale
@@ -161,7 +166,7 @@ function skyLayer(L: Layout, sky: Sky, pal: BiomePalette, id: string, date: Date
         for (let i = 0; i < 28; i++) {
             const sx = hash(id, 'star', i) * W
             const sy = hash(id, 'stary', i) * (top + 10)
-            out += `<circle class="pf-twinkle" style="animation-delay:${f(hash(i, 'd') * 3)}s" cx="${f(sx)}" cy="${f(sy)}" r="${f(0.5 + hash(i) * 0.9)}" fill="#fff"/>`
+            out += `<circle class="pf-twinkle" style="--d:-${f(hash(i, 'd') * 3)}s" cx="${f(sx)}" cy="${f(sy)}" r="${f(0.5 + hash(i) * 0.9)}" fill="#fff"/>`
         }
         const t = ((h + 24 - 20.5) % 24) / 8.5
         const mx = W * (0.15 + 0.7 * t)
@@ -182,7 +187,7 @@ function skyLayer(L: Layout, sky: Sky, pal: BiomePalette, id: string, date: Date
         const s = 0.7 + hash(i, 'cs') * 0.6
         const dur = 70 + hash(i, 'cd') * 60
         const op = sky.phase === 'night' ? 0.18 : 0.85
-        out += `<g class="pf-cloud" style="animation-duration:${f(dur)}s;animation-delay:-${f(hash(i, 'cdl') * dur)}s" opacity="${op}">
+        out += `<g class="pf-cloud" style="animation-duration:${f(dur)}s;--d:-${f(hash(i, 'cdl') * dur)}s" opacity="${op}">
             <g transform="translate(0 ${f(cy)}) scale(${f(s)})"><ellipse cx="0" cy="0" rx="20" ry="7" fill="#fff"/><ellipse cx="-9" cy="-4" rx="10" ry="7" fill="#fff"/><ellipse cx="7" cy="-6" rx="12" ry="9" fill="#fff"/></g></g>`
     }
 
@@ -225,7 +230,7 @@ function groundTile(kind: 'grass' | 'path' | 'water', cx: number, cy: number, pa
     if (kind === 'water') {
         return `<g><polygon points="${diamond(cx, cy)}" fill="#3f9fd8"/><polygon points="${diamond(cx, cy + 1.5, TW - 8, TH - 4)}" fill="#5bb8ea"/>
             <path class="pf-water" d="M${f(cx - 16)} ${f(cy - 2)} q6 -3 12 0 t12 0" stroke="#d6f2ff" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-            <path class="pf-water" style="animation-delay:-1.2s" d="M${f(cx - 4)} ${f(cy + 5)} q5 -2.5 10 0 t10 0" stroke="#d6f2ff" stroke-width="1.2" fill="none" stroke-linecap="round"/></g>`
+            <path class="pf-water" style="--d:-1.2s" d="M${f(cx - 4)} ${f(cy + 5)} q5 -2.5 10 0 t10 0" stroke="#d6f2ff" stroke-width="1.2" fill="none" stroke-linecap="round"/></g>`
     }
     if (kind === 'path') {
         let stones = ''
@@ -287,7 +292,10 @@ export function renderIsoScene(opts: SceneOptions): string {
     const occupied = new Set(opts.items.map((i) => `${i.x},${i.y}`))
     const ground = opts.ground || new Map()
 
-    let svg = `<svg class="pf-scene pf-${sky.phase} pf-mood-${mood}${opts.still ? ' pf-still' : ''} ${opts.className || ''}" viewBox="0 0 ${L.width} ${L.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">`
+    // Animation phases are anchored to the wall clock (--t), so a re-rendered scene
+    // continues exactly where the previous one was instead of restarting.
+    const clock = wallClock()
+    let svg = `<svg class="pf-scene pf-${sky.phase} pf-mood-${mood}${opts.still ? ' pf-still' : ''} ${opts.className || ''}" style="--t:-${f(clock)}s" viewBox="0 0 ${L.width} ${L.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">`
     if (opts.embedCss) svg += `<style>${SCENE_CSS}</style>`
     svg += opts.showSky === false ? `<defs><radialGradient id="${id}-glow"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".85"/><stop offset=".45" stop-color="#ffc56b" stop-opacity=".35"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient></defs>` : skyLayer(L, sky, pal, id, date)
     svg += islandBase(L, pal)
@@ -370,7 +378,7 @@ export function renderIsoScene(opts: SceneOptions): string {
         for (let i = 0; i < 4; i++) pts.push(walkable[Math.floor(hash(id, 'walk', v, i, date.getDate()) * walkable.length)])
         const d = `M${f(pts[0].cx)} ${f(pts[0].cy)} ` + pts.slice(1).map((p) => `L${f(p.cx)} ${f(p.cy)}`).join(' ') + ' Z'
         const dur = 26 + hash(v, 'dur') * 20
-        svg += `<g class="pf-villager"><animateMotion dur="${f(dur)}s" begin="-${f(hash(v, 'b') * dur)}s" repeatCount="indefinite" path="${d}"/>
+        svg += `<g class="pf-villager"><animateMotion dur="${f(dur)}s" begin="-${f((wallClock() + hash(v, 'b') * dur) % dur)}s" repeatCount="indefinite" path="${d}"/>
             ${placeSprite(VILLAGER_SVGS[v % VILLAGER_SVGS.length], 0, 0, 0.8, 23, 16, 24)}</g>`
     }
 
@@ -385,13 +393,13 @@ export function renderIsoScene(opts: SceneOptions): string {
         const n = mood === 'thriving' ? 14 : 7
         for (let i = 0; i < n; i++) {
             const p = walkable.length ? walkable[Math.floor(hash(id, 'ff', i) * walkable.length)] : L.tile(0, 0)
-            svg += `<circle class="pf-firefly" style="animation-delay:-${f(hash(i, 'ffd') * 6)}s" cx="${f(p.cx + (hash(i, 'fx') - 0.5) * 30)}" cy="${f(p.cy - 10 - hash(i, 'fy') * 20)}" r="1.3" fill="#fff59d"/>`
+            svg += `<circle class="pf-firefly" style="--d:-${f(hash(i, 'ffd') * 6)}s" cx="${f(p.cx + (hash(i, 'fx') - 0.5) * 30)}" cy="${f(p.cy - 10 - hash(i, 'fy') * 20)}" r="1.3" fill="#fff59d"/>`
         }
     } else if (sky.phase === 'day' && mood === 'thriving') {
         for (let i = 0; i < 4; i++) {
             const p = walkable.length ? walkable[Math.floor(hash(id, 'bf', i) * walkable.length)] : L.tile(0, 0)
             const color = ['#ffd54f', '#f48fb1', '#b39ddb', '#ffffff'][i]
-            svg += `<g class="pf-butterfly" style="animation-delay:-${f(hash(i, 'bfd') * 8)}s"><g transform="translate(${f(p.cx)} ${f(p.cy - 16)})">
+            svg += `<g class="pf-butterfly" style="--d:-${f(hash(i, 'bfd') * 8)}s"><g transform="translate(${f(p.cx)} ${f(p.cy - 16)})">
                 <ellipse class="pf-wing" cx="-2" cy="0" rx="2.2" ry="1.6" fill="${color}"/><ellipse class="pf-wing" cx="2" cy="0" rx="2.2" ry="1.6" fill="${color}"/></g></g>`
         }
     }
@@ -499,7 +507,7 @@ export function renderGrove(
 
 export const SCENE_CSS = `
 .pf-scene{display:block;width:100%;height:auto;user-select:none}
-.pf-scene .pf-sway{transform-box:view-box;animation:pf-sway 5.5s ease-in-out infinite alternate;animation-delay:var(--d,0s)}
+.pf-scene .pf-sway{transform-box:view-box;animation:pf-sway 5.5s ease-in-out infinite alternate}
 .pf-scene .pf-sails,.pf-scene .pf-wheel{transform-box:view-box;animation:pf-spin 9s linear infinite}
 .pf-scene .pf-wheel{animation-duration:6s}
 .pf-scene .pf-smoke{transform-box:fill-box;transform-origin:center;animation:pf-smoke 3s ease-out infinite}
@@ -512,6 +520,7 @@ export const SCENE_CSS = `
 .pf-scene .pf-butterfly{animation:pf-flutter-path 9s ease-in-out infinite;pointer-events:none}
 .pf-scene .pf-wing{transform-box:fill-box;transform-origin:center;animation:pf-flap .25s ease-in-out infinite alternate}
 .pf-scene .pf-mist{animation:pf-mist 12s ease-in-out infinite alternate;pointer-events:none}
+.pf-scene .pf-sway,.pf-scene .pf-sails,.pf-scene .pf-wheel,.pf-scene .pf-water,.pf-scene .pf-twinkle,.pf-scene .pf-cloud,.pf-scene .pf-halo,.pf-scene .pf-firefly,.pf-scene .pf-butterfly,.pf-scene .pf-mist{animation-delay:calc(var(--t,0s) + var(--d,0s))}
 .pf-scene .pf-villager,.pf-scene .pf-shade,.pf-scene .pf-lights,.pf-scene .pf-ground{pointer-events:none}
 .pf-scene .pf-stars{font-size:6px;fill:#ffd54f;stroke:#5d4037;stroke-width:.4;paint-order:stroke;pointer-events:none}
 .pf-scene.pf-mood-dormant .pf-smoke,.pf-scene.pf-mood-sleepy .pf-smoke{display:none}

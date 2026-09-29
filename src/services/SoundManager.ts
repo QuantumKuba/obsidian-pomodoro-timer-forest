@@ -140,133 +140,301 @@ export default class SoundManager {
     /**
      * Start procedural ambient soundscape during focus.
      */
+    /**
+     * Start a looping procedural soundscape. Each one is a continuous noise bed
+     * plus randomly scheduled events (drops, bubbles, gusts, birds), which is
+     * what makes it read as rain or water rather than a flat hiss.
+     */
     public startAmbient(type: AmbientSoundType, volume = 0.3): void {
-        if (type === 'none') {
-            this.stopAmbient()
-            return
-        }
-
         this.stopAmbient()
+        if (type === 'none') return
         const ctx = this.getContext()
         if (!ctx) return
 
         this.currentAmbient = type
-        this.ambientGainNode = ctx.createGain()
-        this.ambientGainNode.gain.setValueAtTime(volume * 0.5, ctx.currentTime)
-        this.ambientGainNode.connect(ctx.destination)
+        const master = ctx.createGain()
+        // Fade in so starting a session never "pops"
+        master.gain.setValueAtTime(0, ctx.currentTime)
+        master.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, volume)) * 1.6, ctx.currentTime + 1.5)
+        const limiter = ctx.createDynamicsCompressor()
+        limiter.threshold.value = -12
+        limiter.ratio.value = 6
+        master.connect(limiter)
+        limiter.connect(ctx.destination)
+        this.ambientGainNode = master
+        this.ambientSources.push(limiter)
 
-        if (type === 'rain') {
-            this.generateRainAmbient(ctx, this.ambientGainNode)
-        } else if (type === 'forest_stream') {
-            this.generateStreamAmbient(ctx, this.ambientGainNode)
-        } else if (type === 'breeze') {
-            this.generateBreezeAmbient(ctx, this.ambientGainNode)
-        }
+        if (type === 'rain') this.buildRain(ctx, master)
+        else if (type === 'forest_stream') this.buildStream(ctx, master)
+        else if (type === 'breeze') this.buildBreeze(ctx, master)
+    }
+
+    /** Play a few seconds of a soundscape so it can be heard while choosing it. */
+    public previewAmbient(type: AmbientSoundType, volume = 0.3, seconds = 5): void {
+        this.startAmbient(type, volume)
+        const ctx = this.audioCtx
+        const master = this.ambientGainNode
+        if (!ctx || !master || type === 'none') return
+        const t = ctx.currentTime + seconds
+        master.gain.setValueAtTime(master.gain.value, t - 1.2)
+        master.gain.linearRampToValueAtTime(0, t)
+        this.previewTimer = window.setTimeout(() => {
+            if (this.ambientGainNode === master) this.stopAmbient()
+        }, seconds * 1000 + 100)
+    }
+
+    public get isAmbientPlaying(): boolean {
+        return this.currentAmbient !== 'none'
     }
 
     public stopAmbient(): void {
-        if (this.ambientSources.length > 0) {
-            this.ambientSources.forEach((node) => {
+        if (this.previewTimer) {
+            window.clearTimeout(this.previewTimer)
+            this.previewTimer = null
+        }
+        if (this.schedulerTimer) {
+            window.clearInterval(this.schedulerTimer)
+            this.schedulerTimer = null
+        }
+        const ctx = this.audioCtx
+        const master = this.ambientGainNode
+        const sources = this.ambientSources
+        this.ambientSources = []
+        this.ambientGainNode = null
+        this.currentAmbient = 'none'
+
+        // Short fade-out, then tear the graph down
+        if (ctx && master) {
+            master.gain.cancelScheduledValues(ctx.currentTime)
+            master.gain.setValueAtTime(master.gain.value, ctx.currentTime)
+            master.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4)
+        }
+        window.setTimeout(() => {
+            for (const node of [...sources, ...(master ? [master] : [])]) {
                 try {
                     ;(node as any).stop?.()
                     node.disconnect()
                 } catch {
-                    // Ignore disconnect errors
+                    // Already stopped
                 }
-            })
-            this.ambientSources = []
-        }
-        if (this.ambientGainNode) {
-            try {
-                this.ambientGainNode.disconnect()
-            } catch {
-                // Ignore
             }
-            this.ambientGainNode = null
-        }
-        this.currentAmbient = 'none'
+        }, 450)
     }
 
-    private generateRainAmbient(ctx: AudioContext, destination: AudioNode): void {
-        // Pink noise with bandpass filter
-        const bufferSize = ctx.sampleRate * 2
-        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-        const output = noiseBuffer.getChannelData(0)
-        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0
+    // -- building blocks -----------------------------------------------------
 
-        for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1
-            b0 = 0.99886 * b0 + white * 0.0555179
-            b1 = 0.99332 * b1 + white * 0.0750759
-            b2 = 0.96900 * b2 + white * 0.1538520
-            b3 = 0.86650 * b3 + white * 0.3104856
-            b4 = 0.55000 * b4 + white * 0.5329522
-            b5 = -0.7616 * b5 - white * 0.0168980
-            output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.08
-            b6 = white * 0.115926
+    private previewTimer: number | null = null
+    private schedulerTimer: number | null = null
+    private noiseBuffers: { white?: AudioBuffer; brown?: AudioBuffer } = {}
+
+    private noise(ctx: AudioContext, kind: 'white' | 'brown'): AudioBufferSourceNode {
+        let buffer = this.noiseBuffers[kind]
+        if (!buffer || buffer.sampleRate !== ctx.sampleRate) {
+            const length = ctx.sampleRate * 4
+            buffer = ctx.createBuffer(1, length, ctx.sampleRate)
+            const data = buffer.getChannelData(0)
+            let last = 0
+            for (let i = 0; i < length; i++) {
+                const white = Math.random() * 2 - 1
+                if (kind === 'white') {
+                    data[i] = white
+                } else {
+                    last = (last + 0.02 * white) / 1.02
+                    data[i] = last * 3.5
+                }
+            }
+            this.noiseBuffers[kind] = buffer
         }
-
-        const whiteNoise = ctx.createBufferSource()
-        whiteNoise.buffer = noiseBuffer
-        whiteNoise.loop = true
-
-        const filter = ctx.createBiquadFilter()
-        filter.type = 'lowpass'
-        filter.frequency.setValueAtTime(1000, ctx.currentTime)
-
-        whiteNoise.connect(filter)
-        filter.connect(destination)
-        whiteNoise.start()
-
-        this.ambientSources.push(whiteNoise, filter)
+        const src = ctx.createBufferSource()
+        src.buffer = buffer
+        src.loop = true
+        // Start at a random offset so layers built from the same buffer don't phase
+        src.start(0, Math.random() * 3.5)
+        this.ambientSources.push(src)
+        return src
     }
 
-    private generateStreamAmbient(ctx: AudioContext, destination: AudioNode): void {
-        const bufferSize = ctx.sampleRate * 2
-        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-        const output = noiseBuffer.getChannelData(0)
-
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = (Math.random() * 2 - 1) * 0.1
-        }
-
-        const noise = ctx.createBufferSource()
-        noise.buffer = noiseBuffer
-        noise.loop = true
-
-        const filter = ctx.createBiquadFilter()
-        filter.type = 'bandpass'
-        filter.frequency.setValueAtTime(650, ctx.currentTime)
-        filter.Q.setValueAtTime(2.5, ctx.currentTime)
-
-        noise.connect(filter)
-        filter.connect(destination)
-        noise.start()
-
-        this.ambientSources.push(noise, filter)
+    private filter(ctx: AudioContext, type: BiquadFilterType, freq: number, q = 0.7): BiquadFilterNode {
+        const f = ctx.createBiquadFilter()
+        f.type = type
+        f.frequency.value = freq
+        f.Q.value = q
+        this.ambientSources.push(f)
+        return f
     }
 
-    private generateBreezeAmbient(ctx: AudioContext, destination: AudioNode): void {
-        const bufferSize = ctx.sampleRate * 2
-        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-        const output = noiseBuffer.getChannelData(0)
+    private gain(ctx: AudioContext, value: number): GainNode {
+        const g = ctx.createGain()
+        g.gain.value = value
+        this.ambientSources.push(g)
+        return g
+    }
 
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = (Math.random() * 2 - 1) * 0.08
+    /** Slow sine modulation of an AudioParam (e.g. gusts, swelling water). */
+    private lfo(ctx: AudioContext, param: AudioParam, rate: number, depth: number): void {
+        const osc = ctx.createOscillator()
+        osc.frequency.value = rate
+        const amt = this.gain(ctx, depth)
+        osc.connect(amt)
+        amt.connect(param)
+        osc.start()
+        this.ambientSources.push(osc)
+    }
+
+    /** Runs `schedule(from, to)` every 100ms with a small look-ahead window. */
+    private runScheduler(ctx: AudioContext, schedule: (from: number, to: number) => void): void {
+        let cursor = ctx.currentTime + 0.05
+        const tick = () => {
+            const until = ctx.currentTime + 0.3
+            if (until > cursor) {
+                schedule(cursor, until)
+                cursor = until
+            }
+        }
+        tick()
+        this.schedulerTimer = window.setInterval(tick, 100)
+    }
+
+    /** Poisson-distributed event times at `perSecond` between from and to. */
+    private eventTimes(from: number, to: number, perSecond: number): number[] {
+        const times: number[] = []
+        let t = from
+        while (true) {
+            t += -Math.log(1 - Math.random()) / perSecond
+            if (t >= to) return times
+            times.push(t)
+        }
+    }
+
+    private oneShotNoise(ctx: AudioContext, out: AudioNode, at: number, dur: number, type: BiquadFilterType, freq: number, q: number, level: number): void {
+        const src = ctx.createBufferSource()
+        src.buffer = this.noiseBuffers.white!
+        const f = ctx.createBiquadFilter()
+        f.type = type
+        f.frequency.value = freq
+        f.Q.value = q
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0, at)
+        g.gain.linearRampToValueAtTime(level, at + 0.002)
+        g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
+        src.connect(f)
+        f.connect(g)
+        g.connect(out)
+        src.start(at, Math.random() * 3)
+        src.stop(at + dur + 0.02)
+    }
+
+    private chirp(ctx: AudioContext, out: AudioNode, at: number, f0: number, f1: number, dur: number, level: number): void {
+        const osc = ctx.createOscillator()
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(f0, at)
+        osc.frequency.exponentialRampToValueAtTime(f1, at + dur)
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0, at)
+        g.gain.linearRampToValueAtTime(level, at + Math.min(0.01, dur / 4))
+        g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
+        osc.connect(g)
+        g.connect(out)
+        osc.start(at)
+        osc.stop(at + dur + 0.02)
+    }
+
+    // -- soundscapes -----------------------------------------------------------
+
+    /** Steady hiss of distant rain + a soft low rumble + individual drops close by. */
+    private buildRain(ctx: AudioContext, out: AudioNode): void {
+        const hiss = this.noise(ctx, 'white')
+        const hp = this.filter(ctx, 'highpass', 500)
+        const lp = this.filter(ctx, 'lowpass', 7000)
+        const hissGain = this.gain(ctx, 0.12)
+        hiss.connect(hp).connect(lp).connect(hissGain).connect(out)
+        this.lfo(ctx, hissGain.gain, 0.07, 0.035) // intensity slowly ebbs
+
+        const rumble = this.noise(ctx, 'brown')
+        const rumbleLp = this.filter(ctx, 'lowpass', 180)
+        rumble.connect(rumbleLp).connect(this.gain(ctx, 0.12)).connect(out)
+
+        const drops = this.gain(ctx, 1)
+        drops.connect(out)
+        this.runScheduler(ctx, (from, to) => {
+            // Many tiny ticks on leaves/roofs…
+            for (const t of this.eventTimes(from, to, 45)) {
+                this.oneShotNoise(ctx, drops, t, 0.015 + Math.random() * 0.02, 'bandpass', 2500 + Math.random() * 4500, 3, 0.09 + Math.random() * 0.12)
+            }
+            // …and occasional fat drops with a little pitched "plip"
+            for (const t of this.eventTimes(from, to, 2.5)) {
+                this.oneShotNoise(ctx, drops, t, 0.05, 'bandpass', 900 + Math.random() * 900, 4, 0.2)
+                if (Math.random() < 0.4) this.chirp(ctx, drops, t, 1400 + Math.random() * 1200, 2600 + Math.random() * 800, 0.04, 0.025)
+            }
+        })
+    }
+
+    /** Burbling water: noise through wandering resonant filters, plus bubbles and the odd bird. */
+    private buildStream(ctx: AudioContext, out: AudioNode): void {
+        const bedSrc = this.noise(ctx, 'brown')
+        const bed = this.filter(ctx, 'lowpass', 900)
+        bedSrc.connect(bed).connect(this.gain(ctx, 0.35)).connect(out)
+
+        const burbleSrc = this.noise(ctx, 'white')
+        const bands: BiquadFilterNode[] = []
+        for (let i = 0; i < 3; i++) {
+            const bp = this.filter(ctx, 'bandpass', 500 + i * 450, 8)
+            const g = this.gain(ctx, 0.35)
+            burbleSrc.connect(bp).connect(g).connect(out)
+            this.lfo(ctx, g.gain, 0.15 + i * 0.07, 0.15)
+            bands.push(bp)
         }
 
-        const noise = ctx.createBufferSource()
-        noise.buffer = noiseBuffer
-        noise.loop = true
+        const fx = this.gain(ctx, 1)
+        fx.connect(out)
+        this.runScheduler(ctx, (from, to) => {
+            // Water "babble": the resonances jump around several times a second
+            for (const t of this.eventTimes(from, to, 9)) {
+                const bp = bands[Math.floor(Math.random() * bands.length)]
+                bp.frequency.setTargetAtTime(350 + Math.random() * 1500, t, 0.03)
+            }
+            // Bubbles: short upward sine sweeps
+            for (const t of this.eventTimes(from, to, 6)) {
+                const f0 = 300 + Math.random() * 500
+                this.chirp(ctx, fx, t, f0, f0 * (1.8 + Math.random()), 0.03 + Math.random() * 0.04, 0.03 + Math.random() * 0.04)
+            }
+            for (const t of this.eventTimes(from, to, 0.12)) this.bird(ctx, fx, t)
+        })
+    }
 
-        const filter = ctx.createBiquadFilter()
-        filter.type = 'lowpass'
-        filter.frequency.setValueAtTime(450, ctx.currentTime)
+    /** Wind through trees: gusting band of noise, rustling leaves, occasional birdsong. */
+    private buildBreeze(ctx: AudioContext, out: AudioNode): void {
+        const windSrc = this.noise(ctx, 'brown')
+        const band = this.filter(ctx, 'bandpass', 400, 0.8)
+        const windGain = this.gain(ctx, 0.5)
+        windSrc.connect(band).connect(windGain).connect(out)
+        this.lfo(ctx, band.frequency, 0.05, 180) // pitch of the wind wanders
+        this.lfo(ctx, windGain.gain, 0.09, 0.3) // gusts swell and fade
 
-        noise.connect(filter)
-        filter.connect(destination)
-        noise.start()
+        const leavesSrc = this.noise(ctx, 'white')
+        const leavesHp = this.filter(ctx, 'highpass', 3000)
+        const leavesGain = this.gain(ctx, 0.012)
+        leavesSrc.connect(leavesHp).connect(leavesGain).connect(out)
+        this.lfo(ctx, leavesGain.gain, 0.09, 0.01)
 
-        this.ambientSources.push(noise, filter)
+        const fx = this.gain(ctx, 1)
+        fx.connect(out)
+        this.runScheduler(ctx, (from, to) => {
+            for (const t of this.eventTimes(from, to, 1.2)) {
+                this.oneShotNoise(ctx, fx, t, 0.25 + Math.random() * 0.4, 'highpass', 2500 + Math.random() * 2000, 0.7, 0.03)
+            }
+            for (const t of this.eventTimes(from, to, 0.18)) this.bird(ctx, fx, t)
+        })
+    }
+
+    /** A short, soft two- to four-note bird call. */
+    private bird(ctx: AudioContext, out: AudioNode, at: number): void {
+        const base = 2200 + Math.random() * 1600
+        const notes = 2 + Math.floor(Math.random() * 3)
+        for (let i = 0; i < notes; i++) {
+            const t = at + i * (0.09 + Math.random() * 0.05)
+            const f0 = base * (0.9 + Math.random() * 0.25)
+            this.chirp(ctx, out, t, f0, f0 * (Math.random() < 0.5 ? 1.3 : 0.75), 0.07, 0.018)
+        }
     }
 }

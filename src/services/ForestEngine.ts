@@ -764,10 +764,10 @@ export default class ForestEngine {
             g.ambientSound = sound
             g.ambientVolume = volume
         })
-        if (get(this.activePlantStore)) {
-            if (sound === 'none') this.soundManager.stopAmbient()
-            else this.soundManager.startAmbient(sound, volume)
-        }
+        if (sound === 'none') this.soundManager.stopAmbient()
+        else if (get(this.activePlantStore)) this.soundManager.startAmbient(sound, volume)
+        // Not focusing yet: play a short sample so the choice can be heard
+        else this.soundManager.previewAmbient(sound, volume)
     }
 
     // -----------------------------------------------------------------------

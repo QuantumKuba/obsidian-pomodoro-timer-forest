@@ -1,5 +1,5 @@
 <script lang="ts">
-import { createEventDispatcher, onDestroy, onMount } from 'svelte'
+import { afterUpdate, createEventDispatcher, onDestroy, onMount } from 'svelte'
 import { gamificationStore, pluginInstance, clockMinute, settings, charm, vitality, levelInfo } from '../stores'
 import { renderVillage, homesteadItemSprite } from '../render/VillageScene'
 import { SPECIES_SVGS, BUILDING_SVGS, BIOME_CONFIGS } from '../assets/floraAssets'
@@ -19,14 +19,28 @@ let movingId: string | null = null
 
 $: g = $gamificationStore
 $: selected = g.homestead.find((i) => i.id === selectedId) || null
-$: selectedTile = selected ? { x: selected.gridX, y: selected.gridY } : null
+// The sky only needs to move every few minutes; re-rendering less keeps things calm
+$: skySlot = Math.floor($clockMinute.getTime() / 300_000)
+// Selection/placement highlights are NOT part of the scene markup: changing them
+// must not rebuild the SVG (that would restart every animation). See afterUpdate.
 $: sceneHtml = renderVillage(g, {
     interactive: true,
-    selected: selectedTile,
-    highlightEmpty: !!placingKey || !!movingId,
-    date: $clockMinute,
+    date: new Date(skySlot * 300_000),
     still: $settings.lowFps,
     idPrefix: sceneId,
+})
+
+let frame: HTMLElement
+afterUpdate(() => {
+    if (!frame) return
+    const occupied = new Set(g.homestead.map((i) => `${i.gridX},${i.gridY}`))
+    const targeting = !!placingKey || !!movingId
+    frame.querySelectorAll<SVGElement>('.pf-hit').forEach((tile) => {
+        const x = Number(tile.dataset.x)
+        const y = Number(tile.dataset.y)
+        tile.classList.toggle('pf-selected', !!selected && selected.gridX === x && selected.gridY === y)
+        tile.classList.toggle('pf-target', targeting && !occupied.has(`${x},${y}`))
+    })
 })
 
 $: inventory = Object.entries(g.inventory)
@@ -137,7 +151,7 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
 
     <div class="layout">
         <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-        <div class="scene-frame" class:placing={placingKey || movingId} on:click={onSceneClick}>
+        <div class="scene-frame" bind:this={frame} class:placing={placingKey || movingId} on:click={onSceneClick}>
             {@html sceneHtml}
             {#if placingKey || movingId}
                 <div class="mode-banner">
