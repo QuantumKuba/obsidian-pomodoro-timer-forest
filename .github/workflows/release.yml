@@ -1,8 +1,10 @@
 name: Release
 
-# Push a tag that matches the version in manifest.json (e.g. `git tag 1.0.1 && git push origin 1.0.1`)
-# and this workflow builds the plugin, attests the assets and publishes the GitHub release.
-# It can also be run by hand against an existing tag (Actions tab, or `gh workflow run release.yml --ref 1.0.1`).
+# To release: bump the version (`npm version <x.y.z> --no-git-tag-version`), commit, then
+#   git tag <x.y.z> && git push origin <x.y.z>
+#   gh workflow run release.yml --ref <x.y.z>      # if the tag push didn't start the workflow by itself
+# The workflow builds the plugin from the lockfile, attests main.js, manifest.json and
+# styles.css, and publishes the GitHub release. Its tag must equal the manifest version.
 on:
   push:
     tags:
