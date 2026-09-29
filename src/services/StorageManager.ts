@@ -190,7 +190,6 @@ export default class StorageManager {
         }
 
         // Case 2: Legacy format (settings only or old stores attempt)
-        console.log('[PomodoroForest] Migrating legacy plugin data format...')
         const migrated: PluginData = { version: CURRENT_DATA_VERSION, settings: { ...PomodoroSettings.DEFAULT_SETTINGS }, gamification: freshGamificationData() }
 
         // Check if raw contains settings keys

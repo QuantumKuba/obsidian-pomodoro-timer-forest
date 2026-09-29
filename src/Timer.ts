@@ -248,37 +248,44 @@ export default class Timer implements Readable<TimerStore> {
         return state
     }
 
+    private openLog(logFile: TFile | void) {
+        if (logFile) {
+            this.plugin.app.workspace.getLeaf('split').openFile(logFile)
+        }
+    }
+
     private notify(state: TimerState, logFile: TFile | void) {
         const emoji = state.mode == 'WORK' ? '🍅' : '🥤'
         const text = `${emoji} You have been ${
             state.mode === 'WORK' ? 'working' : 'breaking'
         } for ${state.duration} minutes.`
 
-        if (this.plugin.getSettings().useSystemNotification) {
-            const Notification = (require('electron') as any).remote
-                .Notification
-            const sysNotification = new Notification({
-                title: 'Pomodoro Timer',
-                body: text,
-                silent: true,
-            })
-            sysNotification.on('click', () => {
-                if (logFile) {
-                    this.plugin.app.workspace.getLeaf('split').openFile(logFile)
-                }
-                sysNotification.close()
-            })
-            sysNotification.show()
-        } else {
-            let fragment = new DocumentFragment()
-            let span = fragment.createEl('span')
+        const inApp = () => {
+            const fragment = new DocumentFragment()
+            const span = fragment.createEl('span')
             span.setText(`${text}`)
-            fragment.addEventListener('click', () => {
-                if (logFile) {
-                    this.plugin.app.workspace.getLeaf('split').openFile(logFile)
-                }
-            })
+            fragment.addEventListener('click', () => this.openLog(logFile))
             new Notice(fragment)
+        }
+
+        if (this.plugin.getSettings().useSystemNotification && typeof window.Notification !== 'undefined') {
+            // Standard Web Notification API (no Electron), falling back to an in-app notice
+            const show = () => {
+                const n = new window.Notification('Pomodoro Timer', { body: text, silent: true })
+                n.onclick = () => {
+                    this.openLog(logFile)
+                    n.close()
+                }
+            }
+            if (window.Notification.permission === 'granted') {
+                show()
+            } else if (window.Notification.permission === 'denied') {
+                inApp()
+            } else {
+                window.Notification.requestPermission().then((p) => (p === 'granted' ? show() : inApp()))
+            }
+        } else {
+            inApp()
         }
 
         if (this.plugin.getSettings().notificationSound) {
