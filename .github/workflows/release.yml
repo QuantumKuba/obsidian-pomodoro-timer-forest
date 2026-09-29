@@ -2,10 +2,12 @@ name: Release
 
 # Push a tag that matches the version in manifest.json (e.g. `git tag 1.0.1 && git push origin 1.0.1`)
 # and this workflow builds the plugin, attests the assets and publishes the GitHub release.
+# It can also be run by hand against an existing tag (Actions tab, or `gh workflow run release.yml --ref 1.0.1`).
 on:
   push:
     tags:
       - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
 
 permissions:
   contents: write # create the release
@@ -26,6 +28,10 @@ jobs:
 
       - name: Check the tag matches manifest.json
         run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "Run this workflow against a version tag, not $GITHUB_REF" >&2
+            exit 1
+          fi
           manifest_version="$(node -p "require('./manifest.json').version")"
           if [ "$manifest_version" != "$GITHUB_REF_NAME" ]; then
             echo "Tag $GITHUB_REF_NAME does not match manifest.json version $manifest_version" >&2
