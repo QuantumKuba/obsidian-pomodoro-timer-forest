@@ -1,12 +1,116 @@
-<h1 align="center">Pomodoro Timer for Obsidian</h1>
+<p align="center">
+  <img src="docs/images/hero.png" alt="Pomodoro Timer Forest: every focus session grows a tree, every tree builds your village" width="100%">
+</p>
 
-![image](https://github.com/eatgrass/obsidian-pomodoro-timer/assets/2351076/f2f4f339-ba66-423f-b6a5-79fe91e13ef0)
+<p align="center">
+  <b>Turn your focus sessions into a living village, right inside Obsidian.</b><br>
+  Grow a tree with every pomodoro. Turn your trees, tasks and streaks into a village you actually want to come back to.
+</p>
 
-## Introduction
+<p align="center">
+  <a href="docs/GUIDE.md">User guide</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#classic-timer-features">Timer &amp; task docs</a> ·
+  <a href="FOREST_SPEC.md">Technical spec</a>
+</p>
 
-This plugin integrates a customizable Pomodoro timer into your Obsidian workspace, helping you focus and manage your time effectively.
+---
 
-## Features
+## Why you'll keep opening it
+
+Pomodoro timers are easy to ignore. **Pomodoro Timer Forest** gives your focus something to grow into.
+
+| 🌱 Focus feels alive | 🏡 Progress you can see | 🔥 A reason to come back |
+|---|---|---|
+| The plant in your timer grows in real time, from seed to full tree. | Every session, task and streak day builds a village that reacts to how you're doing. | Daily quests, a streak, perks that grow, new things to unlock at every level. |
+
+It's designed to motivate, **not to nag**. Missed days make the village sleepy, never broken. Rest is rewarded. Nothing you've built is ever taken away.
+
+## Watch your tree grow
+
+Start a session and a seed is planted inside the timer. As the minutes pass it sprouts, becomes a sapling and grows into a tree, while the ring fills up around it. Finish and you harvest it. Give up early and it withers.
+
+<p align="center">
+  <img src="docs/images/growth.png" alt="Five species growing through four stages" width="80%">
+</p>
+
+## Build a village you're proud of
+
+Every finished tree becomes a sapling you can plant. Spend what you earn on buildings that give **real perks**: a Cozy Cabin for more Sunlight, a Village Well for more Coins, a Watermill that protects your streak while you rest. Lay paths, dig a brook, put a bridge over it, and expand your island from 5×5 up to 8×8.
+
+<p align="center">
+  <img src="docs/images/homestead-full.png" alt="The full-page Homestead Village view with an upgradeable Cozy Cabin selected" width="90%">
+</p>
+
+Open it as a full-page tab, or keep a compact version in the sidebar under the timer.
+
+## A village that lives on your clock
+
+The sky follows your real time of day. Windows glow at dusk, fireflies come out at night, sails turn, chimneys smoke and villagers wander between the trees. When you've been away the village gets a little sleepier, and one session wakes it back up.
+
+<p align="center">
+  <img src="docs/images/day-cycle.png" alt="The same village at dawn, day, dusk and night" width="90%">
+</p>
+
+## Five biomes, eleven species, thirteen buildings
+
+Unlock new species as you level up: from a humble Classic Pine to a glowing Celestial Gold Tree. Give your village a new mood with five biomes.
+
+<p align="center">
+  <img src="docs/images/collection.png" alt="All flora species and buildings with their unlock levels and perks" width="90%">
+</p>
+
+<p align="center">
+  <img src="docs/images/biomes.png" alt="Emerald Meadow, Sakura Grove, Autumn Valley, Alpine Frost and Twilight Sanctuary" width="90%">
+</p>
+
+## Everything in the sidebar
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="25%"><img src="docs/images/panel-sidebar.png" alt="Timer with a growing cherry blossom and the village below"><br><sub><b>Focus &amp; village</b><br>A growing plant inside the timer, your goal for the day, and the village right beneath it.</sub></td>
+    <td align="center" valign="top" width="25%"><img src="docs/images/panel-reward.png" alt="Reward card after a finished session"><br><sub><b>Harvest</b><br>Every bonus is itemised, so you see exactly what you earned.</sub></td>
+    <td align="center" valign="top" width="25%"><img src="docs/images/panel-market.png" alt="Market with buildings, prices and perks"><br><sub><b>Market</b><br>Buildings with perks that grow when you upgrade them.</sub></td>
+    <td align="center" valign="top" width="25%"><img src="docs/images/panel-journey.png" alt="Daily quests, achievements and lifetime stats" ><br><sub><b>Journey</b><br>Daily quests, a chest, 18 achievements and your lifetime stats.</sub></td>
+  </tr>
+</table>
+
+## Made for how you actually work in Obsidian
+
+- ✅ **Tick a task, earn a reward.** Check off a `- [ ]` task anywhere in your vault and it earns Coins and XP. Only real ticks count: pasting in already-checked tasks or toggling one back and forth earns nothing, and there's a daily cap.
+- 🏷️ **Smart seeds.** `#write` plants a Cherry Blossom, `#code` a Pine, `#study` an Oak. Your notes and tasks choose the tree.
+- 🍅 **Task tracking, built in.** Focus on a task and its actual-pomodoros count updates automatically (enable it in settings).
+- 📓 **Daily-note logging.** Every tree can add a Dataview-friendly line to your daily note.
+- 🌲 **The Grove journal.** Browse any past day as a small island of the trees you grew, with a four-week activity map.
+- 📯 **Daily quests & a chest.** Three fresh quests every morning, such as *Take a proper break* or *Check off 3 tasks*. Finish them all for a chest.
+- 🎧 **Ambient soundscapes.** Rain, a forest stream or a breeze while you focus, all synthesized with no audio files.
+- 🔒 **Local and private.** Everything is stored in your vault. No accounts, no network requests.
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%"><img src="docs/images/panel-grove.png" alt="The Grove journal showing today's trees" width="90%"><br><sub><b>The Grove</b>: today's trees and a four-week activity map.</sub></td>
+    <td align="center" valign="top" width="50%"><img src="docs/images/panel-levelup.png" alt="Level-up celebration card" width="90%"><br><sub><b>Level up</b>: new species, buildings, biomes and land.</sub></td>
+  </tr>
+</table>
+
+## Share your village
+
+One click exports a **self-contained, animated HTML snapshot** of your village that opens in any browser, or a JSON summary for building your own dashboard.
+
+## Quick start
+
+1. **Install.** Copy `main.js`, `manifest.json` and `styles.css` into `<your vault>/.obsidian/plugins/pomodoro-timer-forest/` and enable the plugin under *Settings → Community plugins*. To build them yourself: `npm install && npm run build`.
+2. **Open it.** Click the timer icon in the ribbon (or run *Open Pomodoro Forest*). For the full-page village, click the trees icon or run *Open Homestead Village (Full View)*.
+3. **Press play.** Your first tree (Classic Pine) is free, and you start with a couple of saplings to plant.
+4. **Plant, build, level up.** See the [user guide](docs/GUIDE.md) for how rewards, quests, perks and streaks work.
+
+<sub>The images above are rendered by the plugin's own components and renderer using a sample level-14 village.</sub>
+
+---
+
+# Classic timer features
+
+The game layer sits on top of a full-featured Pomodoro timer for Obsidian:
 
 -   **Customizable Timer**: Set your work and break intervals to suit your productivity style.
 -   **Audible Alerts**: Stay on track with audio notifications signaling the end of each session.
@@ -198,4 +302,22 @@ You can adjust the break interval setting to `0`, this will turn off `Break` ses
 
 ---
 
-[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="BuyMeACoffee" width="150">](https://www.buymeacoffee.com/eatgrass)
+## Development
+
+```bash
+npm install
+npm run dev     # watch build
+npm run build   # type-check and production bundle
+```
+
+The README screenshots are regenerated from the plugin's real components and renderer (needs Google Chrome):
+
+```bash
+node scripts/readme-images/build.mjs
+```
+
+## Credits
+
+Built on [**Pomodoro Timer for Obsidian**](https://github.com/eatgrass/obsidian-pomodoro-timer) by eatgrass (MIT). The timer, task tracking and logging come from that project. The Forest & Homestead game layer is added on top.
+
+[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="BuyMeACoffee" width="150">](https://www.buymeacoffee.com/eatgrass) <sub>Support the original timer's author.</sub>
