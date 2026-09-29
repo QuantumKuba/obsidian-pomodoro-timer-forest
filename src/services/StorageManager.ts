@@ -82,7 +82,18 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
 }
 
 export function freshGamificationData(): GamificationData {
-    return JSON.parse(JSON.stringify(DEFAULT_GAMIFICATION_DATA))
+    return structuredClone(DEFAULT_GAMIFICATION_DATA)
+}
+
+/** Old plugin versions stored their data in different shapes; nothing in it can be trusted. */
+interface RawPluginData {
+    version?: number
+    settings?: Partial<Settings>
+    gamification?: Partial<GamificationData>
+    // pre-2.0 layouts
+    workLen?: number
+    pointsData?: { total?: number }
+    forest?: { name?: string; level?: number }[]
 }
 
 // Single canonical gamification store
@@ -91,7 +102,7 @@ export const gamificationStore: Writable<GamificationData> = writable<Gamificati
 export default class StorageManager {
     private plugin: PomodoroTimerPlugin
     private data: PluginData = { ...DEFAULT_PLUGIN_DATA }
-    private saveTimer: any = null
+    private saveTimer: number | null = null
     private isInitialized = false
 
     public settingsStore: Writable<Settings> = PomodoroSettings.settings
@@ -107,7 +118,7 @@ export default class StorageManager {
         }
         this.isInitialized = true
 
-        const rawData = await this.plugin.loadData()
+        const rawData: unknown = await this.plugin.loadData()
         this.data = this.migrate(rawData)
 
         this.settingsStore.set(this.data.settings)
@@ -154,11 +165,11 @@ export default class StorageManager {
     }
 
     public requestSave(): void {
-        if (this.saveTimer) {
-            clearTimeout(this.saveTimer)
+        if (this.saveTimer !== null) {
+            window.clearTimeout(this.saveTimer)
         }
-        this.saveTimer = setTimeout(async () => {
-            await this.forceSave()
+        this.saveTimer = window.setTimeout(() => {
+            void this.forceSave()
         }, 500)
     }
 
@@ -172,10 +183,11 @@ export default class StorageManager {
         }
     }
 
-    private migrate(raw: any): PluginData {
-        if (!raw) {
+    private migrate(rawData: unknown): PluginData {
+        if (!rawData || typeof rawData !== 'object') {
             return { version: CURRENT_DATA_VERSION, settings: { ...PomodoroSettings.DEFAULT_SETTINGS }, gamification: freshGamificationData() }
         }
+        const raw = rawData as RawPluginData
 
         // Case 1: Already unified data format
         if (raw.version && raw.settings && raw.gamification) {
@@ -196,7 +208,7 @@ export default class StorageManager {
         if (typeof raw.workLen === 'number') {
             migrated.settings = {
                 ...PomodoroSettings.DEFAULT_SETTINGS,
-                ...raw,
+                ...(rawData as Partial<Settings>),
             }
         }
 
@@ -207,7 +219,7 @@ export default class StorageManager {
         }
 
         if (Array.isArray(raw.forest) && raw.forest.length > 0) {
-            raw.forest.forEach((oldPlant: any, idx: number) => {
+            raw.forest.forEach((oldPlant, idx) => {
                 migrated.gamification.homestead.push({
                     id: `migrated_${idx}`,
                     itemType: 'tree',
@@ -223,7 +235,7 @@ export default class StorageManager {
     }
 
     /** Fill in any fields added since the data was written, and repair inconsistent state. */
-    private normalizeGamification(raw: any, fromVersion: number): GamificationData {
+    private normalizeGamification(raw: Partial<GamificationData>, fromVersion: number): GamificationData {
         const base = freshGamificationData()
         const g: GamificationData = {
             ...base,

@@ -108,7 +108,7 @@ export default class ConfettiEngine {
         }
 
         if (this.particles.length > 0) {
-            this.animationFrameId = requestAnimationFrame(this.loop)
+            this.animationFrameId = window.requestAnimationFrame(this.loop)
         } else {
             this.animationFrameId = null
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
@@ -159,7 +159,7 @@ export default class ConfettiEngine {
 
     public destroy(): void {
         if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId)
+            window.cancelAnimationFrame(this.animationFrameId)
             this.animationFrameId = null
         }
         this.particles = []

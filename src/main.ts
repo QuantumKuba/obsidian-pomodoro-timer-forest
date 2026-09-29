@@ -10,212 +10,219 @@ import StorageManager from './services/StorageManager'
 import ForestEngine from './services/ForestEngine'
 import TaskRewardWatcher from './services/TaskRewardWatcher'
 import { setPlugin, resetStoresForDebug } from './stores'
-import { SCENE_CSS } from './render/VillageScene'
 
 export default class PomodoroTimerPlugin extends Plugin {
-	private settingTab?: PomodoroSettings
-	public timer?: Timer
-	public tasks?: Tasks
-	public tracker?: TaskTracker
-	public storageManager!: StorageManager
-	public forestEngine!: ForestEngine
-	public taskRewards?: TaskRewardWatcher
+    private settingTab?: PomodoroSettings
+    private statusBar?: StatusBar
+    private statusBarItem?: HTMLElement
+    public timer?: Timer
+    public tasks?: Tasks
+    public tracker?: TaskTracker
+    public storageManager!: StorageManager
+    public forestEngine!: ForestEngine
+    public taskRewards?: TaskRewardWatcher
+    /** Resolves once saved data is loaded and the timer, tasks and game engine exist. */
+    public ready!: Promise<void>
 
-	async onload() {
-		// Initialize unified storage first to prevent settings/forest overwrites
-		this.storageManager = new StorageManager(this)
-		await this.storageManager.initialize()
-		this.forestEngine = new ForestEngine(this, this.storageManager)
+    onload(): void {
+        // Unified storage is created first so settings and forest data are never overwritten
+        this.storageManager = new StorageManager(this)
 
-		setPlugin(this)
+        // Views, ribbon icons and commands are registered immediately. Everything that needs
+        // the saved data is set up in initialize(); the views wait for `ready` before rendering.
+        this.ready = this.initialize()
+        this.ready.catch((err) => console.error('[Pomodoro Timer Forest] Failed to initialize', err))
 
-		// Scene animations are shared by every view (and the timer's growing plant)
-		const sceneStyle = document.head.createEl('style', { text: SCENE_CSS })
-		this.register(() => sceneStyle.remove())
-		this.forestEngine.ensureToday()
-		// Roll quests / streak / vitality over at midnight even if Obsidian stays open
-		this.registerInterval(window.setInterval(() => this.forestEngine.ensureToday(), 60_000))
+        this.registerView(VIEW_TYPE_TIMER, (leaf) => new TimerView(this, leaf))
+        this.registerView(VIEW_TYPE_HOMESTEAD, (leaf) => new HomesteadView(this, leaf))
 
-		const settings = this.storageManager.getSettings()
-		this.settingTab = new PomodoroSettings(this, settings)
-		this.addSettingTab(this.settingTab)
-		this.tracker = new TaskTracker(this)
-		this.timer = new Timer(this)
-		this.tasks = new Tasks(this)
-		this.taskRewards = new TaskRewardWatcher(this)
+        this.addRibbonIcon('trees', 'Open homestead village', () => {
+            void this.activateHomesteadView()
+        })
+        this.addRibbonIcon('timer', 'Toggle timer panel', () => {
+            this.toggleTimerPanel()
+        })
 
-		this.registerView(VIEW_TYPE_TIMER, (leaf) => new TimerView(this, leaf))
-		this.registerView(VIEW_TYPE_HOMESTEAD, (leaf) => new HomesteadView(this, leaf))
+        // The status bar item is created now; its timer component is mounted once the timer exists
+        this.statusBarItem = this.addStatusBarItem()
+        this.statusBarItem.addClass('mod-clickable')
 
-		// Ribbon icon (Obsidian left ribbon)
-		this.addRibbonIcon('trees', 'Open Homestead Village', () => {
-			this.activateHomesteadView()
-		})
+        this.addCommand({
+            id: 'open-pomodoro-timer-view',
+            name: 'Open timer panel in the right sidebar',
+            callback: () => {
+                void this.activateView()
+            },
+        })
 
-		this.addRibbonIcon('timer', 'Pomodoro Timer Forest', () => {
-			let { workspace } = this.app
-			let leaves = workspace.getLeavesOfType(VIEW_TYPE_TIMER)
-			const isRightCollapsed = workspace.rightSplit && (workspace.rightSplit as any).collapsed
+        this.addCommand({
+            id: 'open-pomodoro-homestead-village',
+            name: 'Open homestead village (full view)',
+            callback: () => {
+                void this.activateHomesteadView()
+            },
+        })
 
-			if (leaves.length > 0 && !isRightCollapsed) {
-				workspace.detachLeavesOfType(VIEW_TYPE_TIMER)
-			} else {
-				this.activateView()
-			}
-		})
+        this.addCommand({
+            id: 'export-pomodoro-forest',
+            name: 'Copy forest data as JSON (for a web dashboard)',
+            callback: () => {
+                void this.copyExportToClipboard()
+            },
+        })
 
-		// Status bar
-		const status = this.addStatusBarItem()
-		status.className = `${status.className} mod-clickable`
-		new StatusBar({ target: status, props: { store: this.timer } })
+        this.addCommand({
+            id: 'reset-pomodoro-forest-debug',
+            name: 'Reset forest progress (debug)',
+            callback: () => {
+                resetStoresForDebug()
+                new Notice('Forest progress has been reset.')
+            },
+        })
 
-		// Commands
-		this.addCommand({
-			id: 'open-pomodoro-timer-view',
-			name: 'Open Pomodoro Forest (Right Sidebar)',
-			callback: () => {
-				this.activateView()
-			},
-		})
+        this.addCommand({
+            id: 'toggle-timer',
+            name: 'Start / pause timer',
+            callback: () => {
+                this.timer?.toggleTimer()
+            },
+        })
 
-		this.addCommand({
-			id: 'open-pomodoro-homestead-village',
-			name: 'Open Homestead Village (Full View)',
-			callback: () => {
-				this.activateHomesteadView()
-			},
-		})
+        this.addCommand({
+            id: 'toggle-timer-panel',
+            name: 'Toggle timer panel',
+            callback: () => {
+                this.toggleTimerPanel()
+            },
+        })
 
-		this.addCommand({
-			id: 'export-pomodoro-forest',
-			name: 'Export Forest Data (JSON for Web Dashboard)',
-			callback: async () => {
-				const payload = this.forestEngine.generateExportPayload()
-				const jsonStr = JSON.stringify(payload, null, 2)
-				await navigator.clipboard.writeText(jsonStr)
-				new Notice('📋 Forest & Homestead export copied to clipboard!')
-			},
-		})
+        this.addCommand({
+            id: 'reset-timer',
+            name: 'Reset timer',
+            callback: () => {
+                this.timer?.reset()
+                new Notice('Timer reset')
+            },
+        })
 
-		this.addCommand({
-			id: 'reset-pomodoro-forest-debug',
-			name: 'Reset Pomodoro Forest (Debug)',
-			callback: () => {
-				resetStoresForDebug()
-				new Notice('Pomodoro Forest has been reset for debugging')
-			},
-		})
+        this.addCommand({
+            id: 'toggle-mode',
+            name: 'Switch timer mode (work / break)',
+            callback: () => {
+                this.timer?.toggleMode((t) => {
+                    new Notice(`Timer mode: ${t.mode}`)
+                })
+            },
+        })
+    }
 
-		this.addCommand({
-			id: 'toggle-timer',
-			name: 'Start / Pause Timer',
-			callback: () => {
-				this.timer?.toggleTimer()
-			},
-		})
+    /** Everything that depends on the saved data. */
+    private async initialize(): Promise<void> {
+        await this.storageManager.initialize()
+        this.forestEngine = new ForestEngine(this, this.storageManager)
 
-		this.addCommand({
-			id: 'toggle-timer-panel',
-			name: 'Toggle Timer Panel',
-			callback: () => {
-				let { workspace } = this.app
-				let leaves = workspace.getLeavesOfType(VIEW_TYPE_TIMER)
-				const isRightCollapsed = workspace.rightSplit && (workspace.rightSplit as any).collapsed
-				if (leaves.length > 0 && !isRightCollapsed) {
-					workspace.detachLeavesOfType(VIEW_TYPE_TIMER)
-				} else {
-					this.activateView()
-				}
-			},
-		})
+        setPlugin(this)
 
-		this.addCommand({
-			id: 'reset-timer',
-			name: 'Reset Timer',
-			callback: () => {
-				this.timer?.reset()
-				new Notice('Timer reset')
-			},
-		})
+        this.forestEngine.ensureToday()
+        // Roll quests / streak / vitality over at midnight even if Obsidian stays open
+        this.registerInterval(window.setInterval(() => this.forestEngine.ensureToday(), 60_000))
 
-		this.addCommand({
-			id: 'toggle-mode',
-			name: 'Switch Timer Mode (Work / Break)',
-			callback: () => {
-				this.timer?.toggleMode((t) => {
-					new Notice(`Timer mode: ${t.mode}`)
-				})
-			},
-		})
-	}
+        this.settingTab = new PomodoroSettings(this, this.storageManager.getSettings())
+        this.addSettingTab(this.settingTab)
+        this.tracker = new TaskTracker(this)
+        this.timer = new Timer(this)
+        this.tasks = new Tasks(this)
+        this.taskRewards = new TaskRewardWatcher(this)
 
-	public getSettings(): Settings {
-		return (
-			this.storageManager?.getSettings() ||
-			this.settingTab?.getSettings() ||
-			PomodoroSettings.DEFAULT_SETTINGS
-		)
-	}
+        if (this.statusBarItem) {
+            this.statusBar = new StatusBar({ target: this.statusBarItem, props: { store: this.timer } })
+        }
+    }
 
-	/** True when a timer or village view is open, so rewards can be celebrated in-view. */
-	public hasVisibleForestView(): boolean {
-		const { workspace } = this.app
-		return [...workspace.getLeavesOfType(VIEW_TYPE_TIMER), ...workspace.getLeavesOfType(VIEW_TYPE_HOMESTEAD)].some(
-			(leaf) => leaf.view.containerEl.isShown(),
-		)
-	}
+    private async copyExportToClipboard(): Promise<void> {
+        if (!this.forestEngine) return
+        try {
+            const payload = this.forestEngine.generateExportPayload()
+            await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+            new Notice('📋 Forest & homestead export copied to clipboard!')
+        } catch {
+            new Notice('Could not copy the export to the clipboard.')
+        }
+    }
 
-	onunload() {
-		this.forestEngine?.soundManager?.stopAmbient()
-		this.forestEngine?.confettiEngine?.destroy()
-		this.settingTab?.unload()
-		this.timer?.destroy()
-		this.tasks?.destroy()
-		this.tracker?.destory()
-	}
+    private toggleTimerPanel(): void {
+        const { workspace } = this.app
+        const leaves = workspace.getLeavesOfType(VIEW_TYPE_TIMER)
+        if (leaves.length > 0 && !workspace.rightSplit?.collapsed) {
+            workspace.detachLeavesOfType(VIEW_TYPE_TIMER)
+        } else {
+            void this.activateView()
+        }
+    }
 
-	async activateView() {
-		let { workspace } = this.app
-		let leaf: WorkspaceLeaf | null = null
-		let leaves = workspace.getLeavesOfType(VIEW_TYPE_TIMER)
+    public getSettings(): Settings {
+        return (
+            this.storageManager?.getSettings() ||
+            this.settingTab?.getSettings() ||
+            PomodoroSettings.DEFAULT_SETTINGS
+        )
+    }
 
-		if (leaves.length > 0) {
-			leaf = leaves[0]
-		} else {
-			leaf = workspace.getRightLeaf(false)
-			if (!leaf) {
-				leaf = workspace.getLeaf(true)
-			}
-			await leaf.setViewState({
-				type: VIEW_TYPE_TIMER,
-				active: true,
-			})
-		}
+    /** True when a timer or village view is open, so rewards can be celebrated in-view. */
+    public hasVisibleForestView(): boolean {
+        const { workspace } = this.app
+        return [...workspace.getLeavesOfType(VIEW_TYPE_TIMER), ...workspace.getLeavesOfType(VIEW_TYPE_HOMESTEAD)].some(
+            (leaf) => leaf.view.containerEl.isShown(),
+        )
+    }
 
-		if (leaf) {
-			workspace.revealLeaf(leaf)
-		}
+    onunload() {
+        this.statusBar?.$destroy()
+        this.forestEngine?.soundManager?.stopAmbient()
+        this.forestEngine?.confettiEngine?.destroy()
+        this.settingTab?.unload()
+        this.timer?.destroy()
+        this.tasks?.destroy()
+        this.tracker?.destory()
+    }
 
-		if (workspace.rightSplit && (workspace.rightSplit as any).collapsed) {
-			(workspace.rightSplit as any).expand()
-		}
-	}
+    async activateView(): Promise<void> {
+        const { workspace } = this.app
+        let leaf: WorkspaceLeaf
+        const leaves = workspace.getLeavesOfType(VIEW_TYPE_TIMER)
 
-	async activateHomesteadView() {
-		let { workspace } = this.app
-		let leaf: WorkspaceLeaf | null = null
-		let leaves = workspace.getLeavesOfType(VIEW_TYPE_HOMESTEAD)
+        if (leaves.length > 0) {
+            leaf = leaves[0]
+        } else {
+            leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(true)
+            await leaf.setViewState({
+                type: VIEW_TYPE_TIMER,
+                active: true,
+            })
+        }
 
-		if (leaves.length > 0) {
-			leaf = leaves[0]
-		} else {
-			leaf = workspace.getLeaf(true) // Open in center workspace tab
-			await leaf.setViewState({
-				type: VIEW_TYPE_HOMESTEAD,
-				active: true,
-			})
-		}
+        void workspace.revealLeaf(leaf)
 
-		workspace.revealLeaf(leaf)
-	}
+        if (workspace.rightSplit?.collapsed) {
+            workspace.rightSplit.expand()
+        }
+    }
+
+    async activateHomesteadView(): Promise<void> {
+        const { workspace } = this.app
+        let leaf: WorkspaceLeaf
+        const leaves = workspace.getLeavesOfType(VIEW_TYPE_HOMESTEAD)
+
+        if (leaves.length > 0) {
+            leaf = leaves[0]
+        } else {
+            leaf = workspace.getLeaf(true) // Open in center workspace tab
+            await leaf.setViewState({
+                type: VIEW_TYPE_HOMESTEAD,
+                active: true,
+            })
+        }
+
+        void workspace.revealLeaf(leaf)
+    }
 }

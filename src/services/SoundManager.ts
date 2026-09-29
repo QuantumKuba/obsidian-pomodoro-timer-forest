@@ -15,13 +15,11 @@ export default class SoundManager {
     private getContext(): AudioContext | null {
         if (typeof window === 'undefined') return null
         if (!this.audioCtx) {
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-            if (AudioContextClass) {
-                this.audioCtx = new AudioContextClass()
-            }
+            this.audioCtx = new window.AudioContext()
         }
-        if (this.audioCtx && this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume()
+        if (this.audioCtx.state === 'suspended') {
+            // Browsers keep audio suspended until the user has interacted with the page
+            this.audioCtx.resume().catch(() => {})
         }
         return this.audioCtx
     }
@@ -212,7 +210,7 @@ export default class SoundManager {
         window.setTimeout(() => {
             for (const node of [...sources, ...(master ? [master] : [])]) {
                 try {
-                    ;(node as any).stop?.()
+                    if (node instanceof AudioScheduledSourceNode) node.stop()
                     node.disconnect()
                 } catch {
                     // Already stopped

@@ -1,5 +1,4 @@
 import type PomodoroTimerPlugin from 'main'
-import { DropdownComponent } from 'obsidian'
 import { PluginSettingTab, Setting, moment } from 'obsidian'
 import type { Unsubscriber } from 'svelte/motion'
 import { writable, type Writable } from 'svelte/store'
@@ -87,7 +86,7 @@ export default class PomodoroSettings extends PluginSettingTab {
             if (this.plugin.storageManager) {
                 this.plugin.storageManager.requestSave()
             } else {
-                this.plugin.saveData(settings)
+                void this.plugin.saveData(settings)
             }
             this.plugin.timer?.setupTimer()
         })
@@ -119,7 +118,7 @@ export default class PomodoroSettings extends PluginSettingTab {
         containerEl.empty()
 
         new Setting(containerEl)
-            .setName('Enable Status Bar Timer')
+            .setName('Enable status bar timer')
             .addToggle((toggle) => {
                 toggle.setValue(this._settings.useStatusBarTimer)
                 toggle.onChange((value) => {
@@ -128,8 +127,8 @@ export default class PomodoroSettings extends PluginSettingTab {
             })
 
 		new Setting(containerEl)
-			.setName('Low Animation FPS')
-			.setDesc("If you encounter high CPU usage, you can enable this option to lower the animation FPS to save CPU resources")
+			.setName('Low animation frame rate')
+			.setDesc('If you encounter high CPU usage, enable this option to lower the animation frame rate and save CPU resources. It also pauses the village animations.')
 			.addToggle((toggle) => {
 				toggle.setValue(this._settings.lowFps)
 				toggle.onChange((value: boolean) => {
@@ -137,7 +136,7 @@ export default class PomodoroSettings extends PluginSettingTab {
 				})
 			})
 
-        new Setting(containerEl).setHeading().setName('Forest & Homestead')
+        new Setting(containerEl).setHeading().setName('Forest & homestead')
 
         new Setting(containerEl)
             .setName('Daily focus goal')
@@ -153,7 +152,7 @@ export default class PomodoroSettings extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Reward checked-off tasks')
-            .setDesc('Earn Coins and XP when you tick a markdown task from [ ] to [x] in any note (each task counts once per day).')
+            .setDesc('Earn coins and experience when you complete a Markdown task in any note (each task counts once per day).')
             .addToggle((toggle) => {
                 toggle.setValue(this._settings.rewardTaskCompletion ?? true)
                 toggle.onChange((value) => {
@@ -193,7 +192,7 @@ export default class PomodoroSettings extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Log trees to daily note')
-            .setDesc('Append a Dataview-friendly line (duration, tree, rewards) to today\'s daily note for every tree grown.')
+            .setDesc('Add a line of inline fields (duration, tree, rewards) to today\'s daily note for every tree grown.')
             .addToggle((toggle) => {
                 toggle.setValue(this._settings.logForestToDailyNote ?? false)
                 toggle.onChange((value) => {
@@ -204,7 +203,7 @@ export default class PomodoroSettings extends PluginSettingTab {
         new Setting(containerEl).setHeading().setName('Notification')
 
         new Setting(containerEl)
-            .setName('Use System Notification')
+            .setName('Use system notification')
             .addToggle((toggle) => {
                 toggle.setValue(this._settings.useSystemNotification)
                 toggle.onChange((value) => {
@@ -212,7 +211,7 @@ export default class PomodoroSettings extends PluginSettingTab {
                 })
             })
         new Setting(containerEl)
-            .setName('Sound Notification')
+            .setName('Sound notification')
             .addToggle((toggle) => {
                 toggle.setValue(this._settings.notificationSound)
                 toggle.onChange((value) => {
@@ -222,9 +221,9 @@ export default class PomodoroSettings extends PluginSettingTab {
 
         if (this._settings.notificationSound) {
             new Setting(containerEl)
-                .setName('Custom Notification Audio')
+                .setName('Custom notification audio')
                 .addText((text) => {
-                    text.inputEl.style.width = '100%'
+                    text.inputEl.addClass('pomodoro-input-full')
                     text.setPlaceholder('path/to/sound.mp3')
                     text.setValue(this._settings.customSound)
                     text.onChange((value) => {
@@ -233,7 +232,7 @@ export default class PomodoroSettings extends PluginSettingTab {
                 })
                 .addExtraButton((button) => {
                     button.setIcon('play')
-                    button.setTooltip('play')
+                    button.setTooltip('Play')
                     button.onClick(() => {
                         this.plugin.timer?.playAudio()
                     })
@@ -242,7 +241,7 @@ export default class PomodoroSettings extends PluginSettingTab {
 
         new Setting(containerEl).setHeading().setName('Task')
         new Setting(containerEl)
-            .setName('Enable Task Tracking')
+            .setName('Enable task tracking')
             .setDesc(
                 'Important: Enabling this feature will automatically add a block ID when activating a task, unless a block ID is already present.',
             )
@@ -253,7 +252,7 @@ export default class PomodoroSettings extends PluginSettingTab {
                 })
             })
         new Setting(containerEl)
-            .setName('Show Task Progress Background')
+            .setName('Show task progress background')
             .addToggle((toggle) => {
                 toggle.setValue(this._settings.showTaskProgress)
                 toggle.onChange((value) => {
@@ -261,9 +260,9 @@ export default class PomodoroSettings extends PluginSettingTab {
                 })
             })
         new Setting(containerEl)
-            .setName('Task Format')
+            .setName('Task format')
             .addDropdown((dropdown) => {
-                dropdown.selectEl.style.width = '160px'
+                dropdown.selectEl.addClass('pomodoro-select-compact')
                 dropdown.addOptions({
                     TASKS: 'Tasks Emoji Format',
                     DATAVIEW: 'Dataview',
@@ -278,8 +277,8 @@ export default class PomodoroSettings extends PluginSettingTab {
             })
 
         new Setting(containerEl).setHeading().setName('Log')
-        new Setting(containerEl).setName('Log File').addDropdown((dropdown) => {
-            dropdown.selectEl.style.width = '160px'
+        new Setting(containerEl).setName('Log file').addDropdown((dropdown) => {
+            dropdown.selectEl.addClass('pomodoro-select-compact')
             dropdown.addOptions({ NONE: 'None' })
             if (appHasDailyNotesPluginLoaded()) {
                 dropdown.addOptions({ DAILY: 'Daily note' })
@@ -300,7 +299,7 @@ export default class PomodoroSettings extends PluginSettingTab {
                     .setName('Log file path')
                     .setDesc('The file to log pomodoro sessions to')
                     .addText((text) => {
-                        text.inputEl.style.width = '300px'
+                        text.inputEl.addClass('pomodoro-input-medium')
                         text.setValue(this._settings.logPath)
                         text.onChange((value) => {
                             this.updateSettings({ logPath: value })
@@ -309,9 +308,9 @@ export default class PomodoroSettings extends PluginSettingTab {
             }
 
             new Setting(containerEl)
-                .setName('Log Level')
+                .setName('Log level')
                 .addDropdown((dropdown) => {
-                    dropdown.selectEl.style.width = '160px'
+                    dropdown.selectEl.addClass('pomodoro-select-compact')
                     dropdown.addOptions({
                         ALL: 'All',
                         WORK: 'Work',
@@ -339,10 +338,10 @@ export default class PomodoroSettings extends PluginSettingTab {
                 )})`
             }
             new Setting(containerEl)
-                .setName('Log Format')
+                .setName('Log format')
                 .setDesc(example)
                 .addDropdown((dropdown) => {
-                    dropdown.selectEl.style.width = '160px'
+                    dropdown.selectEl.addClass('pomodoro-select-compact')
                     dropdown.addOptions({
                         SIMPLE: 'Simple',
                         VERBOSE: 'Verbose',
@@ -365,8 +364,7 @@ export default class PomodoroSettings extends PluginSettingTab {
                 )
                 if (hasTemplater) {
                     logTemplate.addTextArea((text) => {
-                        text.inputEl.style.width = '100%'
-                        text.inputEl.style.resize = 'vertical'
+                        text.inputEl.addClass('pomodoro-input-full', 'pomodoro-textarea-vertical')
                         text.setPlaceholder('<% templater script goes here %>')
                         text.setValue(this._settings.logTemplate)
                         text.onChange((value) => {
@@ -377,19 +375,18 @@ export default class PomodoroSettings extends PluginSettingTab {
                     logTemplate
                         .setDesc(
                             createFragment((fragment) => {
-                                const text1 = document.createElement('span')
-                                text1.setText('Requires ')
-                                text1.style.color = 'var(--text-error)'
-                                const a = document.createElement('a')
-                                a.setText('Templater')
-                                a.href =
-                                    'obsidian://show-plugin?id=templater-obsidian'
-                                const text2 = document.createElement('span')
-                                text2.setText(
-                                    ' plugin to be enabled, then click the refresh button',
-                                )
-                                text2.style.color = 'var(--text-error)'
-                                fragment.append(text1, a, text2)
+                                fragment.createSpan({
+                                    text: 'Requires ',
+                                    cls: 'pomodoro-text-error',
+                                })
+                                fragment.createEl('a', {
+                                    text: 'Templater',
+                                    href: 'obsidian://show-plugin?id=templater-obsidian',
+                                })
+                                fragment.createSpan({
+                                    text: ' plugin to be enabled, then click the refresh button',
+                                    cls: 'pomodoro-text-error',
+                                })
                             }),
                         )
                         .addButton((button) => {
@@ -403,7 +400,7 @@ export default class PomodoroSettings extends PluginSettingTab {
         }
 
         new Setting(containerEl).addButton((button) => {
-            button.setButtonText('Restore Settings')
+            button.setButtonText('Restore settings')
             button.onClick(() => {
                 this.updateSettings(PomodoroSettings.DEFAULT_SETTINGS, true)
             })

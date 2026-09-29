@@ -60,7 +60,7 @@ export default class Logger {
     }
 
     private async resolveLogFile(ctx: LogContext): Promise<TFile | void> {
-        const settings = this.plugin!.getSettings()
+        const settings = this.plugin.getSettings()
 
         // filter log level
         if (settings.logLevel !== 'ALL' && settings.logLevel !== ctx.mode) {

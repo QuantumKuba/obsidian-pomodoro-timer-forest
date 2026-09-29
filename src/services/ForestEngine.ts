@@ -5,6 +5,7 @@ import type {
     BiomeType,
     DailyForestLog,
     DailyQuest,
+    ForestExportPayload,
     GamificationData,
     GrowthStage,
     PlacedHomesteadItem,
@@ -404,7 +405,7 @@ export default class ForestEngine {
 
         if (settings.logForestToDailyNote && result) {
             const r = result as SessionCompletionResult
-            this.logToDailyNote(newTree, durationMinutes, r.sunlightEarned, r.coinsEarned)
+            void this.logToDailyNote(newTree, durationMinutes, r.sunlightEarned, r.coinsEarned)
         }
         return result
     }
@@ -792,7 +793,7 @@ export default class ForestEngine {
         }
     }
 
-    public generateExportPayload(): any {
+    public generateExportPayload(): ForestExportPayload {
         const data = this.state
         return {
             $schema: 'https://obsidian-pomodoro-forest.dev/schemas/v1/export.json',

@@ -19,7 +19,7 @@ export class HomesteadView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Homestead Village'
+        return 'Homestead village'
     }
 
     getIcon(): string {
@@ -27,6 +27,7 @@ export class HomesteadView extends ItemView {
     }
 
     async onOpen() {
+        await this.plugin.ready
         this.contentEl.empty()
         this.contentEl.addClass('pomodoro-homestead-page-view')
         this.component = new ForestComponent({

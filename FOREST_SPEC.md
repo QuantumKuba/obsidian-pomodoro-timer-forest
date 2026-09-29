@@ -120,7 +120,7 @@ Land: 6×6 at level 3 (300/30), 7×7 at level 7 (700/70), 8×8 at level 12 (1400
 - 🌌 **Twilight Sanctuary** (12): indigo moss that always glows.
 
 ### Visuals
-The village and the daily grove render as an isometric floating island (`src/render/VillageScene.ts`). The sky follows the real time of day: dawn, day, dusk and night, with sun/moon, stars and drifting clouds. After dusk, lit windows and lanterns cast glows. Windmill sails, the watermill wheel, chimney smoke, flames, water and trees are animated with CSS. Villagers wander between open tiles. All animation stops with *Low Animation FPS* or `prefers-reduced-motion`.
+The village and the daily grove render as an isometric floating island (`src/render/VillageScene.ts`). The sky follows the real time of day: dawn, day, dusk and night, with sun/moon, stars and drifting clouds. After dusk, lit windows and lanterns cast glows. Windmill sails, the watermill wheel, chimney smoke, flames, water and trees are animated with CSS. Villagers wander between open tiles. All animation stops with *Low animation frame rate* or `prefers-reduced-motion`.
 
 ## 5. Smart Tag Auto-Detection Rules
 When a focus session starts, the plugin collects hashtags from the tracked task, its text, and the note (frontmatter + inline tags). The first tag mapped to an unlocked species picks the seed (and counts toward the "#tagged" quest):

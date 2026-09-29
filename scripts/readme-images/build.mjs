@@ -23,8 +23,9 @@ fs.mkdirSync(images, { recursive: true })
 const alias = { obsidian: path.join(here, 'obsidian-stub.ts') }
 const svelte = esbuildSvelte({ compilerOptions: { css: 'injected' }, preprocess: sveltePreprocess() })
 
-await esbuild.build({ entryPoints: [path.join(here, 'harness.ts')], bundle: true, format: 'iife', outfile: path.join(build, 'harness.js'), alias, plugins: [svelte], logLevel: 'error', target: 'es2020' })
-await esbuild.build({ entryPoints: [path.join(here, 'compose.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: path.join(build, 'compose.cjs'), alias, logLevel: 'error' })
+const loader = { '.css': 'text' }
+await esbuild.build({ entryPoints: [path.join(here, 'harness.ts')], bundle: true, format: 'iife', loader, outfile: path.join(build, 'harness.js'), alias, plugins: [svelte], logLevel: 'error', target: 'es2020' })
+await esbuild.build({ entryPoints: [path.join(here, 'compose.ts')], bundle: true, platform: 'node', loader, format: 'cjs', outfile: path.join(build, 'compose.cjs'), alias, logLevel: 'error' })
 execFileSync('node', [path.join(build, 'compose.cjs'), build], { stdio: 'inherit' })
 
 const tpl = fs.readFileSync(path.join(here, 'page.html.tpl'), 'utf8')

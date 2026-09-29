@@ -20,7 +20,7 @@ export class TimerView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Pomodoro Forest'
+        return 'Pomodoro forest'
     }
 
     getIcon(): string {
@@ -28,6 +28,7 @@ export class TimerView extends ItemView {
     }
 
     async onOpen() {
+        await this.plugin.ready
         this.component = new TimerComponent({
             target: this.contentEl,
             props: {
@@ -35,7 +36,7 @@ export class TimerView extends ItemView {
                 tasks: this.plugin.tasks!,
                 tracker: this.plugin.tracker!,
                 render: (content: string, el: HTMLElement) => {
-                    MarkdownRenderer.render(
+                    void MarkdownRenderer.render(
                         this.plugin.app,
                         content,
                         el,

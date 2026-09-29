@@ -4,7 +4,8 @@
  * catalog and art. Usage: node compose.cjs <outDir>
  */
 import * as fs from 'fs'
-import { renderVillage, SCENE_CSS } from '../../src/render/VillageScene'
+import { renderVillage } from '../../src/render/VillageScene'
+import { SCENE_CSS } from '../../src/render/sceneCss'
 import { BIOME_CONFIGS, SPECIES_SVGS, growthSvg } from '../../src/assets/floraAssets'
 import { BIOME_UNLOCK_LEVELS, FLORA_SPECIES, HOMESTEAD_BUILDINGS, LAND_EXPANSIONS } from '../../src/assets/floraCatalog'
 import { perkText } from '../../src/services/Progression'

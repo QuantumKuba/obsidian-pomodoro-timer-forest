@@ -1,34 +1,55 @@
-name: Release Obsidian plugin
+name: Release
 
+# Push a tag that matches the version in manifest.json (e.g. `git tag 1.0.1 && git push origin 1.0.1`)
+# and this workflow builds the plugin, attests the assets and publishes the GitHub release.
 on:
   push:
     tags:
-      - "*"
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write # create the release
+  id-token: write # sign the attestation
+  attestations: write # store the attestation
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
-      - name: Use Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v7
         with:
-          node-version: "18.x"
+          node-version: "22"
+          cache: npm
 
-      - name: Build plugin
+      - name: Check the tag matches manifest.json
         run: |
-          npm install
+          manifest_version="$(node -p "require('./manifest.json').version")"
+          if [ "$manifest_version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest.json version $manifest_version" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: |
+          npm ci
           npm run build
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Create release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${GITHUB_REF#refs/tags/}"
-
-          gh release create "$tag" \
-            --title="$tag" \
-            --draft \
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
             main.js manifest.json styles.css

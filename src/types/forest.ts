@@ -161,6 +161,26 @@ export interface GamificationData {
     }
 }
 
+/** JSON summary produced by the "copy dashboard JSON" export. */
+export interface ForestExportPayload {
+    $schema: string
+    exportTimestamp: number
+    pluginVersion: string
+    village: {
+        level: number
+        xp: number
+        landSize: number
+        vitality: number
+        activeBiome: BiomeType
+    }
+    activeBiome: BiomeType
+    homestead: PlacedHomesteadItem[]
+    streak: { current: number; longest: number; lastCheckInDate: string }
+    lifetimeStats: GamificationData['lifetimeStats']
+    achievements: string[]
+    dailyLogsSummary: DailyForestLog[]
+}
+
 export interface PluginData {
     version: number
     settings: Settings

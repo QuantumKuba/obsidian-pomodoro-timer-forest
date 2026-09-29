@@ -16,6 +16,7 @@ import {
     VILLAGER_SVGS,
 } from '../assets/floraAssets'
 import { getBuilding } from '../assets/floraCatalog'
+import { SCENE_CSS } from './sceneCss'
 
 const TW = 64 // tile width
 const TH = 32 // tile height
@@ -291,7 +292,7 @@ export function renderIsoScene(opts: SceneOptions): string {
     const vitality = opts.vitality ?? 70
     const mood = vitality >= 75 ? 'thriving' : vitality >= 45 ? 'healthy' : vitality >= 20 ? 'sleepy' : 'dormant'
     const occupied = new Set(opts.items.map((i) => `${i.x},${i.y}`))
-    const ground = opts.ground || new Map()
+    const ground = opts.ground || new Map<string, 'path' | 'water'>()
 
     // Animation phases are anchored to the wall clock (--t), so a re-rendered scene
     // continues exactly where the previous one was instead of restarting.
@@ -501,52 +502,3 @@ export function renderGrove(
     }))
     return renderIsoScene({ size, biome, items, vitality: 80, villagers: 0, interactive: false, ...opts, className: 'pf-grove' })
 }
-
-// ---------------------------------------------------------------------------
-// Animations (scoped to .pf-scene; injected once by the plugin, embedded in exports)
-// ---------------------------------------------------------------------------
-
-export const SCENE_CSS = `
-.pf-scene{display:block;width:100%;height:auto;user-select:none}
-.pf-scene .pf-sway{transform-box:view-box;animation:pf-sway 5.5s ease-in-out infinite alternate}
-.pf-scene .pf-sails,.pf-scene .pf-wheel{transform-box:view-box;animation:pf-spin 9s linear infinite}
-.pf-scene .pf-wheel{animation-duration:6s}
-.pf-scene .pf-smoke{transform-box:fill-box;transform-origin:center;animation:pf-smoke 3s ease-out infinite}
-.pf-scene .pf-flame{transform-box:view-box;animation:pf-flicker .5s ease-in-out infinite alternate}
-.pf-scene .pf-water{animation:pf-shimmer 2.4s ease-in-out infinite alternate}
-.pf-scene .pf-twinkle{animation:pf-twinkle 2.6s ease-in-out infinite}
-.pf-scene .pf-cloud{animation:pf-drift 90s linear infinite}
-.pf-scene .pf-halo{animation:pf-halo 3.5s ease-in-out infinite alternate;pointer-events:none}
-.pf-scene .pf-firefly{animation:pf-firefly 6s ease-in-out infinite;pointer-events:none}
-.pf-scene .pf-butterfly{animation:pf-flutter-path 9s ease-in-out infinite;pointer-events:none}
-.pf-scene .pf-wing{transform-box:fill-box;transform-origin:center;animation:pf-flap .25s ease-in-out infinite alternate}
-.pf-scene .pf-mist{animation:pf-mist 12s ease-in-out infinite alternate;pointer-events:none}
-.pf-scene .pf-sway,.pf-scene .pf-sails,.pf-scene .pf-wheel,.pf-scene .pf-water,.pf-scene .pf-twinkle,.pf-scene .pf-cloud,.pf-scene .pf-halo,.pf-scene .pf-firefly,.pf-scene .pf-butterfly,.pf-scene .pf-mist{animation-delay:calc(var(--t,0s) + var(--d,0s))}
-.pf-scene .pf-villager,.pf-scene .pf-shade,.pf-scene .pf-lights,.pf-scene .pf-ground{pointer-events:none}
-.pf-scene .pf-stars{font-size:6px;fill:#ffd54f;stroke:#5d4037;stroke-width:.4;paint-order:stroke;pointer-events:none}
-.pf-scene.pf-mood-dormant .pf-smoke,.pf-scene.pf-mood-sleepy .pf-smoke{display:none}
-.pf-scene.pf-mood-dormant .pf-sails,.pf-scene.pf-mood-dormant .pf-wheel{animation-duration:40s}
-.pf-scene.pf-day .pf-glow{filter:none}
-.pf-scene.pf-night .pf-glow,.pf-scene.pf-dusk .pf-glow{filter:brightness(1.35) drop-shadow(0 0 2px #ffcf6b)}
-.pf-scene .pf-hit{fill:transparent;cursor:pointer;transition:fill .15s}
-.pf-scene .pf-hit:hover{fill:rgba(255,255,255,.28)}
-.pf-scene .pf-hit.pf-target{fill:rgba(255,255,255,.2);stroke:#fff;stroke-width:1;stroke-dasharray:4 3;animation:pf-pulse 1.4s ease-in-out infinite}
-.pf-scene .pf-hit.pf-selected{fill:rgba(255,224,102,.35);stroke:#ffe066;stroke-width:2}
-.pf-scene .pf-item[data-item]{cursor:pointer}
-.pf-scene .pf-item[data-item]:hover>svg{filter:brightness(1.1) drop-shadow(0 0 3px rgba(255,255,255,.7))}
-.pf-scene.pf-still *,.pf-scene.pf-still{animation:none!important}
-@media (prefers-reduced-motion: reduce){.pf-scene *{animation:none!important}}
-@keyframes pf-sway{from{transform:rotate(-1.6deg)}to{transform:rotate(1.6deg)}}
-@keyframes pf-spin{to{transform:rotate(360deg)}}
-@keyframes pf-smoke{0%{opacity:0;transform:translate(0,0) scale(.6)}20%{opacity:.75}100%{opacity:0;transform:translate(4px,-16px) scale(1.6)}}
-@keyframes pf-flicker{from{transform:scale(.92,.86)}to{transform:scale(1.04,1.08)}}
-@keyframes pf-shimmer{from{opacity:.35;transform:translateX(-1.5px)}to{opacity:1;transform:translateX(1.5px)}}
-@keyframes pf-twinkle{0%,100%{opacity:.25}50%{opacity:1}}
-@keyframes pf-drift{from{transform:translateX(-12%)}to{transform:translateX(112%)}}
-@keyframes pf-halo{from{opacity:.65}to{opacity:1}}
-@keyframes pf-firefly{0%,100%{transform:translate(0,0);opacity:.1}25%{transform:translate(6px,-5px);opacity:1}50%{transform:translate(-3px,-10px);opacity:.3}75%{transform:translate(-7px,-3px);opacity:.9}}
-@keyframes pf-flutter-path{0%,100%{transform:translate(0,0)}25%{transform:translate(14px,-8px)}50%{transform:translate(24px,2px)}75%{transform:translate(8px,6px)}}
-@keyframes pf-flap{from{transform:scaleX(1)}to{transform:scaleX(.25)}}
-@keyframes pf-mist{from{transform:translateX(-10px)}to{transform:translateX(10px)}}
-@keyframes pf-pulse{0%,100%{stroke-opacity:.4}50%{stroke-opacity:1}}
-`

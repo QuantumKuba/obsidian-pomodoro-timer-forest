@@ -30,9 +30,9 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 
 | What | How |
 |---|---|
-| Timer + village panel (right sidebar) | Ribbon icon **Pomodoro Timer Forest** (timer), or the command *Open Pomodoro Forest (Right Sidebar)* |
-| Full-page village | Ribbon icon **Open Homestead Village** (trees), or the command *Open Homestead Village (Full View)* |
-| Start / pause, reset, switch work/break | Commands *Start / Pause Timer*, *Reset Timer*, *Switch Timer Mode*, or click the timer |
+| Timer + village panel (right sidebar) | Ribbon icon **Toggle timer panel** (timer), or the command *Open timer panel in the right sidebar* |
+| Full-page village | Ribbon icon **Open homestead village** (trees), or the command *Open homestead village (full view)* |
+| Start / pause, reset, switch work/break | Commands *Start / pause timer*, *Reset timer*, *Switch timer mode (work / break)*, or click the timer |
 
 Both the sidebar panel and the full page have four tabs: **Village**, **Grove**, **Market** and **Journey**.
 
@@ -136,7 +136,7 @@ The *Grove* tab shows the trees you grew on any day as a small island. Use the a
 
 ## Settings
 
-Under *Settings → Pomodoro Timer Forest → Forest & Homestead*:
+Under *Settings → Pomodoro Timer Forest → Forest & homestead*:
 
 | Setting | What it does |
 |---|---|
@@ -146,7 +146,7 @@ Under *Settings → Pomodoro Timer Forest → Forest & Homestead*:
 | Celebration effects | Petals, sparkles and the reward card. |
 | Forest chimes | Synthesized sound effects. |
 | Log trees to daily note | Adds a Dataview-friendly line to today's daily note for every tree. |
-| Low Animation FPS | Also stops the village animations. |
+| Low animation frame rate | Also pauses the village animations. |
 
 The village animations also stop when your system asks for reduced motion.
 
@@ -161,7 +161,7 @@ If daily-note logging is on, each tree adds a line like this:
 In the *Journey* tab:
 
 - **Download village snapshot (.html):** a single self-contained page with your animated village, stats and recent trees. Open it in any browser or share it.
-- **Copy dashboard JSON** (also available as the command *Export Forest Data*): a structured summary (levels, streak, village layout, the last 30 days) for building your own dashboard. The schema is in the [spec](../FOREST_SPEC.md#7-web-dashboard-export-schema).
+- **Copy dashboard JSON** (also available as the command *Copy forest data as JSON (for a web dashboard)*): a structured summary (levels, streak, village layout, the last 30 days) for building your own dashboard. The schema is in the [spec](../FOREST_SPEC.md#7-web-dashboard-export-schema).
 
 ## Your data
 
@@ -172,4 +172,4 @@ Everything is stored locally in the plugin's `data.json` inside your vault (`.ob
 - **Nothing rewards me for ticking tasks.** Check that *Reward checked-off tasks* is on. Only tasks that change from `[ ]` to `[x]` while the note is open count, and each task counts once per day.
 - **I can't hear the ambient sound.** Pick it from the drop-down under the timer. You should get a 5-second preview. Also check your system volume; browsers only play audio after you have interacted with the app.
 - **A building or species is greyed out.** It unlocks at a higher village level; the card says which.
-- **I want a fresh start.** Run the command *Reset Pomodoro Forest (Debug)*. This wipes your progress.
+- **I want a fresh start.** Run the command *Reset forest progress (debug)*. This wipes your progress.

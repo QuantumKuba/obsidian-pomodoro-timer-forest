@@ -20,7 +20,7 @@ export default class TaskRewardWatcher {
 
         plugin.registerEvent(
             plugin.app.workspace.on('file-open', (file) => {
-                if (file) this.prime(file)
+                if (file) void this.prime(file)
             }),
         )
         plugin.registerEvent(
@@ -37,15 +37,19 @@ export default class TaskRewardWatcher {
         )
         plugin.app.workspace.onLayoutReady(() => {
             const file = plugin.app.workspace.getActiveFile()
-            if (file) this.prime(file)
+            if (file) void this.prime(file)
         })
     }
 
     private async prime(file: TFile): Promise<void> {
         if (file.extension !== 'md' || this.snapshots.has(file.path)) return
-        const content = await this.plugin.app.vault.cachedRead(file)
-        const cache = this.plugin.app.metadataCache.getFileCache(file)
-        if (cache) this.snapshots.set(file.path, this.readTasks(content, cache))
+        try {
+            const content = await this.plugin.app.vault.cachedRead(file)
+            const cache = this.plugin.app.metadataCache.getFileCache(file)
+            if (cache) this.snapshots.set(file.path, this.readTasks(content, cache))
+        } catch {
+            // The file vanished before it could be read; the next open will try again
+        }
     }
 
     private readTasks(content: string, cache: CachedMetadata): Map<string, TaskSnapshot> {

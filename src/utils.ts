@@ -66,11 +66,10 @@ export const ensureFileExists = async (
     const file = app.vault.getAbstractFileByPath(path)
     if (file) {
         if (file instanceof TFile) {
-            const md = file as TFile
-            if (md.extension == 'md') {
-                return md
+            if (file.extension == 'md') {
+                return file
             } else {
-                throw new Error(`invalid file extension: ${md.extension}`)
+                throw new Error(`invalid file extension: ${file.extension}`)
             }
         } else {
             throw new Error(`invalid file path: ${path}`)
@@ -103,17 +102,17 @@ export const join = (...partSegments: string[]): string => {
 }
 
 export const getDailyNoteFile = async (): Promise<TFile> => {
-    const file = getDailyNote(moment() as any, getAllDailyNotes())
+    const file = getDailyNote(moment(), getAllDailyNotes())
     if (!file) {
-        return await createDailyNote(moment() as any)
+        return await createDailyNote(moment())
     }
     return file
 }
 
 export const getWeeklyNoteFile = async (): Promise<TFile> => {
-    const file = getWeeklyNote(moment() as any, getAllWeeklyNotes())
+    const file = getWeeklyNote(moment(), getAllWeeklyNotes())
     if (!file) {
-        return await createWeeklyNote(moment() as any)
+        return await createWeeklyNote(moment())
     }
     return file
 }

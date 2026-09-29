@@ -1,6 +1,6 @@
 import PomodoroTimerPlugin from 'main'
-// @ts-ignore
-import Worker from 'clock.worker'
+// @ts-ignore: replaced at build time by the inline-worker esbuild plugin
+import createClockWorker from 'clock.worker'
 import { writable, derived } from 'svelte/store'
 import type { Readable } from 'svelte/store'
 import { Notice, TFile } from 'obsidian'
@@ -69,7 +69,7 @@ export default class Timer implements Readable<TimerStore> {
 
     private store: Readable<TimerStore>
 
-    private clock: any
+    private clock: Worker
 
     private update
 
@@ -111,9 +111,9 @@ export default class Timer implements Readable<TimerStore> {
                 this.state = state
             }),
         )
-        this.clock = Worker()
-        this.clock.onmessage = ({ data }: any) => {
-            this.tick(data as number)
+        this.clock = (createClockWorker as () => Worker)()
+        this.clock.onmessage = ({ data }: MessageEvent<number>) => {
+            this.tick(data)
         }
     }
 
@@ -160,7 +160,9 @@ export default class Timer implements Readable<TimerStore> {
         let autostart = false
         this.update((state) => {
             const ctx = this.createLogContext(state)
-            this.processLog(ctx)
+            this.processLog(ctx).catch((err) =>
+                console.error('[Pomodoro Timer Forest] Failed to log the finished session', err),
+            )
             autostart = state.autostart
             return this.endSession(state)
         })
@@ -250,7 +252,7 @@ export default class Timer implements Readable<TimerStore> {
 
     private openLog(logFile: TFile | void) {
         if (logFile) {
-            this.plugin.app.workspace.getLeaf('split').openFile(logFile)
+            void this.plugin.app.workspace.getLeaf('split').openFile(logFile)
         }
     }
 
@@ -262,7 +264,7 @@ export default class Timer implements Readable<TimerStore> {
 
         const inApp = () => {
             const fragment = new DocumentFragment()
-            const span = fragment.createEl('span')
+            const span = fragment.createSpan()
             span.setText(`${text}`)
             fragment.addEventListener('click', () => this.openLog(logFile))
             new Notice(fragment)
@@ -282,7 +284,10 @@ export default class Timer implements Readable<TimerStore> {
             } else if (window.Notification.permission === 'denied') {
                 inApp()
             } else {
-                window.Notification.requestPermission().then((p) => (p === 'granted' ? show() : inApp()))
+                window.Notification.requestPermission().then(
+                    (p) => (p === 'granted' ? show() : inApp()),
+                    () => inApp(),
+                )
             }
         } else {
             inApp()
@@ -307,7 +312,9 @@ export default class Timer implements Readable<TimerStore> {
     public reset() {
         this.update((state) => {
             if (state.elapsed > 0) {
-                this.logger.log(this.createLogContext(state))
+                this.logger
+                    .log(this.createLogContext(state))
+                    .catch((err) => console.error('[Pomodoro Timer Forest] Failed to log the session', err))
             }
 
             this.abandonGrowingTree(state)
@@ -369,7 +376,8 @@ export default class Timer implements Readable<TimerStore> {
                 audio = new Audio(soundSrc)
             }
         }
-        audio.play()
+        // Playback can be blocked (e.g. before any user interaction); that's not worth surfacing
+        audio.play().catch(() => {})
     }
 
     public setupTimer() {

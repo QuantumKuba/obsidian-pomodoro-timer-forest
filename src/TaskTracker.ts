@@ -104,7 +104,7 @@ export default class TaskTracker implements TaskTrackerStore {
     private async ensureBlockId(task: TaskItem) {
         let file = this.plugin.app.vault.getAbstractFileByPath(task.path)
         if (file && file instanceof TFile) {
-            const f = file as TFile
+            const f = file
             if (f.extension === 'md') {
                 let content = await this.plugin.app.vault.read(f)
                 let lines = content.split('\n')
@@ -114,7 +114,7 @@ export default class TaskTracker implements TaskTrackerStore {
                         if (!line.endsWith(task.blockLink)) {
                             // block id mismatch?
                             lines[task.line] += `${task.blockLink}`
-                            this.plugin.app.vault.modify(f, lines.join('\n'))
+                            await this.plugin.app.vault.modify(f, lines.join('\n'))
                             return
                         }
                     } else {
@@ -122,7 +122,7 @@ export default class TaskTracker implements TaskTrackerStore {
                         let blockId = this.createBlockId()
                         task.blockLink = blockId
                         lines[task.line] += `${blockId}`
-                        this.plugin.app.vault.modify(f, lines.join('\n'))
+                        await this.plugin.app.vault.modify(f, lines.join('\n'))
                     }
                 }
             }
@@ -145,7 +145,7 @@ export default class TaskTracker implements TaskTrackerStore {
             const leaf = this.plugin.app.workspace.getLeaf(
                 Keymap.isModEvent(event),
             )
-            leaf.openFile(this.state.file)
+            void leaf.openFile(this.state.file)
         }
     }
 
@@ -155,7 +155,7 @@ export default class TaskTracker implements TaskTrackerStore {
             const leaf = this.plugin.app.workspace.getLeaf(
                 Keymap.isModEvent(event),
             )
-            leaf.openFile(file, { eState: { line: task.line } })
+            void leaf.openFile(file, { eState: { line: task.line } })
         }
     }
 
@@ -197,7 +197,7 @@ export default class TaskTracker implements TaskTrackerStore {
                 this.task.path,
             )
             if (file && file instanceof TFile) {
-                let f = file as TFile
+                const f = file
                 this.store.update((state) => {
                     if (state.task) {
                         if (state.task.actual >= 0) {

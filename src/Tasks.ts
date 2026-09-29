@@ -1,5 +1,5 @@
 import PomodoroTimerPlugin from 'main'
-import { type CachedMetadata, type TFile, type App } from 'obsidian'
+import { type CachedMetadata, type TFile } from 'obsidian'
 import { extractTaskComponents } from 'utils'
 import { writable, derived, type Readable, type Writable } from 'svelte/store'
 
@@ -116,17 +116,20 @@ export default class Tasks implements Readable<TaskStore> {
 
     public loadFileTasks(file: TFile) {
         if (file.extension == 'md') {
-            this.plugin.app.vault.cachedRead(file).then((c) => {
-                let tasks = resolveTasks(
-                    this.plugin.getSettings().taskFormat,
-                    file,
-                    c,
-                    this.plugin.app.metadataCache.getFileCache(file),
-                )
-                this._store.update(() => ({
-                    list: tasks,
-                }))
-            })
+            this.plugin.app.vault
+                .cachedRead(file)
+                .then((c) => {
+                    let tasks = resolveTasks(
+                        this.plugin.getSettings().taskFormat,
+                        file,
+                        c,
+                        this.plugin.app.metadataCache.getFileCache(file),
+                    )
+                    this._store.update(() => ({
+                        list: tasks,
+                    }))
+                })
+                .catch((err) => console.error('[Pomodoro Timer Forest] Failed to read tasks', err))
         } else {
             this._store.update(() => ({
                 file,

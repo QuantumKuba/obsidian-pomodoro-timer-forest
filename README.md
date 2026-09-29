@@ -1,3 +1,5 @@
+# Pomodoro Timer Forest
+
 <p align="center">
   <img src="docs/images/hero.png" alt="Pomodoro Timer Forest: every focus session grows a tree, every tree builds your village" width="100%">
 </p>
@@ -100,9 +102,16 @@ One click exports a **self-contained, animated HTML snapshot** of your village t
 ## Quick start
 
 1. **Install.** Copy `main.js`, `manifest.json` and `styles.css` into `<your vault>/.obsidian/plugins/pomodoro-timer-forest/` and enable the plugin under *Settings → Community plugins*. To build them yourself: `npm install && npm run build`.
-2. **Open it.** Click the timer icon in the ribbon (or run *Open Pomodoro Forest*). For the full-page village, click the trees icon or run *Open Homestead Village (Full View)*.
+2. **Open it.** Click the timer icon in the ribbon (or run *Open timer panel in the right sidebar*). For the full-page village, click the trees icon or run *Open homestead village (full view)*.
 3. **Press play.** Your first tree (Classic Pine) is free, and you start with a couple of saplings to plant.
 4. **Plant, build, level up.** See the [user guide](docs/GUIDE.md) for how rewards, quests, perks and streaks work.
+
+## Permissions and privacy
+
+- **No network requests, no accounts, no telemetry.** Everything stays in your vault.
+- **Vault files:** the plugin only reads or writes notes for features you turn on: task tracking (updates the `[🍅:: …]` field on the task you focus on), session logging (daily, weekly or a chosen note), and the optional daily-note line for each tree. Its own data is saved in the plugin's `data.json`.
+- **Clipboard:** written only when you press *Copy dashboard JSON* (or run the matching command).
+- **Notifications:** system notifications are optional and use the browser's Notification API. Otherwise you get an in-app notice.
 
 <sub>The images above are rendered by the plugin's own components and renderer using a sample level-14 village.</sub>
 

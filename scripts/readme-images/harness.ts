@@ -10,7 +10,7 @@ import { activePlantStore, gamificationStore, setPlugin } from '../../src/stores
 import { getBuilding } from '../../src/assets/floraCatalog'
 import { upgradeCost, xpForLevel } from '../../src/services/Progression'
 import type { PlacedHomesteadItem, RewardEvent } from '../../src/types/forest'
-import { SCENE_CSS } from '../../src/render/VillageScene'
+import { SCENE_CSS } from '../../src/render/sceneCss'
 import { village } from './sample-data'
 
 // main.ts injects this once for every view in the real plugin

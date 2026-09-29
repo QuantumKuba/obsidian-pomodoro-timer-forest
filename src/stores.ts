@@ -50,6 +50,6 @@ export function resetStoresForDebug(): void {
     if (pluginInstance?.storageManager) {
         pluginInstance.storageManager.updateGamification(() => freshGamificationData())
         pluginInstance.forestEngine?.ensureToday()
-        pluginInstance.storageManager.forceSave()
+        void pluginInstance.storageManager.forceSave()
     }
 }
