@@ -3,6 +3,7 @@ import { createEventDispatcher } from 'svelte'
 import { gamificationStore, pluginInstance, levelInfo } from '../stores'
 import { FLORA_SPECIES, HOMESTEAD_BUILDINGS } from '../assets/floraCatalog'
 import { perkText } from '../services/Progression'
+import { ICONS } from '../assets/floraAssets'
 import type { FloraSpecies, HomesteadBuilding } from '../types/forest'
 
 export let full = false
@@ -19,6 +20,13 @@ function shortfall(sun: number, coin: number): string {
     const parts = []
     if (g.sunlight < sun) parts.push(`${sun - g.sunlight}☀️`)
     if (g.coins < coin) parts.push(`${coin - g.coins}🪙`)
+    return parts.length ? `${parts.join(' + ')} to go` : ''
+}
+
+function shortfallHtml(sun: number, coin: number): string {
+    const parts = []
+    if (g.sunlight < sun) parts.push(`${sun - g.sunlight}${ICONS.sunlight}`)
+    if (g.coins < coin) parts.push(`${coin - g.coins}${ICONS.coin}`)
     return parts.length ? `${parts.join(' + ')} to go` : ''
 }
 
@@ -64,9 +72,9 @@ function placedCount(id: string): number {
                             {:else if locked}
                                 <span class="muted">Reach level {sp.unlockLevel} to unlock</span>
                             {:else}
-                                <span class="cost">☀️{sp.sunlightCost} 🪙{sp.coinsCost}</span>
+                                <span class="cost">{@html ICONS.sunlight}{sp.sunlightCost} {@html ICONS.coin}{sp.coinsCost}</span>
                                 <button class="buy" disabled={!afford} title={shortfall(sp.sunlightCost, sp.coinsCost)} on:click={() => buySpecies(sp)}>
-                                    {afford ? 'Unlock' : shortfall(sp.sunlightCost, sp.coinsCost)}
+                                    {@html afford ? 'Unlock' : shortfallHtml(sp.sunlightCost, sp.coinsCost)}
                                 </button>
                             {/if}
                         </div>
@@ -94,10 +102,10 @@ function placedCount(id: string): number {
                             {:else if locked}
                                 <span class="muted">Reach level {b.unlockLevel} to build</span>
                             {:else}
-                                <span class="cost">☀️{b.sunlightCost} 🪙{b.coinsCost}</span>
+                                <span class="cost">{@html ICONS.sunlight}{b.sunlightCost} {@html ICONS.coin}{b.coinsCost}</span>
                                 {#if !b.unique && placedCount(b.id)}<span class="muted">own {placedCount(b.id)}</span>{/if}
                                 <button class="buy" disabled={!afford} title={shortfall(b.sunlightCost, b.coinsCost)} on:click={() => buyBuilding(b)}>
-                                    {afford ? 'Build' : shortfall(b.sunlightCost, b.coinsCost)}
+                                    {@html afford ? 'Build' : shortfallHtml(b.sunlightCost, b.coinsCost)}
                                 </button>
                             {/if}
                         </div>
@@ -175,7 +183,8 @@ function placedCount(id: string): number {
 .perk { margin: 0; font-size: 0.7rem; font-weight: 600; color: #e39b2d; }
 .upg { margin: 0; font-size: 0.66rem; color: #ffb300; letter-spacing: 0.5px; }
 .foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.cost { font-size: 0.75rem; font-weight: 700; }
+.cost { font-size: 0.75rem; font-weight: 700; display: inline-flex; align-items: center; gap: 2px; }
+.cost :global(svg), .buy :global(svg) { width: 13px; height: 13px; }
 .muted { font-size: 0.7rem; color: var(--text-muted); }
 .active-seed { font-size: 0.72rem; font-weight: 700; color: #43a047; }
 .buy {

@@ -57,7 +57,7 @@ function downloadHtml() {
                         <div class="bar"><div class="fill" style="width:{Math.round((q.progress / q.target) * 100)}%"></div></div>
                     </div>
                     <span class="q-meta">{q.progress}/{q.target}</span>
-                    <span class="q-reward" title="Reward">+{q.rewardSunlight}☀️ +{q.rewardCoins}🪙</span>
+                    <span class="q-reward" title="Reward">+{q.rewardSunlight}{@html ICONS.sunlight} +{q.rewardCoins}{@html ICONS.coin}</span>
                 </div>
             {/each}
             <button class="chest" class:ready={allDone && !board.chestClaimed} disabled={!allDone || board.chestClaimed} on:click={() => engine?.openDailyChest()}>
@@ -65,7 +65,7 @@ function downloadHtml() {
                 {#if board.chestClaimed}
                     Chest opened — new quests at midnight
                 {:else if allDone}
-                    Open the daily chest! (+{CHEST_REWARD.sunlight}☀️ +{CHEST_REWARD.coins}🪙 + a sapling)
+                    Open the daily chest! (+{CHEST_REWARD.sunlight}{@html ICONS.sunlight} +{CHEST_REWARD.coins}{@html ICONS.coin} + a sapling)
                 {:else}
                     Finish all three to open the daily chest
                 {/if}
@@ -168,6 +168,7 @@ h4 { margin: 0; font-size: 0.88rem; }
 .q-body { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .q-meta { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .q-reward { font-size: 0.66rem; color: var(--text-muted); white-space: nowrap; }
+.q-reward :global(svg) { width: 12px; height: 12px; vertical-align: -2px; }
 .bar { height: 5px; border-radius: 99px; background: var(--background-modifier-border); overflow: hidden; }
 .bar.small { height: 3px; margin-top: 3px; }
 .fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #9ccc65, #43a047); transition: width 0.6s ease; }

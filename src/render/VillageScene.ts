@@ -81,14 +81,15 @@ interface Sky {
     bottom: string
     shade: number // 0..1 darkness overlay
     lights: boolean
+    haze: string // ground haze below the horizon hills
 }
 
 export function skyFor(date: Date): Sky {
     const h = date.getHours() + date.getMinutes() / 60
-    if (h >= 5 && h < 8) return { phase: 'dawn', top: '#8fb0e0', bottom: '#fbd7b5', shade: 0.12, lights: true }
-    if (h >= 8 && h < 17.5) return { phase: 'day', top: '#79c1ee', bottom: '#d9f1ff', shade: 0, lights: false }
-    if (h >= 17.5 && h < 20.5) return { phase: 'dusk', top: '#5d5a9e', bottom: '#f5a36e', shade: 0.22, lights: true }
-    return { phase: 'night', top: '#0b1333', bottom: '#27386a', shade: 0.45, lights: true }
+    if (h >= 5 && h < 8) return { phase: 'dawn', top: '#8fb0e0', bottom: '#fbd7b5', haze: '#c9c6d0', shade: 0.12, lights: true }
+    if (h >= 8 && h < 17.5) return { phase: 'day', top: '#79c1ee', bottom: '#d9f1ff', haze: '#b7dccb', shade: 0, lights: false }
+    if (h >= 17.5 && h < 20.5) return { phase: 'dusk', top: '#5d5a9e', bottom: '#f5a36e', haze: '#8a6f9a', shade: 0.22, lights: true }
+    return { phase: 'night', top: '#0b1333', bottom: '#27386a', haze: '#26356a', shade: 0.45, lights: true }
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +205,7 @@ function skyLayer(L: Layout, sky: Sky, pal: BiomePalette, id: string, date: Date
         return `<path d="${d} L${W} ${f(L.height)} Z" fill="${color}"/>`
     }
     out += `<g class="pf-hills" opacity="${sky.phase === 'night' ? 0.45 : 0.9}">${hills(hy - 26, 16, pal.hillsFar, id + 'far')}${hills(hy, 12, pal.hillsNear, id + 'near')}</g>`
-    out += `<rect y="${f(hy + 10)}" width="${W}" height="${f(L.height - hy)}" fill="${sky.bottom}" opacity=".55"/>`
+    out += `<rect y="${f(hy + 10)}" width="${W}" height="${f(L.height - hy)}" fill="${sky.haze}" opacity=".7"/>`
     return out
 }
 

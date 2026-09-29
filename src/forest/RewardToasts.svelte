@@ -41,8 +41,9 @@ function art(e: RewardEvent): string {
     return ICONS.sapling
 }
 
+// Drawn icons instead of emoji: 🪙 renders as a grey coin on some platforms
 function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string {
-    return [l.sunlight ? `+${l.sunlight}☀️` : '', l.coins ? `+${l.coins}🪙` : '', l.xp ? `+${l.xp} XP` : ''].filter(Boolean).join('  ')
+    return [l.sunlight ? `+${l.sunlight}${ICONS.sunlight}` : '', l.coins ? `+${l.coins}${ICONS.coin}` : '', l.xp ? `+${l.xp} XP` : ''].filter(Boolean).join(' ')
 }
 </script>
 
@@ -52,7 +53,7 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
         <div class="toast {e.kind}" in:fly={{ y: -12, duration: 250 }} out:fade={{ duration: 200 }} on:click={() => dismiss(e.id)}>
             <span class="t-icon">{e.kind === 'task' ? '✅' : '🍵'}</span>
             <span class="t-text">{e.title}</span>
-            <span class="t-amt">{amounts(e)}</span>
+            <span class="t-amt">{@html amounts(e)}</span>
         </div>
     {/each}
 </div>
@@ -68,15 +69,15 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
                 {#if card.subtitle}<p class="sub">{card.subtitle}</p>{/if}
                 {#if card.sunlight || card.coins || card.xp}
                     <div class="totals">
-                        {#if card.sunlight}<span class="tot sun">+{card.sunlight} ☀️</span>{/if}
-                        {#if card.coins}<span class="tot coin">+{card.coins} 🪙</span>{/if}
+                        {#if card.sunlight}<span class="tot sun">+{card.sunlight} {@html ICONS.sunlight}</span>{/if}
+                        {#if card.coins}<span class="tot coin">+{card.coins} {@html ICONS.coin}</span>{/if}
                         {#if card.xp}<span class="tot xp">+{card.xp} XP</span>{/if}
                     </div>
                 {/if}
                 {#if card.lines.length}
                     <ul class="lines">
                         {#each card.lines as l, i}
-                            <li style="animation-delay:{150 + i * 90}ms"><span>{l.label}</span><em>{amounts(l)}</em></li>
+                            <li style="animation-delay:{150 + i * 90}ms"><span>{l.label}</span><em>{@html amounts(l)}</em></li>
                         {/each}
                     </ul>
                 {/if}
@@ -123,6 +124,11 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
     text-decoration-color: rgba(102, 187, 106, 0.7);
 }
 .toast.break .t-text { text-decoration: none; }
+.t-amt :global(svg), .lines em :global(svg), .tot :global(svg) {
+    width: 13px;
+    height: 13px;
+    vertical-align: -2px;
+}
 .t-amt {
     font-weight: 700;
     color: #e0a800;

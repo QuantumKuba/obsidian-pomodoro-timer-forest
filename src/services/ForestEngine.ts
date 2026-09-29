@@ -572,7 +572,7 @@ export default class ForestEngine {
         const earned = this.grant(g, { sunlight: 25 * levelAfter, coins: 3 * levelAfter })
         this.emit({
             kind: 'levelup',
-            title: `Village level ${levelAfter}!`,
+            title: 'Your village grew!',
             subtitle: unlocks.length ? 'New things to discover:' : 'Your village grows more beautiful.',
             ...earned,
             xp: 0,

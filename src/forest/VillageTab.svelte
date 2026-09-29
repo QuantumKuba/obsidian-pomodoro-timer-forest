@@ -2,7 +2,7 @@
 import { afterUpdate, createEventDispatcher, onDestroy, onMount } from 'svelte'
 import { gamificationStore, pluginInstance, clockMinute, settings, charm, vitality, levelInfo } from '../stores'
 import { renderVillage, homesteadItemSprite } from '../render/VillageScene'
-import { SPECIES_SVGS, BUILDING_SVGS, BIOME_CONFIGS } from '../assets/floraAssets'
+import { SPECIES_SVGS, BUILDING_SVGS, BIOME_CONFIGS, ICONS } from '../assets/floraAssets'
 import { getBuilding, getSpecies, LAND_EXPANSIONS, BIOME_UNLOCK_LEVELS, TREE_MAX_LEVEL } from '../assets/floraCatalog'
 import { perkText } from '../services/Progression'
 import type { BiomeType, PlacedHomesteadItem } from '../types/forest'
@@ -185,7 +185,7 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
                                 class="primary"
                                 disabled={g.sunlight < upgrade.sunlight || g.coins < upgrade.coins}
                                 on:click={() => selected && engine?.upgradeHomesteadItem(selected.id)}>
-                                ✨ {selected.itemType === 'tree' ? 'Nurture' : 'Upgrade'} · ☀️{upgrade.sunlight} 🪙{upgrade.coins}
+                                ✨ {selected.itemType === 'tree' ? 'Nurture' : 'Upgrade'} · {@html ICONS.sunlight}{upgrade.sunlight} {@html ICONS.coin}{upgrade.coins}
                             </button>
                         {:else if upgrade?.maxed}
                             <span class="maxed">Fully upgraded ✨</span>
@@ -228,7 +228,7 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
                     {:else}
                         <button
                             disabled={g.sunlight < nextLand.sunlightCost || g.coins < nextLand.coinsCost}
-                            on:click={() => engine?.expandLand()}>☀️{nextLand.sunlightCost} 🪙{nextLand.coinsCost}</button>
+                            on:click={() => engine?.expandLand()}>{@html ICONS.sunlight}{nextLand.sunlightCost} {@html ICONS.coin}{nextLand.coinsCost}</button>
                     {/if}
                 </div>
             {/if}
@@ -429,4 +429,5 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
     font-size: 0.75rem;
 }
 .land button { font-size: 0.72rem; padding: 3px 8px; }
+.insp-actions .primary :global(svg), .land button :global(svg) { width: 13px; height: 13px; vertical-align: -2px; }
 </style>
