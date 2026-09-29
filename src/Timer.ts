@@ -143,6 +143,9 @@ export default class Timer implements Readable<TimerStore> {
                     s.elapsed = s.count
                 }
                 timeup = s.elapsed >= s.count
+                if (s.mode === 'WORK') {
+                    this.plugin.forestEngine?.updateProgress(s.elapsed, s.count)
+                }
             } else {
                 pause = true
             }
@@ -183,6 +186,13 @@ export default class Timer implements Readable<TimerStore> {
     private async processLog(ctx: LogContext) {
         if (ctx.mode == 'WORK') {
             await this.plugin.tracker?.updateActual()
+            this.plugin.forestEngine?.completeSession(ctx.duration, {
+                taskText: ctx.task.name || ctx.task.text,
+                notePath: ctx.task.path,
+                tags: ctx.task.tags,
+            })
+        } else {
+            this.plugin.forestEngine?.completeBreak()
         }
         const logFile = await this.logger.log(ctx)
         this.notify(ctx, logFile)
@@ -197,6 +207,16 @@ export default class Timer implements Readable<TimerStore> {
                 s.duration = s.mode === 'WORK' ? s.workLen : s.breakLen
                 s.count = s.duration * 60 * 1000
                 s.startTime = now
+                if (s.mode === 'WORK') {
+                    const task = this.plugin.tracker?.task
+                    const file = this.plugin.tracker?.file
+                    this.plugin.forestEngine?.startSession(
+                        s.workLen,
+                        task?.name || task?.text,
+                        task?.path || file?.path,
+                        task?.tags,
+                    )
+                }
             }
             s.inSession = true
             s.running = true
@@ -283,6 +303,8 @@ export default class Timer implements Readable<TimerStore> {
                 this.logger.log(this.createLogContext(state))
             }
 
+            this.abandonGrowingTree(state)
+
             state.duration =
                 state.mode == 'WORK' ? state.workLen : state.breakLen
             state.count = state.duration * 60 * 1000
@@ -302,8 +324,20 @@ export default class Timer implements Readable<TimerStore> {
         })
     }
 
+    /** Leaving a work session early withers the tree (after the first minute, if enabled). */
+    private abandonGrowingTree(state: TimerState) {
+        if (!state.inSession || state.mode !== 'WORK') return
+        const task = this.plugin.tracker?.task
+        const file = this.plugin.tracker?.file
+        this.plugin.forestEngine?.abortSession(state.elapsed / 60000, {
+            taskText: task?.name || task?.text,
+            notePath: task?.path || file?.path,
+        })
+    }
+
     public toggleMode(callback?: (state: TimerState) => void) {
         this.update((s) => {
+            this.abandonGrowingTree(s)
             let updated = this.endSession(s)
             if (callback) {
                 callback(updated)

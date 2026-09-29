@@ -32,6 +32,12 @@ export interface Settings {
     useSystemNotification: boolean
     taskFormat: TaskFormat
     lowFps: boolean
+    hardcoreMode: boolean
+    enableCelebrationParticles: boolean
+    dailyGoal: number
+    rewardTaskCompletion: boolean
+    logForestToDailyNote: boolean
+    forestSounds: boolean
 }
 
 export default class PomodoroSettings extends PluginSettingTab {
@@ -53,6 +59,12 @@ export default class PomodoroSettings extends PluginSettingTab {
         useSystemNotification: false,
         taskFormat: 'TASKS',
         lowFps: false,
+        hardcoreMode: true,
+        enableCelebrationParticles: true,
+        dailyGoal: 4,
+        rewardTaskCompletion: true,
+        logForestToDailyNote: false,
+        forestSounds: true,
     }
 
     static settings: Writable<Settings> = writable(
@@ -71,8 +83,12 @@ export default class PomodoroSettings extends PluginSettingTab {
         this._settings = { ...PomodoroSettings.DEFAULT_SETTINGS, ...settings }
         PomodoroSettings.settings.set(this._settings)
         this.unsubscribe = PomodoroSettings.settings.subscribe((settings) => {
-            this.plugin.saveData(settings)
             this._settings = settings
+            if (this.plugin.storageManager) {
+                this.plugin.storageManager.requestSave()
+            } else {
+                this.plugin.saveData(settings)
+            }
             this.plugin.timer?.setupTimer()
         })
     }
@@ -120,6 +136,70 @@ export default class PomodoroSettings extends PluginSettingTab {
 					this.updateSettings({ lowFps: value })
 				})
 			})
+
+        new Setting(containerEl).setHeading().setName('Forest & Homestead')
+
+        new Setting(containerEl)
+            .setName('Daily focus goal')
+            .setDesc('How many pomodoros make a "full" day. Used for the daily goal meter and quest sizes — pick something kind to yourself.')
+            .addSlider((slider) => {
+                slider.setLimits(1, 12, 1)
+                slider.setValue(this._settings.dailyGoal ?? 4)
+                slider.setDynamicTooltip()
+                slider.onChange((value) => {
+                    this.updateSettings({ dailyGoal: value })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Reward checked-off tasks')
+            .setDesc('Earn Coins and XP when you tick a markdown task from [ ] to [x] in any note (each task counts once per day).')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.rewardTaskCompletion ?? true)
+                toggle.onChange((value) => {
+                    this.updateSettings({ rewardTaskCompletion: value })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Withering (hardcore mode)')
+            .setDesc('Abandoning a work session after the first minute leaves a withered tree in today\'s grove.')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.hardcoreMode ?? true)
+                toggle.onChange((value) => {
+                    this.updateSettings({ hardcoreMode: value })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Celebration effects')
+            .setDesc('Petals, sparkles and the reward card when a tree finishes growing.')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.enableCelebrationParticles ?? true)
+                toggle.onChange((value) => {
+                    this.updateSettings({ enableCelebrationParticles: value })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Forest chimes')
+            .setDesc('Soft synthesized chimes when planting, harvesting and levelling up.')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.forestSounds ?? true)
+                toggle.onChange((value) => {
+                    this.updateSettings({ forestSounds: value })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Log trees to daily note')
+            .setDesc('Append a Dataview-friendly line (duration, tree, rewards) to today\'s daily note for every tree grown.')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.logForestToDailyNote ?? false)
+                toggle.onChange((value) => {
+                    this.updateSettings({ logForestToDailyNote: value })
+                })
+            })
 
         new Setting(containerEl).setHeading().setName('Notification')
 

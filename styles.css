@@ -13,11 +13,21 @@ If your plugin does not need CSS, delete this file.
     --pomodoro-timer-color: var(--text-faint);
     --pomodoro-timer-text-color: var(--text-normal);
     --pomodoro-timer-dot-color: var(--color-red);
+    --pomodoro-forest-sunlight: #ffa726;
+    --pomodoro-forest-coin: #ffd700;
+    --pomodoro-forest-streak: #ff7043;
 }
 
 .status-bar-item.plugin-pomodoro-timer {
     padding-top: 0;
     padding-bottom: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.status-bar-item.plugin-pomodoro-timer:hover {
+    color: var(--interactive-accent);
 }
 
 .pomodoro-focus {

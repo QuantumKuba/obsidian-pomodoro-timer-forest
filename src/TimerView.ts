@@ -20,16 +20,20 @@ export class TimerView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Timer'
+        return 'Pomodoro Forest'
+    }
+
+    getIcon(): string {
+        return 'timer'
     }
 
     async onOpen() {
         this.component = new TimerComponent({
             target: this.contentEl,
             props: {
-                timer: this.plugin.timer,
-                tasks: this.plugin.tasks,
-                tracker: this.plugin.tracker,
+                timer: this.plugin.timer!,
+                tasks: this.plugin.tasks!,
+                tracker: this.plugin.tracker!,
                 render: (content: string, el: HTMLElement) => {
                     MarkdownRenderer.render(
                         this.plugin.app,

@@ -1,210 +1,55 @@
-import { writable, get, derived } from 'svelte/store'
-import type { Plugin } from 'obsidian'
+import { writable, derived, readable, type Writable, type Readable } from 'svelte/store'
+import type PomodoroTimerPlugin from './main'
 import PomodoroSettings, { type Settings } from './Settings'
+import type { GamificationData, ActiveSessionPlant, PlacedHomesteadItem } from './types/forest'
+import { gamificationStore, freshGamificationData } from './services/StorageManager'
+import { dateKey, levelProgress, levelTitle, villageCharm, vitalityState } from './services/Progression'
 
-// Types
-interface Plant {
-	id: string
-	name: string
-	cost: number
-	icon: string
-	level: number
-	upgradeCost: number
-}
+// Global reference to the plugin instance (set in onload)
+export let pluginInstance: PomodoroTimerPlugin | null = null
 
-interface PointsData {
-	total: number
-	daily: number
-	lastReset: string // ISO date string
-}
+export { gamificationStore }
+export const settings: Writable<Settings> = PomodoroSettings.settings
+export const activePlantStore: Writable<ActiveSessionPlant | null> = writable<ActiveSessionPlant | null>(null)
 
-// Plugin instance
-let pluginInstance: Plugin | null = null
+// Derived helpers
+export const sunlight: Readable<number> = derived(gamificationStore, ($g) => $g.sunlight)
+export const coins: Readable<number> = derived(gamificationStore, ($g) => $g.coins)
+export const streak: Readable<GamificationData['streak']> = derived(gamificationStore, ($g) => $g.streak)
+export const homestead: Readable<PlacedHomesteadItem[]> = derived(gamificationStore, ($g) => $g.homestead)
+export const lifetimeStats: Readable<GamificationData['lifetimeStats']> = derived(gamificationStore, ($g) => $g.lifetimeStats)
 
-// Constants
-const PLANT_TYPES: Omit<Plant, 'id' | 'level' | 'upgradeCost'>[] = [
-	{ name: 'Small Tree', cost: 30, icon: 'tree' },
-	{ name: 'Big Tree', cost: 50, icon: 'tree' },
-	{ name: 'Flower', cost: 20, icon: 'flower' },
-]
+export const levelInfo = derived(gamificationStore, ($g) => {
+    const p = levelProgress($g.xp)
+    return { ...p, title: levelTitle(p.level) }
+})
 
-const INITIAL_POINTS_DATA: PointsData = {
-	total: 900,
-	daily: 0,
-	lastReset: new Date().toISOString().split('T')[0],
-}
+export const charm: Readable<number> = derived(gamificationStore, ($g) => villageCharm($g.homestead))
+export const vitality = derived(gamificationStore, ($g) => ({ value: $g.vitality, ...vitalityState($g.vitality) }))
 
-// Stores
-export const settings = PomodoroSettings.settings
-export const pointsData = writable<PointsData>(INITIAL_POINTS_DATA)
-export const points = derived(pointsData, ($pointsData) => $pointsData.total)
-export const forest = writable<Plant[]>([])
-export const plants = PLANT_TYPES
+/** Ticks every minute so time-of-day visuals and "today" rollovers stay current. */
+export const clockMinute: Readable<Date> = readable(new Date(), (set) => {
+    const id = window.setInterval(() => set(new Date()), 60_000)
+    return () => window.clearInterval(id)
+})
 
-// State
-let nextPlantId = 1
+export const todayLog = derived([gamificationStore, clockMinute], ([$g, $now]) => {
+    const key = dateKey($now)
+    return $g.dailyLogs[key] || { date: key, trees: [], totalMinutes: 0, completedPomodoros: 0, tasksCompleted: 0, breaksCompleted: 0 }
+})
 
-// Helper Functions
-function generatePlantId(): string {
-	return `plant_${nextPlantId++}`
-}
+export const questBoard = derived([gamificationStore, clockMinute], ([$g, $now]) =>
+    $g.questBoard && $g.questBoard.date === dateKey($now) ? $g.questBoard : null,
+)
 
-function calculateUpgradeCost(plant: Plant): number {
-	return plant.level === 1 ? plant.cost * 3 : plant.upgradeCost * 2
+export function setPlugin(plugin: PomodoroTimerPlugin): void {
+    pluginInstance = plugin
 }
 
 export function resetStoresForDebug(): void {
-	forest.set([])
-	pointsData.set(INITIAL_POINTS_DATA)
-	nextPlantId = 1
-	console.log('Stores reset for debugging')
-	saveProgress()
-}
-
-// Main Functions
-export function setPlugin(plugin: Plugin): void {
-	console.log('Setting plugin instance:', plugin)
-	pluginInstance = plugin
-}
-
-export function addPoints(value: number): void {
-	pointsData.update((data) => {
-		const today = new Date().toISOString().split('T')[0]
-		if (data.lastReset !== today) {
-			data.daily = 0
-			data.lastReset = today
-		}
-		return {
-			...data,
-			total: data.total + value,
-			daily: data.daily + value,
-		}
-	})
-	saveProgress()
-}
-
-export function purchasePlant(
-	plantType: Omit<Plant, 'id' | 'level' | 'upgradeCost'>,
-): void {
-	pointsData.update((data) => {
-		if (data.total >= plantType.cost) {
-			const newPlant: Plant = {
-				...plantType,
-				id: `plant_${nextPlantId++}`,
-				level: 1,
-				upgradeCost: plantType.cost * 3,
-			}
-			forest.update((currentForest) => [...currentForest, newPlant])
-			console.log('Plant purchased:', newPlant)
-			saveProgress()
-			return {
-				...data,
-				total: data.total - plantType.cost,
-			}
-		}
-		console.log('Not enough points to purchase plant')
-		return data
-	})
-}
-
-export function upgradePlant(plantId: string): void {
-	let upgraded = false
-	forest.update((currentForest) =>
-		currentForest.map((plant) => {
-			if (plant.id === plantId) {
-				const upgradeCost = calculateUpgradeCost(plant)
-				if (get(pointsData).total >= upgradeCost) {
-					upgraded = true
-					console.log(
-						`Plant ${plantId} upgraded from level ${plant.level
-						} to ${plant.level + 1}`,
-					)
-					return {
-						...plant,
-						level: plant.level + 1,
-						upgradeCost: upgradeCost * 2,
-					}
-				}
-			}
-			return plant
-		}),
-	)
-
-	if (upgraded) {
-		pointsData.update((data) => ({
-			...data,
-			total:
-				data.total -
-				calculateUpgradeCost(
-					get(forest).find((p) => p.id === plantId)!,
-				),
-		}))
-		saveProgress()
-	} else {
-		console.log('Not enough points to upgrade plant or plant not found')
-	}
-}
-
-export function removePlant(plantId: string): void {
-	forest.update((currentForest) => {
-		const updatedForest = currentForest.filter(
-			(plant) => plant.id !== plantId,
-		)
-		console.log('Plant removed, updated forest:', updatedForest)
-		saveProgress()
-		return updatedForest
-	})
-}
-
-// Data Persistence
-async function saveProgress(): Promise<void> {
-	if (pluginInstance) {
-		try {
-			const data = {
-				forest: get(forest),
-				pointsData: get(pointsData),
-				nextPlantId,
-			}
-			await pluginInstance.saveData(data)
-			console.log('Progress saved successfully')
-		} catch (error) {
-			console.error('Error saving progress:', error)
-		}
-	} else {
-		console.warn('Plugin instance is null, cannot save data')
-	}
-}
-
-export async function loadProgress(): Promise<void> {
-	if (pluginInstance) {
-		try {
-			const savedData = await pluginInstance.loadData()
-			if (savedData) {
-				forest.set(savedData.forest || [])
-				if (savedData.pointsData) {
-					const today = new Date().toISOString().split('T')[0]
-					if (savedData.pointsData.lastReset !== today) {
-						savedData.pointsData.daily = 0
-						savedData.pointsData.lastReset = today
-					}
-					pointsData.set(savedData.pointsData)
-				} else {
-					pointsData.set(INITIAL_POINTS_DATA)
-				}
-				nextPlantId = savedData.nextPlantId || nextPlantId
-				console.log('Progress loaded successfully')
-			}
-		} catch (error) {
-			console.error('Error loading progress:', error)
-		}
-	} else {
-		console.warn('Plugin instance is null, cannot load data')
-	}
-}
-
-// Debug function (remove in production)
-export function debugStores(): void {
-	console.log('Current forest:', get(forest))
-	console.log('Current points:', get(pointsData))
-	console.log('Next plant ID:', nextPlantId)
+    if (pluginInstance?.storageManager) {
+        pluginInstance.storageManager.updateGamification(() => freshGamificationData())
+        pluginInstance.forestEngine?.ensureToday()
+        pluginInstance.storageManager.forceSave()
+    }
 }
