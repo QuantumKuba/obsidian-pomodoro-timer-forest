@@ -126,6 +126,7 @@ export default class PomodoroTimerPlugin extends Plugin {
         this.forestEngine.ensureToday()
         // Roll quests / streak / vitality over at midnight even if Obsidian stays open
         this.registerInterval(window.setInterval(() => this.forestEngine.ensureToday(), 60_000))
+        this.watchDataFile()
 
         this.settingTab = new PomodoroSettings(this, this.storageManager.getSettings())
         this.addSettingTab(this.settingTab)
@@ -137,6 +138,33 @@ export default class PomodoroTimerPlugin extends Plugin {
         if (this.statusBarItem) {
             this.statusBar = new StatusBar({ target: this.statusBarItem, props: { store: this.timer } })
         }
+    }
+
+    /**
+     * Syncing between devices is done by the user's sync tool. When it replaces data.json, load
+     * the new progress instead of carrying on with (and later saving) the old copy. Obsidian
+     * reports most such changes through onExternalSettingsChange(); these checks cover sync
+     * tools it does not see. Pending changes are written before the app goes to the background
+     * so the sync tool picks them up.
+     */
+    private watchDataFile(): void {
+        const reload = () => void this.reloadData()
+        this.registerInterval(window.setInterval(reload, 30_000))
+        this.registerDomEvent(window, 'focus', reload)
+        this.registerDomEvent(document, 'visibilitychange', () => {
+            if (document.visibilityState === 'hidden') void this.storageManager.flush()
+            else reload()
+        })
+        this.app.workspace.onLayoutReady(reload)
+    }
+
+    private async reloadData(): Promise<void> {
+        if (await this.storageManager.reloadFromDisk()) this.forestEngine.ensureToday()
+    }
+
+    /** Called by Obsidian when data.json was changed by something other than this plugin. */
+    onExternalSettingsChange(): void {
+        this.ready.then(() => this.reloadData()).catch(() => undefined)
     }
 
     private async copyExportToClipboard(): Promise<void> {
@@ -177,6 +205,8 @@ export default class PomodoroTimerPlugin extends Plugin {
     }
 
     onunload() {
+        // Write anything still waiting in the save debounce
+        void this.storageManager?.flush()
         this.statusBar?.$destroy()
         this.forestEngine?.soundManager?.stopAmbient()
         this.forestEngine?.confettiEngine?.destroy()

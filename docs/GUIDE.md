@@ -16,6 +16,8 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 - [Settings](#settings)
 - [Export and sharing](#export-and-sharing)
 - [Your data](#your-data)
+  - [Uninstalling without losing your progress](#uninstalling-without-losing-your-progress)
+  - [Using more than one device](#using-more-than-one-device)
 - [Troubleshooting](#troubleshooting)
 
 ## The loop in one minute
@@ -165,7 +167,34 @@ In the *Journey* tab:
 
 ## Your data
 
-Everything is stored locally in the plugin's `data.json` inside your vault (`.obsidian/plugins/pomodoro-timer-forest/`). The game makes no network requests and uses no external assets. Data from earlier versions is upgraded automatically, and past focus time is converted into starting XP.
+Everything is stored locally in the plugin's `data.json` inside your vault (`.obsidian/plugins/pomodoro-timer-forest/`, or your vault's config folder if you renamed it). It holds your village, XP, streaks, quests, achievements and the plugin's settings. The game makes no network requests and uses no external assets. Data from earlier versions is upgraded automatically, and past focus time is converted into starting XP.
+
+### Uninstalling without losing your progress
+
+**Uninstalling the plugin deletes its folder, and `data.json` with it. Your progress is gone for good.** Disabling the plugin is safe: the file stays where it is.
+
+If you might come back one day, keep a copy of the save file:
+
+1. **Before you uninstall,** copy `.obsidian/plugins/pomodoro-timer-forest/data.json` to somewhere outside the plugin folder (your documents, a cloud drive, a note in the vault).
+2. **When you return,** install the plugin again but don't enable it yet. Put the saved `data.json` into `.obsidian/plugins/pomodoro-timer-forest/`, then enable the plugin. If you already enabled it, put the file there and restart Obsidian.
+
+The plugin is still under active development, so the save format can change between versions. Older saves are upgraded automatically when they are loaded, but nothing guarantees that a file from a much older version will load perfectly in a much newer one. Note which plugin version the backup came from (the `version` in `manifest.json`), and if a restore looks wrong, try it on that version first.
+
+*Copy dashboard JSON* and *Download village snapshot* are for sharing, not backups: they cannot be loaded back into the plugin.
+
+### Using more than one device
+
+The plugin does not sync anything itself. Your whole game is that one `data.json`, so whatever syncs your vault (Obsidian Sync, the Git plugin, Syncthing…) carries your progress between devices, with no manual export or import. Make sure your sync setup includes `.obsidian/plugins/pomodoro-timer-forest/data.json`. Some setups skip the config folder or plugin settings by default, and Git users should check the file is not in `.gitignore`.
+
+What the plugin does to play well with your sync tool:
+
+- When the sync tool updates `data.json` while Obsidian is open, the new progress is loaded right away, without a restart.
+- It never saves over a newer `data.json` it has not loaded yet. The synced file wins.
+- Opening Obsidian does not rewrite the file. Only real progress does, so pulls don't conflict with a file that merely got opened.
+- Pending progress is saved before the app goes to the background, so the sync tool can pick it up.
+- If the file is damaged or contains merge-conflict markers, the plugin pauses with a notice instead of starting a fresh game over it. Keep one version of the file in your sync tool, then reload the plugin.
+
+For the smoothest experience, let the sync finish before you play on the other device, and keep the same plugin version on every device.
 
 ## Troubleshooting
 

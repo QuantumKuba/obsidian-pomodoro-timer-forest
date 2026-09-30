@@ -115,6 +115,12 @@ One click exports a **self-contained, animated HTML snapshot** of your village t
 
 <sub>The images above are rendered by the plugin's own components and renderer using a sample level-14 village.</sub>
 
+## Your progress: devices, backups and uninstalling
+
+- **Progress lives in one file:** `.obsidian/plugins/pomodoro-timer-forest/data.json`.
+- **Several devices:** the plugin doesn't sync by itself. Include that file in your sync tool (Obsidian Sync, the Git plugin…) and your village follows you. The plugin reloads the file when the sync tool updates it and never saves over newer synced progress. See the [guide](docs/GUIDE.md#using-more-than-one-device).
+- **Uninstalling deletes your progress.** Removing the plugin removes its folder, including `data.json`. If you might return, copy the file somewhere safe first and put it back after reinstalling. The plugin is still evolving, so older saves are upgraded on load but not guaranteed to work forever. Steps in the [guide](docs/GUIDE.md#uninstalling-without-losing-your-progress).
+
 ---
 
 # Classic timer features

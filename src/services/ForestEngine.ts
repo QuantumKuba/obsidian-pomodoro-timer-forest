@@ -91,13 +91,13 @@ export default class ForestEngine {
      * Apply a change to a deep copy of the game state, then run the shared
      * follow-ups (level-ups, achievements) and publish the result in one update.
      */
-    private mutate(fn: (g: GamificationData) => void): void {
+    private mutate(fn: (g: GamificationData) => void, options: { persist?: boolean } = {}): void {
         const g: GamificationData = structuredClone(this.state)
         const levelBefore = levelFromXp(g.xp)
         fn(g)
         this.checkAchievements(g)
         this.applyLevelUps(g, levelBefore)
-        this.storage.updateGamification(() => g)
+        this.storage.updateGamification(() => g, options)
         this.flushEvents()
     }
 
@@ -155,12 +155,19 @@ export default class ForestEngine {
     // Daily rollover: quests, streak shields, gentle vitality fade
     // -----------------------------------------------------------------------
 
-    /** Cheap to call often; only does work the first time it runs on a new day. */
+    /**
+     * Cheap to call often; only does work the first time it runs on a new day.
+     *
+     * The rollover is not saved by itself: every device works it out from the date, and it is
+     * written with the next real change. Saving it on launch would change data.json before the
+     * sync tool has pulled, and make the pull conflict.
+     */
     public ensureToday(): void {
         const today = dateKey()
         const g0 = this.state
         if (g0.lastVisitDate === today && g0.questBoard?.date === today) return
 
+        let shieldUsed = false
         this.mutate((g) => {
             const settings = this.settings()
 
@@ -178,20 +185,23 @@ export default class ForestEngine {
                 g.vitality = Math.round(g.vitality)
             }
 
-            this.resolveStreak(g, today)
+            shieldUsed = this.resolveStreak(g, today)
 
             if (g.questBoard?.date !== today) {
                 g.questBoard = generateQuestBoard(today, settings.dailyGoal || 4, settings.workLen || 25)
             }
             g.lastVisitDate = today
-        })
+        }, { persist: false })
+        // A used shield is announced once; save it so the notice does not repeat on every launch
+        if (shieldUsed) this.storage.markChanged()
     }
 
-    private resolveStreak(g: GamificationData, today: string): void {
+    /** Returns true when a streak shield covered the missed days. */
+    private resolveStreak(g: GamificationData, today: string): boolean {
         const last = g.streak.lastCheckInDate
-        if (!last || g.streak.current === 0) return
+        if (!last || g.streak.current === 0) return false
         const missed = daysBetween(last, today) - 1
-        if (missed <= 0) return
+        if (missed <= 0) return false
 
         const month = today.slice(0, 7)
         if (g.streak.shieldMonth !== month) {
@@ -208,9 +218,10 @@ export default class ForestEngine {
                 subtitle: `${missed} rest day${missed > 1 ? 's' : ''} covered — your ${g.streak.current}-day streak lives on.`,
                 sunlight: 0, coins: 0, xp: 0, lines: [],
             })
-        } else {
-            g.streak.current = 0
+            return true
         }
+        g.streak.current = 0
+        return false
     }
 
     // -----------------------------------------------------------------------
