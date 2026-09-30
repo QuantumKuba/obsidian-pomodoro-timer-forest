@@ -325,7 +325,7 @@ export default class Timer implements Readable<TimerStore> {
             state.inSession = false
             state.running = false
 
-            if (!this.plugin.tracker!.pinned) {
+            if (!this.plugin.tracker!.taskPinned) {
                 this.plugin.tracker!.clear()
             }
             this.clock.postMessage({

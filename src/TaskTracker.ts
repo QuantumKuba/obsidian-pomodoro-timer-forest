@@ -1,26 +1,30 @@
 import { type TaskItem } from 'Tasks'
 import type PomodoroTimerPlugin from 'main'
-import { TFile, Keymap, MarkdownView } from 'obsidian'
-import { DESERIALIZERS, POMODORO_REGEX } from 'serializer'
+import { TFile, Keymap } from 'obsidian'
 import {
     writable,
+    get,
     type Readable,
     type Writable,
     type Unsubscriber,
 } from 'svelte/store'
-import { extractTaskComponents } from 'utils'
+import { settings } from 'stores'
+import { editTaskLine, readPomodoros } from 'serializer/TaskLineEditor'
+import { locateTaskLine } from 'TaskWriter'
 
 export type TaskTrackerState = {
+    /** The task the timer is counting pomodoros for. */
     task?: TaskItem
+    /** The note being worked in: the last note that was active. */
     file?: TFile
-    pinned: boolean
+    /** Notes whose tasks stay listed while working in other notes. */
+    pinned: string[]
 }
 
 type TaskTrackerStore = Readable<TaskTrackerState>
 
-const DEFAULT_TRACKER_STATE: TaskTrackerState = {
-    pinned: false,
-}
+const sameList = (a: string[], b: string[]) =>
+    a.length === b.length && a.every((value, i) => value === b[i])
 
 export default class TaskTracker implements TaskTrackerStore {
     private plugin
@@ -35,7 +39,7 @@ export default class TaskTracker implements TaskTrackerStore {
 
     constructor(plugin: PomodoroTimerPlugin) {
         this.plugin = plugin
-        this.state = DEFAULT_TRACKER_STATE
+        this.state = { pinned: [...(plugin.getSettings().pinnedNotes ?? [])] }
         this.store = writable(this.state)
         this.subscribe = this.store.subscribe
         this.unsubscribers.push(
@@ -44,28 +48,70 @@ export default class TaskTracker implements TaskTrackerStore {
             }),
         )
 
+        // Pins live in the saved settings so they survive restarts and follow the vault
+        // between devices; the settings store stays the single source of truth.
+        this.unsubscribers.push(
+            settings.subscribe((s) => {
+                const pinned = s.pinnedNotes ?? []
+                if (!sameList(pinned, this.state.pinned)) {
+                    this.store.update((state) =>
+                        this.scoped({ ...state, pinned: [...pinned] }),
+                    )
+                }
+            }),
+        )
+
         plugin.registerEvent(
-            //loadtasks on file change
             plugin.app.workspace.on('active-leaf-change', () => {
-                let file = this.plugin.app.workspace.getActiveFile()
-                if (!this.state.pinned) {
-                    this.store.update((state) => {
-                        if (state.file?.path !== file?.path) {
-                            state.task = undefined
-                        }
-                        state.file = file ?? state.file
-                        return state
-                    })
+                const file = this.plugin.app.workspace.getActiveFile()
+                // The timer panel, graph view etc. have no file: stay on the last note
+                if (!file || file.path === this.state.file?.path) return
+                this.store.update((state) => {
+                    const next = { ...state, file }
+                    // The focused task stays while its note is pinned or a session is running
+                    if (
+                        next.task &&
+                        !next.pinned.includes(next.task.path) &&
+                        !this.sessionRunning()
+                    ) {
+                        next.task = undefined
+                    }
+                    return next
+                })
+            }),
+        )
+
+        plugin.registerEvent(
+            plugin.app.vault.on('rename', (file, oldPath) => {
+                // The pins and the focused task change together, so the focus is not dropped
+                // for a moment while its note is between two names
+                const pinned = this.state.pinned.includes(oldPath)
+                    ? this.state.pinned.map((p) => (p === oldPath ? file.path : p))
+                    : null
+                if (!pinned && this.state.task?.path !== oldPath) return
+                this.store.update((state) => ({
+                    ...state,
+                    pinned: pinned ?? state.pinned,
+                    task:
+                        state.task?.path === oldPath
+                            ? { ...state.task, path: file.path }
+                            : state.task,
+                }))
+                if (pinned) this.savePinned(pinned)
+            }),
+        )
+
+        plugin.registerEvent(
+            plugin.app.vault.on('delete', (file) => {
+                if (this.state.pinned.includes(file.path)) {
+                    this.setPinned(this.state.pinned.filter((p) => p !== file.path))
                 }
             }),
         )
 
         plugin.app.workspace.onLayoutReady(() => {
-            let file = this.plugin.app.workspace.getActiveFile()
-            this.store.update((state) => {
-                state.file = file ?? state.file
-                return state
-            })
+            const file = this.plugin.app.workspace.getActiveFile()
+            this.store.update((state) => ({ ...state, file: file ?? state.file }))
         })
     }
 
@@ -77,28 +123,68 @@ export default class TaskTracker implements TaskTrackerStore {
         return this.state.file
     }
 
-    public togglePinned() {
-        this.store.update((state) => {
-            state.pinned = !state.pinned
-            return state
-        })
+    get pinnedPaths() {
+        return this.state.pinned
+    }
+
+    public isPinned(path: string | undefined) {
+        return !!path && this.state.pinned.includes(path)
+    }
+
+    /** True when the focused task belongs to a pinned note, so it should survive a timer reset. */
+    public get taskPinned() {
+        return this.isPinned(this.state.task?.path)
+    }
+
+    /** Pins a note (the current one by default), or unpins it when it is already pinned. */
+    public togglePinned(path: string | undefined = this.state.file?.path) {
+        if (!path) return
+        this.setPinned(
+            this.isPinned(path)
+                ? this.state.pinned.filter((p) => p !== path)
+                : [...this.state.pinned, path],
+        )
+    }
+
+    private setPinned(pinned: string[]) {
+        this.store.update((state) => this.scoped({ ...state, pinned }))
+        this.savePinned(pinned)
+    }
+
+    private savePinned(pinned: string[]) {
+        this.plugin.storageManager?.updateSettings((s) => ({
+            ...s,
+            pinnedNotes: pinned,
+        }))
+    }
+
+    /** Drops the focused task when its note is neither pinned nor the current note any more. */
+    private scoped(state: TaskTrackerState): TaskTrackerState {
+        const path = state.task?.path
+        if (path && path !== state.file?.path && !state.pinned.includes(path)) {
+            if (!this.sessionRunning()) return { ...state, task: undefined }
+        }
+        return state
+    }
+
+    private sessionRunning() {
+        const timer = this.plugin.timer
+        if (!timer) return false
+        const t = get(timer)
+        return t.inSession && t.mode === 'WORK'
     }
 
     public async active(task: TaskItem) {
         await this.ensureBlockId(task)
-        this.store.update((state) => {
-            state.task = task
-            return state
-        })
+        // A copy: the label below is edited without touching the list
+        this.store.update((state) => ({ ...state, task: { ...task } }))
     }
 
     public setTaskName(name: string) {
-        this.store.update((state) => {
-            if (state.task) {
-                state.task.name = name
-            }
-            return state
-        })
+        this.store.update((state) => ({
+            ...state,
+            task: state.task ? { ...state.task, name } : state.task,
+        }))
     }
 
     private async ensureBlockId(task: TaskItem) {
@@ -134,18 +220,16 @@ export default class TaskTracker implements TaskTrackerStore {
     }
 
     public clear() {
-        this.store.update((state) => {
-            state.task = undefined
-            return state
-        })
+        this.store.update((state) => ({ ...state, task: undefined }))
     }
 
-    public openFile(event: MouseEvent) {
-        if (this.state.file) {
+    public openNote(event: MouseEvent, path: string) {
+        const file = this.plugin.app.vault.getAbstractFileByPath(path)
+        if (file instanceof TFile) {
             const leaf = this.plugin.app.workspace.getLeaf(
                 Keymap.isModEvent(event),
             )
-            void leaf.openFile(this.state.file)
+            void leaf.openFile(file)
         }
     }
 
@@ -159,10 +243,6 @@ export default class TaskTracker implements TaskTrackerStore {
         }
     }
 
-    get pinned() {
-        return this.state.pinned
-    }
-
     public finish() {}
 
     public destory() {
@@ -171,19 +251,25 @@ export default class TaskTracker implements TaskTrackerStore {
         }
     }
 
-    public sync(task: TaskItem) {
-        if (
-            this.state.task?.blockLink &&
-            this.state.task.blockLink === task.blockLink
-        ) {
-            this.store.update((state) => {
-                if (state.task) {
-                    let name = state.task.name
-                    state.task = { ...task, name }
-                }
-                return state
-            })
-        }
+    /** Called with the freshly read tasks of a note; keeps the focused task up to date. */
+    public sync(path: string, tasks: TaskItem[]) {
+        const current = this.state.task
+        if (!current || current.path !== path) return
+        const fresh =
+            (current.blockLink &&
+                tasks.find((t) => t.blockLink === current.blockLink)) ||
+            tasks.find(
+                (t) => t.line === current.line && t.description === current.description,
+            ) ||
+            tasks.find((t) => t.description === current.description)
+        if (!fresh) return
+        // A label the user has not changed follows the description
+        const name =
+            current.name === current.description ? fresh.description : current.name
+        this.store.update((state) => ({
+            ...state,
+            task: { ...fresh, name },
+        }))
     }
 
     public async updateActual() {
@@ -193,93 +279,33 @@ export default class TaskTracker implements TaskTrackerStore {
             this.task &&
             this.task.blockLink
         ) {
-            let file = this.plugin.app.vault.getAbstractFileByPath(
-                this.task.path,
-            )
-            if (file && file instanceof TFile) {
-                const f = file
-                this.store.update((state) => {
-                    if (state.task) {
-                        if (state.task.actual >= 0) {
-                            state.task.actual += 1
-                        } else {
-                            state.task.actual = 1
-                        }
-                    }
-                    return state
-                })
-                await this.incrTaskActual(this.task.blockLink, f)
-            }
+            const task = this.task
+            this.store.update((state) => ({
+                ...state,
+                task: state.task
+                    ? { ...state.task, actual: Math.max(0, state.task.actual) + 1 }
+                    : state.task,
+            }))
+            await this.incrTaskActual(task)
         }
     }
 
-    private async incrTaskActual(blockLink: string, file: TFile) {
+    /** Counts one more finished pomodoro on the task's line in its note. */
+    private async incrTaskActual(task: TaskItem) {
+        const file = this.plugin.app.vault.getAbstractFileByPath(task.path)
+        if (!(file instanceof TFile) || file.extension !== 'md') {
+            return
+        }
         const format = this.plugin.getSettings().taskFormat
 
-        if (file.extension !== 'md') {
-            return
-        }
-
-        let metadata = this.plugin.app.metadataCache.getFileCache(file)
-        let content = await this.plugin.app.vault.read(file)
-
-        if (!content || !metadata) {
-            return
-        }
-
-        const lines = content.split('\n')
-
-        for (let rawElement of metadata.listItems || []) {
-            if (rawElement.task) {
-                let lineNr = rawElement.position.start.line
-                let line = lines[lineNr]
-
-                const components = extractTaskComponents(line)
-
-                if (!components) {
-                    continue
-                }
-
-                if (components.blockLink === blockLink) {
-                    const match = components.body.match(POMODORO_REGEX)
-                    if (match !== null) {
-                        let pomodoros = match[1]
-                        let [actual, expected] = pomodoros.split('/')
-                        actual = actual || '0'
-                        let text = `🍅:: ${parseInt(actual) + 1}`
-                        if (expected !== undefined) {
-                            text += `/${expected.trim()}`
-                        }
-                        line = line
-                            .replace(/🍅:: *(\d* *\/? *\d* *)/, text)
-                            .trim()
-                    } else {
-                        let detail = DESERIALIZERS[format].deserialize(
-                            components.body,
-                        )
-                        line = line.replace(
-                            detail.description,
-                            `${detail.description} [🍅:: 1]`,
-                        )
-                    }
-
-                    lines[lineNr] = line
-
-                    await this.plugin.app.vault.modify(file, lines.join('\n'))
-
-                    this.plugin.app.metadataCache.trigger(
-                        'changed',
-                        file,
-                        content,
-                        metadata,
-                    )
-
-                    this.plugin.app.workspace
-                        .getActiveViewOfType(MarkdownView)
-                        ?.load()
-                    break
-                }
-            }
-        }
+        await this.plugin.app.vault.process(file, (data) => {
+            const lines = data.split('\n')
+            const index = locateTaskLine(lines, task, format)
+            if (index < 0) return data
+            // Count from what the note says, not from what was last read
+            const done = readPomodoros(lines[index], format)?.actual ?? 0
+            lines[index] = editTaskLine(lines[index], { actual: done + 1 }, format)
+            return lines.join('\n')
+        })
     }
 }

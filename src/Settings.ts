@@ -30,6 +30,8 @@ export interface Settings {
     logFormat: LogFormat
     useSystemNotification: boolean
     taskFormat: TaskFormat
+    /** Notes whose tasks stay in the task list while working in other notes. */
+    pinnedNotes?: string[]
     lowFps: boolean
     hardcoreMode: boolean
     enableCelebrationParticles: boolean
@@ -243,7 +245,7 @@ export default class PomodoroSettings extends PluginSettingTab {
         new Setting(containerEl)
             .setName('Enable task tracking')
             .setDesc(
-                'Important: Enabling this feature will automatically add a block ID when activating a task, unless a block ID is already present.',
+                'Adds one to the 🍅 count on the task you are focusing on each time a focus session finishes. Focusing on a task adds a block ID (like ^a1b2) to its line, unless it already has one, so the task can be found again.',
             )
             .addToggle((toggle) => {
                 toggle.setValue(this._settings.enableTaskTracking)

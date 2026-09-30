@@ -1,11 +1,14 @@
 import PomodoroTimerPlugin from 'main'
-import { type CachedMetadata, type TFile } from 'obsidian'
+import { TFile, type CachedMetadata } from 'obsidian'
 import { extractTaskComponents } from 'utils'
 import { writable, derived, type Readable, type Writable } from 'svelte/store'
 
 import type { TaskFormat } from 'Settings'
 import type { Unsubscriber } from 'svelte/motion'
 import { DESERIALIZERS } from 'serializer'
+import type { TaskLineEdits } from 'serializer/TaskLineEditor'
+import TaskWriter from 'TaskWriter'
+import { settings } from 'stores'
 
 export type TaskItem = {
     path: string
@@ -30,7 +33,23 @@ export type TaskItem = {
     line: number
 }
 
+/** The tasks of one note, as listed in the task panel. */
+export type TaskGroup = {
+    path: string
+    /** File name without the extension. */
+    name: string
+    /** The note currently open in the editor. */
+    current: boolean
+    pinned: boolean
+    /** The note is still being read. */
+    loading: boolean
+    tasks: TaskItem[]
+}
+
 export type TaskStore = {
+    /** The current note first (unless it is pinned), then the pinned notes in the order pinned. */
+    groups: TaskGroup[]
+    /** Every task of every group. */
     list: TaskItem[]
 }
 
@@ -41,11 +60,20 @@ export default class Tasks implements Readable<TaskStore> {
 
     public subscribe
 
+    public writer: TaskWriter
+
     private unsubscribers: Unsubscriber[] = []
 
     private state: TaskStore = {
+        groups: [],
         list: [],
     }
+
+    /** Tasks of the notes currently listed, by note path. */
+    private loaded = new Map<string, TaskItem[]>()
+
+    /** Notes read before Obsidian had indexed them; read again once it has. */
+    private unresolved = new Set<string>()
 
     public static getDeserializer(format: TaskFormat) {
         return DESERIALIZERS[format]
@@ -53,6 +81,7 @@ export default class Tasks implements Readable<TaskStore> {
 
     constructor(plugin: PomodoroTimerPlugin) {
         this.plugin = plugin
+        this.writer = new TaskWriter(plugin)
 
         this._store = writable(this.state)
 
@@ -62,15 +91,22 @@ export default class Tasks implements Readable<TaskStore> {
             }),
         )
 
+        // Which notes are listed depends only on the current note and the pins, so the
+        // panel is not rebuilt each time a task is picked.
         this.unsubscribers.push(
-            derived(this.plugin.tracker!, ($tracker) => {
-                return $tracker.file?.path
-            }).subscribe(() => {
-                let file = this.plugin.tracker?.file
-                if (file) {
-                    this.loadFileTasks(file)
-                } else {
-                    this.clearTasks()
+            derived(this.plugin.tracker!, ($tracker) =>
+                [$tracker.file?.path ?? '', ...$tracker.pinned].join('\n'),
+            ).subscribe(() => this.refresh()),
+        )
+
+        // Tasks are read differently when the format setting changes
+        let format = plugin.getSettings().taskFormat
+        this.unsubscribers.push(
+            settings.subscribe((s) => {
+                if (s.taskFormat !== format) {
+                    format = s.taskFormat
+                    this.loaded.clear()
+                    this.refresh()
                 }
             }),
         )
@@ -78,70 +114,117 @@ export default class Tasks implements Readable<TaskStore> {
         this.subscribe = this._store.subscribe
 
         this.plugin.registerEvent(
+            plugin.app.metadataCache.on('resolved', () => {
+                const paths = [...this.unresolved]
+                this.unresolved.clear()
+                paths.forEach((path) => this.loadFileTasks(path))
+            }),
+        )
+
+        this.plugin.registerEvent(
             plugin.app.metadataCache.on(
                 'changed',
                 (file: TFile, content: string, cache: CachedMetadata) => {
                     if (
                         file.extension === 'md' &&
-                        file == this.plugin.tracker!.file
+                        this.wanted().some((w) => w.path === file.path)
                     ) {
-                        let tasks = resolveTasks(
+                        const tasks = resolveTasks(
                             this.plugin.getSettings().taskFormat,
                             file,
                             content,
                             cache,
                         )
-                        this._store.update((state) => {
-                            state.list = tasks
-                            return state
-                        })
-
-                        // sync active task
-                        if (this.plugin.tracker?.task?.blockLink) {
-                            let task = tasks.find(
-                                (item) =>
-                                    item.blockLink &&
-                                    item.blockLink ===
-                                        this.plugin.tracker?.task?.blockLink,
-                            )
-                            if (task) {
-                                this.plugin.tracker.sync(task)
-                            }
-                        }
+                        this.loaded.set(file.path, tasks)
+                        this.publish()
+                        this.plugin.tracker?.sync(file.path, tasks)
                     }
                 },
             ),
         )
     }
 
-    public loadFileTasks(file: TFile) {
-        if (file.extension == 'md') {
-            this.plugin.app.vault
-                .cachedRead(file)
-                .then((c) => {
-                    let tasks = resolveTasks(
-                        this.plugin.getSettings().taskFormat,
-                        file,
-                        c,
-                        this.plugin.app.metadataCache.getFileCache(file),
-                    )
-                    this._store.update(() => ({
-                        list: tasks,
-                    }))
-                })
-                .catch((err) => console.error('[Pomodoro Timer Forest] Failed to read tasks', err))
-        } else {
-            this._store.update(() => ({
-                file,
-                list: [],
-            }))
+    /** The notes to list, in display order. */
+    private wanted() {
+        const tracker = this.plugin.tracker
+        const current = tracker?.file?.path
+        const pinned = tracker?.pinnedPaths ?? []
+        const out: { path: string; current: boolean; pinned: boolean }[] = []
+        if (current && !pinned.includes(current)) {
+            out.push({ path: current, current: true, pinned: false })
+        }
+        for (const path of pinned) {
+            out.push({ path, current: path === current, pinned: true })
+        }
+        return out
+    }
+
+    /** Reads the notes that are newly listed and forgets the ones that no longer are. */
+    private refresh() {
+        const wanted = this.wanted()
+        for (const path of [...this.loaded.keys()]) {
+            if (!wanted.some((w) => w.path === path)) this.loaded.delete(path)
+        }
+        this.publish()
+        for (const { path } of wanted) {
+            if (!this.loaded.has(path)) this.loadFileTasks(path)
         }
     }
 
-    public clearTasks() {
-        this._store.update(() => ({
-            list: [],
-        }))
+    private publish() {
+        const { vault } = this.plugin.app
+        const groups: TaskGroup[] = []
+        for (const w of this.wanted()) {
+            const file = vault.getAbstractFileByPath(w.path)
+            if (!(file instanceof TFile)) continue // a pinned note that is not in this vault (yet)
+            groups.push({
+                path: w.path,
+                name: file.basename,
+                current: w.current,
+                pinned: w.pinned,
+                loading: !this.loaded.has(w.path),
+                tasks: this.loaded.get(w.path) ?? [],
+            })
+        }
+        this._store.set({
+            groups,
+            list: groups.flatMap((g) => g.tasks),
+        })
+    }
+
+    public loadFileTasks(path: string) {
+        const file = this.plugin.app.vault.getAbstractFileByPath(path)
+        if (!(file instanceof TFile)) return
+        if (file.extension !== 'md') {
+            this.loaded.set(path, [])
+            this.publish()
+            return
+        }
+        this.plugin.app.vault
+            .cachedRead(file)
+            .then((c) => {
+                // The panel may have moved on while the note was being read
+                if (!this.wanted().some((w) => w.path === path)) return
+                const metadata = this.plugin.app.metadataCache.getFileCache(file)
+                if (!metadata) this.unresolved.add(path)
+                const tasks = resolveTasks(
+                    this.plugin.getSettings().taskFormat,
+                    file,
+                    c,
+                    metadata,
+                )
+                this.loaded.set(path, tasks)
+                this.publish()
+                this.plugin.tracker?.sync(path, tasks)
+            })
+            .catch((err) =>
+                console.error('[Pomodoro Timer Forest] Failed to read tasks', err),
+            )
+    }
+
+    /** Writes pomodoros / dates to the task's line in its note. */
+    public update(task: TaskItem, edits: TaskLineEdits) {
+        return this.writer.update(task, edits)
     }
 
     public destroy() {
@@ -194,8 +277,8 @@ export function resolveTasks(
                 start: detail.startDate?.format(dateformat) ?? '',
                 priority: detail.priority,
                 recurrence: detail.recurrenceRule,
-                expected: expected ? parseInt(expected) : 0,
-                actual: actual === '' ? 0 : parseInt(actual),
+                expected: parseInt(expected) || 0,
+                actual: parseInt(actual) || 0,
                 tags: detail.tags,
                 line: lineNr,
             }
