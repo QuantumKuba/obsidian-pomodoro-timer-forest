@@ -1,13 +1,13 @@
 <script lang="ts">
-import { afterUpdate } from 'svelte'
-
 export let render: (content: string, el: HTMLElement) => void
 export let content: string
 let el: HTMLDivElement
-afterUpdate(() => {
+
+// Draw again only when the text changes, not on every update of the row around it
+$: if (el) {
     el.empty()
     render(content, el)
-})
+}
 </script>
 
 <div bind:this={el} class="pomodoro-tasks-item-desc"></div>

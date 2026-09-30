@@ -37,17 +37,20 @@ If your plugin does not need CSS, delete this file.
 
 /* Doubled class: outranks Obsidian's markdown rules (e.g. headings) by specificity alone */
 .pomodoro-tasks-item-desc.pomodoro-tasks-item-desc * {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
 }
 
+/* A task's text takes the room it needs, up to two lines */
 .pomodoro-tasks-item-desc p {
     width: 100%;
-    line-height: 1.1;
-    height: 2.2em;
+    line-height: 1.35;
     padding: 0;
     margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    line-break: anywhere;
+    overflow-wrap: anywhere;
 }
 
 /* ---- Settings tab helpers ---- */
