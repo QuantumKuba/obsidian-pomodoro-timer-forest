@@ -359,5 +359,3 @@ node scripts/readme-images/build.mjs
 ## Credits
 
 Built on [**Pomodoro Timer for Obsidian**](https://github.com/eatgrass/obsidian-pomodoro-timer) by eatgrass (MIT). The timer, task tracking and logging come from that project. The Forest & Homestead game layer is added on top.
-
-[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="BuyMeACoffee" width="150">](https://www.buymeacoffee.com/eatgrass) <sub>Support the original timer's author.</sub>
