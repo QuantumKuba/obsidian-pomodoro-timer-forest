@@ -5,6 +5,11 @@
  */
 import { readable, writable } from 'svelte/store'
 import TimerViewComponent from '../../src/TimerViewComponent.svelte'
+import TasksComponent from '../../src/TasksComponent.svelte'
+import type { TaskItem, TaskGroup } from '../../src/Tasks'
+import { addDays, today } from '../../src/tasks/dates'
+import { settings } from '../../src/stores'
+import STYLES_CSS from '../../styles.css'
 import ForestComponent from '../../src/forest/ForestComponent.svelte'
 import { activePlantStore, gamificationStore, setPlugin } from '../../src/stores'
 import { getBuilding } from '../../src/assets/floraCatalog'
@@ -84,6 +89,8 @@ if (scene === 'sidebar' || scene === 'sidebar-reward' || scene === 'sidebar-leve
         target: app,
         props: { timer: cloneTimer(idle ? 0 : ratio * 25 * 60000, !idle, !idle) as any, tasks: {} as any, tracker: {} as any, render: () => {} },
     })
+} else if (scene === 'tasks') {
+    mountTasks()
 } else {
     const full = scene === 'homestead'
     if (scene === 'homestead') rewardEvents.set([])
@@ -99,6 +106,94 @@ if (scene === 'sidebar' || scene === 'sidebar-reward' || scene === 'sidebar-leve
         requestAnimationFrame(() => setTimeout(() => {
             const id = g.homestead.find((i) => i.itemId === select)?.id
             document.querySelector(`[data-item="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        }, 50))
+    }
+}
+
+/** The task panel, with a few notes of sample tasks. Edits apply to the sample data. */
+function mountTasks() {
+    document.head.appendChild(Object.assign(document.createElement('style'), { textContent: STYLES_CSS }))
+    if (q.get('theme') === 'light') {
+        document.head.appendChild(Object.assign(document.createElement('style'), {
+            textContent: `:root{--background-primary:#fff;--background-primary-alt:#f5f6f8;--background-secondary:#f2f3f5;--background-secondary-alt:#e3e5e8;
+            --background-modifier-border:#dcdde0;--background-modifier-hover:rgba(0,0,0,.05);--background-modifier-form-field:#fff;
+            --text-normal:#222;--text-muted:#5c5c5c;--text-faint:#a0a0a0;--interactive-normal:#f2f3f5;--color-red:#e93147;--color-orange:#e9973f;--color-green:#08b94e;--color-blue:#086ddd}
+            button,input,select{color:var(--text-normal)} input{background:var(--background-modifier-form-field);border:1px solid var(--background-modifier-border)}`,
+        }))
+    }
+    // Obsidian adds these to every element
+    ;(HTMLElement.prototype as any).empty = function () { this.textContent = '' }
+    settings.update((s) => ({ ...s, enableTaskTracking: q.get('tracking') === '1' }))
+
+    const D = (n: number) => addDays(today(), n)
+    const item = (path: string, line: number, description: string, o: Partial<TaskItem> = {}): TaskItem => ({
+        path, fileName: path.split('/').pop()!, text: '', name: description, status: ' ', blockLink: '', checked: false, done: '', due: '', created: '',
+        cancelled: '', scheduled: '', start: '', description, priority: '', recurrence: '', expected: 0, actual: 0, tags: [], line, ...o,
+    })
+    const weekly = 'Journal/Weekly review.md', thesis = 'Projects/Thesis chapter 3.md', garden = 'Home/Garden plan.md'
+    const data: Record<string, { name: string; tasks: TaskItem[] }> = {
+        [weekly]: { name: 'Weekly review', tasks: [
+            item(weekly, 4, 'Clear the inbox', { expected: 2, actual: 2, checked: true, status: 'x', due: D(-1) }),
+            item(weekly, 5, 'Plan next week around the **deep work** blocks', { expected: 3, actual: 1, due: D(0) }),
+            item(weekly, 6, 'Reply to the grant committee #admin', { due: D(-3), tags: ['#admin'] }),
+            item(weekly, 7, 'Book dentist', { start: D(4) }),
+            item(weekly, 8, 'Tidy the reading list'),
+        ] },
+        [thesis]: { name: 'Thesis chapter 3', tasks: [
+            item(thesis, 2, 'Draft the methods section', { expected: 6, actual: 4, due: D(2), start: D(-5) }),
+            item(thesis, 3, 'Re-run the regression with the new dataset', { expected: 2, actual: 0, due: D(9) }),
+            item(thesis, 4, 'Send figures to the co-author', { expected: 1, actual: 3, due: D(1) }),
+        ] },
+        [garden]: { name: 'Garden plan', tasks: [item(garden, 1, 'Order tulip bulbs', { start: D(30), due: D(45) })] },
+    }
+    const pinnedOnly = q.get('pins') === '2' ? [thesis, garden] : [thesis]
+    const tracker = writable<any>({
+        file: { path: weekly, name: 'Weekly review.md', basename: 'Weekly review' },
+        pinned: pinnedOnly,
+        task: q.get('focus') === '0' ? undefined : { ...data[thesis].tasks[0], name: data[thesis].tasks[0].description, fileName: 'Thesis chapter 3.md' },
+    })
+    const store = writable<{ groups: TaskGroup[]; list: TaskItem[] }>({ groups: [], list: [] })
+    const publish = () => {
+        let t: any; tracker.subscribe((v) => (t = v))()
+        const order = [...(t.pinned.includes(weekly) ? [] : [weekly]), ...t.pinned]
+        const groups: TaskGroup[] = order.map((path) => ({ path, name: data[path].name, current: path === weekly, pinned: t.pinned.includes(path), loading: false, tasks: data[path].tasks }))
+        store.set({ groups, list: groups.flatMap((g) => g.tasks) })
+    }
+    publish()
+    const tasks: any = {
+        subscribe: store.subscribe,
+        writer: { tasksPluginAvailable: () => q.get('tasksplugin') !== '0', editWithTasksPlugin: async () => true },
+        async update(task: TaskItem, edits: any) {
+            const target = data[task.path].tasks.find((x) => x.line === task.line)!
+            if (edits.expected !== undefined) target.expected = edits.expected ?? 0
+            if (edits.actual !== undefined) target.actual = edits.actual
+            if (edits.start !== undefined) target.start = edits.start ?? ''
+            if (edits.due !== undefined) target.due = edits.due ?? ''
+            data[task.path].tasks = [...data[task.path].tasks]
+            publish()
+            return true
+        },
+    }
+    const fake: any = {
+        subscribe: tracker.subscribe,
+        togglePinned(path: string) { tracker.update((t) => ({ ...t, pinned: t.pinned.includes(path) ? t.pinned.filter((p: string) => p !== path) : [...t.pinned, path] })); publish() },
+        active(task: TaskItem) { tracker.update((t) => ({ ...t, task: { ...task } })) },
+        clear() { tracker.update((t) => ({ ...t, task: undefined })) },
+        setTaskName(name: string) { tracker.update((t) => ({ ...t, task: { ...t.task, name } })) },
+        openNote() {}, openTask() {},
+    }
+    const render = (content: string, el: HTMLElement) => {
+        const esc = content.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        el.innerHTML = `<p>${esc.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(#[\w-]+)/g, '<a style="color:var(--text-accent,#a99cf7)">$1</a>')}</p>`
+    }
+    new TasksComponent({ target: app, props: { tasks, tracker: fake, render } })
+
+    // ?click=<css selector>[&nth=n] presses a control before the screenshot
+    const sel = q.get('press')
+    if (sel) {
+        const nth = Number(q.get('nth') || 0)
+        requestAnimationFrame(() => setTimeout(() => {
+            ;(document.querySelectorAll(sel)[nth] as HTMLElement | undefined)?.click()
         }, 50))
     }
 }

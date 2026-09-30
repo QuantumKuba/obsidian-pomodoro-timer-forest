@@ -81,7 +81,7 @@ Unlock new species as you level up: from a humble Classic Pine to a glowing Cele
 
 - ✅ **Tick a task, earn a reward.** Check off a `- [ ]` task anywhere in your vault and it earns Coins and XP. Only real ticks count: pasting in already-checked tasks or toggling one back and forth earns nothing, and there's a daily cap.
 - 🏷️ **Smart seeds.** `#write` plants a Cherry Blossom, `#code` a Pine, `#study` an Oak. Your notes and tasks choose the tree.
-- 🍅 **Task tracking, built in.** Focus on a task and its actual-pomodoros count updates automatically (enable it in settings).
+- 🍅 **Task tracking, built in.** Focus on a task and its pomodoro count updates automatically (enable it in settings). Plan pomodoros and set start and due dates from the panel, and pin several notes to keep their tasks in one list.
 - 📓 **Daily-note logging.** Every tree can add a Dataview-friendly line to your daily note.
 - 🌲 **The Grove journal.** Browse any past day as a small island of the trees you grew, with a four-week activity map.
 - 📯 **Daily quests & a chest.** Three fresh quests every morning, such as *Take a proper break* or *Check off 3 tasks*. Finish them all for a chest.
@@ -131,7 +131,7 @@ The game layer sits on top of a full-featured Pomodoro timer for Obsidian:
 -   **Audible Alerts**: Stay on track with audio notifications signaling the end of each session.
 -   **Status Bar Display**: Monitor your progress directly from Obsidian's status bar to keep focusing.
 -   **Daily Note Integration**: Automatically log your sessions in your daily notes for better tracking.
--   **Task Tracking**: Automatically refresh the 'actual time' field for the task in focus.
+-   **Task Tracking**: Plan pomodoros, set start and due dates and pin several notes from the task panel, with the count refreshed for the task in focus.
 
 ## Notification
 
@@ -145,9 +145,34 @@ The game layer sits on top of a full-featured Pomodoro timer for Obsidian:
 
 ## Task Tracking
 
-To activate this feature, first enable it in the settings. Then add pomodoros inline-field after your task's text description as below. The pomodoro timer will then automatically update the actual count at the end of each work session.
+The **Tasks** panel (the checklist icon under the timer) lists the tasks of the note you are working in, plus every note you have pinned.
 
-**Important: Ensure to add this inline-field before the [Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin's fields. Placing it elsewhere may result in incorrect rendering within the Tasks Plugin.**
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%"><img src="docs/images/panel-tasks.png" alt="Task panel with a focus card and three notes, two of them pinned"><br><sub><b>One list, several notes</b><br>The note you are in, plus everything you pinned.</sub></td>
+    <td align="center" valign="top" width="50%"><img src="docs/images/panel-tasks-edit.png" alt="Inline editor with planned and done pomodoros, start date and due date"><br><sub><b>Plan without typing</b><br>Pomodoros, start date and due date, right under the task.</sub></td>
+  </tr>
+</table>
+
+-   **Focus a task** by clicking it. The timer counts its pomodoros, and the session is logged against it. Right-click a task for more actions.
+-   **Pin notes.** Click the pin next to a note's name to keep its tasks in the panel while you work in other notes. Pin as many notes as you like; pins are remembered between sessions. When you open another note, its tasks appear first, followed by your pinned notes. A task you are focusing on stays focused while its note is pinned, or while a focus session is running.
+-   **Plan and schedule from the panel.** The sliders button on a task opens its editor: how many pomodoros it should take, how many are done (with the number left shown), a start date and a due date. Changes are written straight to the task's line in your note, and the rest of the line is left alone.
+-   **Edit in Tasks.** With the [Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin installed, the editor also has an **Edit in Tasks** button. It opens the Tasks plugin's own editor (priority, recurrence, every date, status) through the plugin's public API and writes the result back to the line.
+-   **Count sessions automatically.** Turn on *Enable task tracking* in the settings. Every finished focus session then adds one to the focused task's count. Without it, the panel still works, and you can adjust the count by hand.
+
+This is what ends up in your note:
+
+```markdown
+-   [ ] Draft the methods section [🍅:: 4/6] 🛫 2025-09-25 📅 2025-10-03
+```
+
+`4/6` is four pomodoros done out of six planned. Dates follow the *Task format* setting: the Tasks emoji format shown above, or Dataview fields (`[start:: 2025-09-25] [due:: 2025-10-03]`).
+
+### Typing it by hand
+
+The panel is optional; you can still write the field yourself after the task's text. Enable tracking in the settings and the timer updates the count at the end of each work session.
+
+**Important: Ensure to add this inline-field before the [Tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin's fields. Placing it elsewhere may result in incorrect rendering within the Tasks Plugin.** The panel always puts it there.
 
 ```markdown
 -   [ ] Task with specified expected and actual pomodoros fields [🍅:: 3/10]

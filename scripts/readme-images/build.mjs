@@ -53,6 +53,8 @@ ui('panel-levelup', 'scene=sidebar-levelup&settle=1', 356, 640, { pad: 12 })
 ui('panel-grove', 'scene=forest&tab=grove', 356, 1010, { pad: 12 })
 ui('panel-market', 'scene=forest&tab=market&player=mid&click=Builders', 356, 960, { pad: 12 })
 ui('panel-journey', 'scene=forest&tab=journey', 356, 1510, { pad: 12 })
+ui('panel-tasks', 'scene=tasks&pins=2', 356, 860, { pad: 12 })
+ui('panel-tasks-edit', 'scene=tasks&press=.edit&nth=1&focus=1&tracking=1', 356, 1130, { pad: 12 })
 ui('homestead-full', 'scene=homestead&select=cabin', 1360, 880, { pad: 0, extra: 'body{height:880px;overflow:hidden}' })
 
 const only = process.argv[2]
