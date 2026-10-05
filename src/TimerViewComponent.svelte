@@ -12,6 +12,8 @@ import { FLORA_SPECIES, getSpecies } from './assets/floraCatalog'
 import { SPECIES_SVGS, growthSvg } from './assets/floraAssets'
 import type { AmbientSoundType } from './services/SoundManager'
 import { onMount, onDestroy } from 'svelte'
+import { slide } from 'svelte/transition'
+import { EARLY_HARVEST_RATE } from './services/Progression'
 
 export let timer: Timer
 export let tasks: Tasks
@@ -65,6 +67,29 @@ $: stageLabel =
           ? `${species.name} · tap to change`
           : { seed: 'Seed planted', sprout: 'Sprouting', sapling: 'Sapling', mature: 'Almost grown', withered: '' }[stage]
 
+// The focused task was checked off mid-session: offer to end it early
+let dismissedAt: number | null = null
+$: showTaskDone = $timer.taskDone && dismissedAt !== $timer.taskDoneAt
+$: harvestReady = $timer.elapsed >= $timer.earlyHarvestAt
+$: focusedMin = Math.floor($timer.elapsed / 60000)
+$: readyIn = clock($timer.earlyHarvestAt - $timer.elapsed)
+$: spare = clock($timer.remained.millis)
+const earlyPct = `${Math.round(EARLY_HARVEST_RATE * 100)}%`
+
+function clock(ms: number): string {
+    const total = Math.max(0, Math.ceil(ms / 1000))
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+function keepGoing() {
+    dismissedAt = $timer.taskDoneAt
+}
+
+function pickNextTask() {
+    keepGoing()
+    extra = 'tasks'
+}
+
 $: goal = $settings.dailyGoal || 4
 $: doneToday = $todayLog.completedPomodoros
 $: questsDone = $questBoard ? $questBoard.quests.filter((q) => q.claimed).length : 0
@@ -94,7 +119,7 @@ function onMainButton() {
 
 function onReset() {
     const s = $timer
-    const wouldWither = s.inSession && s.mode === 'WORK' && s.elapsed >= 60000 && $settings.hardcoreMode
+    const wouldWither = s.inSession && s.mode === 'WORK' && s.elapsed >= 60000 && $settings.hardcoreMode && !s.taskDone
     if (wouldWither && !confirmAbandon) {
         confirmAbandon = true
         return
@@ -198,6 +223,28 @@ function onAmbient(e: Event) {
                     <button class="keep" on:click={() => (confirmAbandon = false)}>Keep growing</button>
                     <button class="give-up" on:click={onReset}>Give up</button>
                 </div>
+            </div>
+        {/if}
+
+        {#if showTaskDone}
+            <div class="task-done" transition:slide={{ duration: 200 }} role="status">
+                <div class="td-head">
+                    <span class="td-title">✅ Task done with {spare} to spare</span>
+                    <button class="x" on:click={keepGoing} aria-label="Keep focusing" title="Keep focusing">✕</button>
+                </div>
+                {#if harvestReady}
+                    <p>Harvest a young tree now for your {focusedMin} focused minutes at {earlyPct} of the usual rewards, or keep going for the full tree and its sapling.</p>
+                    <div class="td-actions">
+                        <button class="td-main" on:click={() => timer.harvestEarly()}>🌿 Harvest early</button>
+                        <button on:click={keepGoing}>Keep going</button>
+                    </div>
+                {:else}
+                    <p>Early harvest opens in {readyIn}. Pick your next task and keep this tree growing, or end the session now. It won't wither.</p>
+                    <div class="td-actions">
+                        <button class="td-main" on:click={pickNextTask}>Pick next task</button>
+                        <button on:click={() => timer.harvestEarly()}>End session</button>
+                    </div>
+                {/if}
             </div>
         {/if}
 
@@ -463,6 +510,23 @@ function onAmbient(e: Event) {
     border: 1px solid rgba(161, 136, 127, 0.5);
 }
 .abandon div { display: flex; gap: 6px; }
+
+.task-done {
+    width: 100%;
+    max-width: 280px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    font-size: 0.74rem;
+    background: color-mix(in srgb, #43a047 12%, transparent);
+    border: 1px solid color-mix(in srgb, #43a047 45%, transparent);
+}
+.td-head { display: flex; justify-content: space-between; align-items: center; }
+.td-title { font-weight: 700; font-variant-numeric: tabular-nums; }
+.task-done p { margin: 4px 0 8px; color: var(--text-muted); line-height: 1.35; }
+.td-actions { display: flex; gap: 6px; justify-content: center; }
+.td-actions button { font-size: 0.72rem; padding: 3px 10px; }
+.td-main { background: #43a047; color: #fff; }
+.td-main:hover { background: #388e3c; }
 .abandon button { font-size: 0.72rem; padding: 3px 10px; }
 .keep { background: var(--interactive-accent); color: var(--text-on-accent); }
 

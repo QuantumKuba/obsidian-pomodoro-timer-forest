@@ -10,10 +10,10 @@ import type { BiomeType, GamificationData, PlacedHomesteadItem, PlantedTree } fr
 import {
     BUILDING_SVGS,
     DECOR_SVGS,
-    GROWTH_STAGE_SVGS,
     LIGHT_SOURCES,
     SPECIES_SVGS,
     VILLAGER_SVGS,
+    plantedTreeSvg,
 } from '../assets/floraAssets'
 import { getBuilding } from '../assets/floraCatalog'
 import { SCENE_CSS } from './sceneCss'
@@ -495,10 +495,10 @@ export function renderGrove(
     const items: SceneItem[] = trees.slice(0, cells.length).map((t, i) => ({
         x: cells[i].x,
         y: cells[i].y,
-        svg: t.status === 'withered' ? GROWTH_STAGE_SVGS.withered : speciesSprite(t.speciesId),
-        scale: t.status === 'withered' ? 0.85 : 0.8 + Math.min(0.35, t.durationMinutes / 150),
+        svg: plantedTreeSvg(t),
+        scale: t.status === 'withered' ? 0.85 : t.status === 'young' ? 0.7 : 0.8 + Math.min(0.35, t.durationMinutes / 150),
         key: t.id,
-        light: t.status === 'withered' ? undefined : LIGHT_SOURCES[t.speciesId],
+        light: t.status === 'mature' ? LIGHT_SOURCES[t.speciesId] : undefined,
     }))
     return renderIsoScene({ size, biome, items, vitality: 80, villagers: 0, interactive: false, ...opts, className: 'pf-grove' })
 }

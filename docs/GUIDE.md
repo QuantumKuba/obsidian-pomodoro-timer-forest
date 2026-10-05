@@ -5,6 +5,7 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 - [The loop in one minute](#the-loop-in-one-minute)
 - [Opening things](#opening-things)
 - [Growing trees](#growing-trees)
+  - [Done early? Harvest early](#done-early-harvest-early)
 - [Rewards](#rewards)
 - [Levels and unlocks](#levels-and-unlocks)
 - [Building your village](#building-your-village)
@@ -46,14 +47,30 @@ Both the sidebar panel and the full page have four tabs: **Village**, **Grove**,
 - **Giving up** (reset, or switching mode mid-session) after the first minute withers the tree, if *Withering* is on. The reset button asks you to confirm first.
 - Breaks are rewarded too, so resting is part of the game.
 
+### Done early? Harvest early
+
+Planned 25 minutes but the task took 10? You don't have to sit out the rest of the timer.
+
+When you **tick off the task you are focusing on** during a focus session (in its note, or with the Tasks plugin), the timer panel offers to end the session early. If the panel is hidden you get a notice instead; click it to open the timer.
+
+- **After 5 minutes of focus** (or half the session, for sessions shorter than 10 minutes), *Harvest early* grows a **young tree** for today's grove and pays **75 % of the usual rate for the minutes you focused**, plus your streak and building bonuses.
+- **Before that**, *End session* stops the timer without a tree. Nothing withers either way: once the task is done, stopping is finishing, not giving up. Reset and mode switching don't wither the tree any more either.
+- **Past the halfway mark** the session also counts as a 🍅 on the task (with task tracking on) and your break starts. Shorter ones go straight back to a fresh focus session for your next task.
+- **Keep going** instead and nothing changes: pick your next task from the list and the tree finishes growing as usual.
+
+Finishing a session is always worth more than harvesting early. An early harvest gives **no sapling** for your village and doesn't count toward your **daily goal**, *Grow trees* quests or trees-grown achievements. It does keep your **streak**, adds to your focus minutes (and *Focus for N minutes* quests), and wakes the village a little. Because every minute pays less than it would in a full session, ticking off lots of tiny tasks never beats focusing properly.
+
+Unchecking the task takes the offer back. Switching to another task does the same, and the timer carries on with that task. Turn the feature off with *Early harvest when the task is done* in settings. The command *Harvest focus session early (focused task is done)* does the same as the button.
+
 ## Rewards
 
 | Source | Sunlight ☀️ | Coins 🪙 | XP |
 |---|---|---|---|
 | Focus session | about 1.2 per minute | 1 per 10 minutes | 1 per minute |
+| [Early harvest](#done-early-harvest-early) (task done before the timer) | 75 % of the above, for the minutes focused | | |
 | First tree of the day | | | +10 |
 | Reaching your daily goal | +40 | +5 | +20 |
-| Ticking a task `[ ]` → `[x]` | | +3 (+2 if it was a 🍅 task) | +5 |
+| Ticking a task `[ ]` → `[x]` | | +3 (+2 if it was a 🍅 task, or the timer's task mid-session) | +5 |
 | Finishing a break | Tea Gazebo perk | | +3 |
 | Each daily quest | 20–35 | 3–4 | 15–25 |
 | Daily chest (all three quests) | +60 | +10 | +40, plus a sapling |
@@ -110,7 +127,7 @@ The game is meant to pull you back gently, not to punish you.
 
 - **Streak:** consecutive days with at least one finished session. A missed day resets it, unless a River Watermill shield covers it.
 - **Vitality (0–100 %):** shown as *Thriving / Healthy / Sleepy / Dormant*. It fades by a bit for each day without a session, never below 10 %, and one session lifts it again. It only changes how the village looks: fewer villagers, no chimney smoke, mist. **Nothing is ever destroyed.**
-- **Withering:** abandoning a session leaves a withered tree in today's grove. You can turn this off in settings.
+- **Withering:** abandoning a session leaves a withered tree in today's grove. You can turn this off in settings. Ending a session because its task is done never withers: see [Harvest early](#done-early-harvest-early).
 
 ## Smart seeds (tags)
 
@@ -144,6 +161,7 @@ Under *Settings → Pomodoro Timer Forest → Forest & homestead*:
 |---|---|
 | Daily focus goal | Pomodoros that make a "full" day (default 4). Sizes the goal meter and quests. |
 | Reward checked-off tasks | Coins and XP for ticking tasks. |
+| Early harvest when the task is done | Offer to end a session early when you tick off its task (on by default). |
 | Withering (hardcore mode) | Abandoned sessions leave a withered tree. |
 | Celebration effects | Petals, sparkles and the reward card. |
 | Forest chimes | Synthesized sound effects. |
@@ -157,6 +175,8 @@ If daily-note logging is on, each tree adds a line like this:
 ```markdown
 - 🌲 **Pomodoro Forest** (14:35): Draft RFC · [[Projects/Thesis]] · *Cherry Blossom* · [duration:: 25m] [tree:: sakura] [sunlight:: +44] [coins:: +2] [status:: completed]
 ```
+
+An early harvest logs the same line with `[status:: early]` and the minutes actually focused.
 
 ## Export and sharing
 

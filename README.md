@@ -80,6 +80,7 @@ Unlock new species as you level up: from a humble Classic Pine to a glowing Cele
 ## Made for how you actually work in Obsidian
 
 - ✅ **Tick a task, earn a reward.** Check off a `- [ ]` task anywhere in your vault and it earns Coins and XP. Only real ticks count: pasting in already-checked tasks or toggling one back and forth earns nothing, and there's a daily cap.
+- 🌿 **Done early? Harvest early.** Tick off the task you're focusing on and the timer offers to end the session: a young tree and most of the rewards for the minutes you focused, and nothing withers. Finishing the full session still pays the most, so ticking off tiny tasks can't be farmed.
 - 🏷️ **Smart seeds.** `#write` plants a Cherry Blossom, `#code` a Pine, `#study` an Oak. Your notes and tasks choose the tree.
 - 🍅 **Task tracking, built in.** Focus on a task and its pomodoro count updates automatically (enable it in settings). Plan pomodoros and set start and due dates from the panel, and pin several notes to keep their tasks in one list.
 - 📓 **Daily-note logging.** Every tree can add a Dataview-friendly line to your daily note.

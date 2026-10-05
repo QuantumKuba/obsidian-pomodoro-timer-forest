@@ -55,6 +55,7 @@ The loop is designed to pull you back daily without punishing you for resting.
 | Action | Sunlight ☀️ | Coins 🪙 | XP | Other |
 |---|---|---|---|---|
 | Finish a focus session (25m) | ~30 (1.2/min) | ~2 (1 per 10m) | 1/min | +1 sapling of the species grown, +12 vitality |
+| Harvest early (focused task done, ≥5m) | 75% of 1.2/min | 75% of 1 per 10m | 0.75/min | Young tree in the grove, +4 vitality, no sapling |
 | First tree of the day | | | +10 | |
 | Reach the daily goal (setting, default 4) | +40 | +5 | +20 | |
 | Streak bonus | +2% per streak day (max +20%) | | | |
@@ -69,7 +70,8 @@ The loop is designed to pull you back daily without punishing you for resting.
 - **Levels**: total XP to reach level *L* is `50·(L−1)·L` (L2 = 100, L5 = 1000, L10 = 4500).
 - **Vitality (0–100)** fades 15 per day with zero sessions, never below 10, slowed by the Hearth Campfire. It changes how the village looks: villagers, chimney smoke, fireflies, butterflies, saturation and mist. **Nothing is ever destroyed.**
 - **Streak**: breaks after a missed day unless the River Watermill has shields left this month.
-- **Withering** (setting): giving up a work session after the first minute leaves a withered tree in today's grove. The UI asks for confirmation first.
+- **Withering** (setting): giving up a work session after the first minute leaves a withered tree in today's grove. The UI asks for confirmation first. A session whose focused task was checked off never withers.
+- **Early harvest** (setting, on by default): when the task the timer is focused on goes `[ ]`→`[x]` during a work session (matched by its block id), the session can end early. From `min(5, session/2)` minutes it grants a `young` tree with `round(1.2·m·0.75)` sunlight, `floor(m/10·0.75)` coins and `round(0.75·m)` XP for `m` focused minutes, with the streak and building percentages applied. No sapling, no `completedPomodoros`, no first-tree, daily-goal or `sessions` / `tagged_session` quest progress; it does check in the streak, add focus minutes, progress `minutes` and `linked_task` quests, and add +4 vitality. Before the minimum it ends with no tree. Past halfway it adds a 🍅 to the task and moves on to the break. Per minute it always pays less than finishing, so it can't be farmed with short tasks.
 - **Village building**: every finished session puts a sapling of the tree you grew into your inventory. Purchases also go into inventory and are then placed on a tile. Items can be moved, stowed back to inventory and upgraded. Paths, brooks and decorations can be bought repeatedly. Land expands from 5×5 to 8×8.
 
 ## 3. Flora Catalog

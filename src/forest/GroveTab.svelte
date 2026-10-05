@@ -1,7 +1,7 @@
 <script lang="ts">
 import { gamificationStore, pluginInstance, clockMinute, settings } from '../stores'
 import { renderGrove } from '../render/VillageScene'
-import { SPECIES_SVGS, GROWTH_STAGE_SVGS } from '../assets/floraAssets'
+import { plantedTreeSvg } from '../assets/floraAssets'
 import { getSpecies } from '../assets/floraCatalog'
 import { addDays, dateKey, parseDateKey } from '../services/Progression'
 import type { PlantedTree } from '../types/forest'
@@ -17,7 +17,8 @@ let focusTreeId: string | null = null
 $: log = $gamificationStore.dailyLogs[selectedDateKey]
 $: trees = log?.trees || []
 $: grown = trees.filter((t) => t.status === 'mature').length
-$: withered = trees.length - grown
+$: young = trees.filter((t) => t.status === 'young').length
+$: withered = trees.filter((t) => t.status === 'withered').length
 $: skySlot = Math.floor($clockMinute.getTime() / 300_000)
 $: sceneHtml = renderGrove(trees, $gamificationStore.activeBiome, { date: new Date(skySlot * 300_000), idPrefix: sceneId, still: $settings.lowFps })
 $: focusTree = trees.find((t) => t.id === focusTreeId) || null
@@ -74,6 +75,7 @@ function heat(count: number): number {
     <div class="summary">
         <div><span class="num">{log?.totalMinutes || 0}m</span><span class="lbl">focused</span></div>
         <div><span class="num grown">{grown}</span><span class="lbl">trees</span></div>
+        {#if young}<div><span class="num grown">{young}</span><span class="lbl" title="Harvested early: the task was done before the timer ended">early</span></div>{/if}
         <div><span class="num">{log?.tasksCompleted || 0}</span><span class="lbl">tasks</span></div>
         {#if withered}<div><span class="num wither">{withered}</span><span class="lbl">withered</span></div>{/if}
     </div>
@@ -92,9 +94,9 @@ function heat(count: number): number {
         {@const sp = getSpecies(focusTree.speciesId)}
         <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
         <div class="tree-card {focusTree.notePath ? 'link' : ''}" on:click={() => focusTree && open(focusTree)}>
-            <div class="tc-art">{@html focusTree.status === 'withered' ? GROWTH_STAGE_SVGS.withered : SPECIES_SVGS[focusTree.speciesId] || ''}</div>
+            <div class="tc-art">{@html plantedTreeSvg(focusTree)}</div>
             <div class="tc-body">
-                <strong>{focusTree.status === 'withered' ? `Withered ${sp?.name || ''}` : sp?.name}</strong>
+                <strong>{focusTree.status === 'withered' ? `Withered ${sp?.name || ''}` : focusTree.status === 'young' ? `Young ${sp?.name || ''} · harvested early` : sp?.name}</strong>
                 <span>{time(focusTree)} · {focusTree.durationMinutes}m</span>
                 {#if focusTree.taskText}<span class="task">✔ {focusTree.taskText}</span>{/if}
                 {#if focusTree.notePath}<span class="note">📄 {focusTree.notePath.split('/').pop()?.replace(/\.md$/, '')} — open</span>{/if}
@@ -107,7 +109,7 @@ function heat(count: number): number {
             {#each [...trees].reverse() as t (t.id)}
                 <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
                 <div class="row {t.status}" class:active={t.id === focusTreeId} on:click={() => (focusTreeId = t.id)} on:dblclick={() => open(t)}>
-                    <span class="r-art">{@html t.status === 'withered' ? GROWTH_STAGE_SVGS.withered : SPECIES_SVGS[t.speciesId] || ''}</span>
+                    <span class="r-art">{@html plantedTreeSvg(t)}</span>
                     <span class="r-time">{time(t)}</span>
                     <span class="r-text">{t.taskText || t.notePath?.split('/').pop()?.replace(/\.md$/, '') || getSpecies(t.speciesId)?.name}</span>
                     <span class="r-dur">{t.durationMinutes}m</span>

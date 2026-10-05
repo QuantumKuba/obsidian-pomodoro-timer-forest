@@ -1051,3 +1051,10 @@ export function growthSvg(stage: 'seed' | 'sprout' | 'sapling', speciesId: strin
     if (stage === 'sprout') return svg(sproutFor(speciesId))
     return svg(saplingFor(speciesId))
 }
+
+/** A tree in the grove: withered, young (harvested early when its task was done), or fully grown. */
+export function plantedTreeSvg(tree: { status: 'mature' | 'young' | 'withered'; speciesId: string }): string {
+    if (tree.status === 'withered') return GROWTH_STAGE_SVGS.withered
+    if (tree.status === 'young') return growthSvg('sapling', tree.speciesId)
+    return SPECIES_SVGS[tree.speciesId] || SPECIES_SVGS.classic_pine
+}

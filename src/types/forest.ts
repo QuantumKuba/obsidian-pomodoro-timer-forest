@@ -62,7 +62,8 @@ export interface PlantedTree {
     speciesId: string
     plantedAt: string // ISO string
     durationMinutes: number
-    status: 'mature' | 'withered'
+    /** `young`: harvested early because its task was done before the timer ended. */
+    status: 'mature' | 'young' | 'withered'
     notePath?: string
     taskText?: string
     tags?: string[]
@@ -85,6 +86,8 @@ export interface DailyForestLog {
     completedPomodoros: number
     tasksCompleted?: number
     breaksCompleted?: number
+    /** Sessions ended early because their task was done; not counted in completedPomodoros. */
+    earlyHarvests?: number
 }
 
 export type QuestKind =
@@ -148,6 +151,7 @@ export interface GamificationData {
         totalPomodoros: number
         treesGrown: number
         treesWithered: number
+        earlyHarvests: number
         tasksCompleted: number
         breaksCompleted: number
         questsCompleted: number
@@ -209,7 +213,7 @@ export interface RewardLine {
 /** A celebratory event shown in the UI (session harvest, task, quest, level-up…). */
 export interface RewardEvent {
     id: string
-    kind: 'harvest' | 'wither' | 'task' | 'break' | 'quest' | 'chest' | 'achievement' | 'levelup'
+    kind: 'harvest' | 'early' | 'wither' | 'task' | 'break' | 'quest' | 'chest' | 'achievement' | 'levelup'
     title: string
     subtitle?: string
     speciesId?: string

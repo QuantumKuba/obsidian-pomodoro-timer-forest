@@ -26,15 +26,20 @@ import {
 import {
     ACHIEVEMENTS,
     CHEST_REWARD,
+    EARLY_HARVEST_RATE,
     VITALITY_DAILY_FADE,
     VITALITY_FLOOR,
     addDays,
     dateKey,
     daysBetween,
+    earlyHarvestBaseReward,
+    earlyHarvestMinMinutes,
     generateQuestBoard,
     levelFromXp,
     perkValue,
+    sessionBaseReward,
     upgradeCost,
+    type BaseReward,
 } from './Progression'
 import SoundManager, { type AmbientSoundType } from './SoundManager'
 import ConfettiEngine from './ConfettiEngine'
@@ -178,7 +183,8 @@ export default class ForestEngine {
                 const span = Math.min(60, daysBetween(g.lastVisitDate, today))
                 for (let i = 0; i < span; i++) {
                     const d = addDays(g.lastVisitDate, i)
-                    if (!(g.dailyLogs[d]?.completedPomodoros > 0)) {
+                    const log = g.dailyLogs[d]
+                    if (!(log?.completedPomodoros > 0 || (log?.earlyHarvests ?? 0) > 0)) {
                         g.vitality = Math.max(VITALITY_FLOOR, g.vitality - fade)
                     }
                 }
@@ -318,37 +324,12 @@ export default class ForestEngine {
         let result: SessionCompletionResult | null = null
 
         this.mutate((g) => {
-            const lines: RewardLine[] = []
-            const baseSun = Math.max(5, Math.round(durationMinutes * 1.2))
-            const baseCoins = Math.max(1, Math.floor(durationMinutes / 10))
-            lines.push({ label: `${durationMinutes}m of focus`, sunlight: baseSun, coins: baseCoins, xp: durationMinutes })
+            const base = sessionBaseReward(durationMinutes)
+            const lines: RewardLine[] = [{ label: `${durationMinutes}m of focus`, ...base }]
 
             // Streak first, so today's session counts toward its own bonus
-            const last = g.streak.lastCheckInDate
-            if (last !== today) {
-                g.streak.current = last === addDays(today, -1) ? g.streak.current + 1 : 1
-                g.streak.longest = Math.max(g.streak.longest, g.streak.current)
-                g.streak.lastCheckInDate = today
-            }
-
-            let sunPct = 0
-            let coinPct = 0
-            const pctLine = (label: string, pct: number, kind: 'sun' | 'coin') => {
-                if (pct <= 0) return
-                if (kind === 'sun') sunPct += pct
-                else coinPct += pct
-                lines.push({
-                    label: `${label} +${pct}%`,
-                    sunlight: kind === 'sun' ? Math.round((baseSun * pct) / 100) : undefined,
-                    coins: kind === 'coin' ? Math.round((baseCoins * pct) / 100) : undefined,
-                })
-            }
-            pctLine(`🔥 ${g.streak.current}-day streak`, Math.min(20, Math.max(0, g.streak.current - 1) * 2), 'sun')
-            pctLine('🏡 Cozy Cabin', perkValue(g.homestead, 'sunlight_pct'), 'sun')
-            if (durationMinutes >= 45) pctLine('🌬️ Windmill (long session)', perkValue(g.homestead, 'long_session_sunlight_pct'), 'sun')
-            const hour = new Date().getHours()
-            if (hour >= 19 || hour < 5) pctLine('🏮 Lanterns (evening)', perkValue(g.homestead, 'night_sunlight_pct'), 'sun')
-            pctLine('🪣 Village Well', perkValue(g.homestead, 'coins_pct'), 'coin')
+            this.checkInStreak(g, today)
+            const { sunPct, coinPct } = this.focusBonuses(g, base, durationMinutes, lines)
 
             const log = this.todayLog(g, today)
             const firstToday = log.completedPomodoros === 0
@@ -368,9 +349,9 @@ export default class ForestEngine {
             }
 
             const earned = this.grant(g, {
-                sunlight: baseSun * (1 + sunPct / 100) + bonusSun,
-                coins: baseCoins * (1 + coinPct / 100) + bonusCoins,
-                xp: durationMinutes + bonusXp,
+                sunlight: base.sunlight * (1 + sunPct / 100) + bonusSun,
+                coins: base.coins * (1 + coinPct / 100) + bonusCoins,
+                xp: base.xp + bonusXp,
             })
 
             // The grown tree becomes a sapling you can plant in the village
@@ -421,6 +402,129 @@ export default class ForestEngine {
         return result
     }
 
+    /**
+     * The focused task was done before the timer ended and the session was cut short. The
+     * minutes focused pay at EARLY_HARVEST_RATE and a young tree joins today's grove, but none
+     * of a full tree's extras: no sapling for the village, no daily goal or "grow trees" quest
+     * progress, no first-tree bonus. Finishing the session is always worth more per minute.
+     */
+    public harvestEarly(
+        focusedMinutes: number,
+        sessionMinutes: number,
+        taskContext?: { taskText?: string; notePath?: string; tags?: string[] },
+    ): SessionCompletionResult | null {
+        this.soundManager.stopAmbient()
+        this.ensureToday()
+
+        const currentPlant = get(this.activePlantStore)
+        this.activePlantStore.set(null)
+        const minutes = Math.floor(focusedMinutes)
+        if (focusedMinutes < earlyHarvestMinMinutes(sessionMinutes) || minutes < 1) return null
+
+        const speciesId = currentPlant?.speciesId || this.state.selectedSpeciesId || 'classic_pine'
+        const species = getSpecies(speciesId) || FLORA_SPECIES[0]
+        const today = dateKey()
+        const settings = this.settings()
+
+        const youngTree: PlantedTree = {
+            id: `tree_young_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            speciesId,
+            plantedAt: new Date().toISOString(),
+            durationMinutes: minutes,
+            status: 'young',
+            notePath: taskContext?.notePath || currentPlant?.notePath,
+            taskText: taskContext?.taskText || currentPlant?.taskText,
+            tags: taskContext?.tags,
+        }
+
+        let result: SessionCompletionResult | null = null
+
+        this.mutate((g) => {
+            const base = earlyHarvestBaseReward(minutes)
+            const pct = Math.round(EARLY_HARVEST_RATE * 100)
+            const lines: RewardLine[] = [{ label: `${minutes}m of focus · ${pct}% early rate`, ...base }]
+
+            // Real focus happened today, so the streak holds
+            this.checkInStreak(g, today)
+            const { sunPct, coinPct } = this.focusBonuses(g, base, minutes, lines)
+            lines.push({ label: `🌳 Finish the full ${sessionMinutes}m next time for a sapling and a tree toward your goal` })
+
+            const earned = this.grant(g, {
+                sunlight: base.sunlight * (1 + sunPct / 100),
+                coins: base.coins * (1 + coinPct / 100),
+                xp: base.xp,
+            })
+
+            const log = this.todayLog(g, today)
+            log.trees.push(youngTree)
+            log.totalMinutes += minutes
+            log.earlyHarvests = (log.earlyHarvests || 0) + 1
+            g.lifetimeStats.totalFocusMinutes += minutes
+            g.lifetimeStats.earlyHarvests = (g.lifetimeStats.earlyHarvests || 0) + 1
+            g.vitality = Math.min(100, g.vitality + 4)
+
+            this.emit({
+                kind: 'early',
+                title: `Task done early — a young ${species.name}`,
+                subtitle: youngTree.taskText || (youngTree.notePath ? youngTree.notePath.split('/').pop()?.replace(/\.md$/, '') : undefined),
+                speciesId,
+                ...earned,
+                lines,
+            })
+
+            this.progressQuests(g, 'minutes', minutes)
+            if (youngTree.taskText) this.progressQuests(g, 'linked_task', 1)
+
+            result = {
+                tree: youngTree,
+                sunlightEarned: earned.sunlight,
+                coinsEarned: earned.coins,
+                currentStreak: g.streak.current,
+                speciesName: species.name,
+            }
+        })
+
+        if (settings.forestSounds) this.soundManager.playCoin()
+
+        if (settings.logForestToDailyNote && result) {
+            const r = result as SessionCompletionResult
+            void this.logToDailyNote(youngTree, minutes, r.sunlightEarned, r.coinsEarned)
+        }
+        return result
+    }
+
+    /** A focus day counts toward the streak once, on its first session. */
+    private checkInStreak(g: GamificationData, today: string): void {
+        const last = g.streak.lastCheckInDate
+        if (last === today) return
+        g.streak.current = last === addDays(today, -1) ? g.streak.current + 1 : 1
+        g.streak.longest = Math.max(g.streak.longest, g.streak.current)
+        g.streak.lastCheckInDate = today
+    }
+
+    /** Streak and building percentages on a session's base reward; adds a line for each. */
+    private focusBonuses(g: GamificationData, base: BaseReward, minutes: number, lines: RewardLine[]): { sunPct: number; coinPct: number } {
+        let sunPct = 0
+        let coinPct = 0
+        const pctLine = (label: string, pct: number, kind: 'sun' | 'coin') => {
+            if (pct <= 0) return
+            if (kind === 'sun') sunPct += pct
+            else coinPct += pct
+            lines.push({
+                label: `${label} +${pct}%`,
+                sunlight: kind === 'sun' ? Math.round((base.sunlight * pct) / 100) : undefined,
+                coins: kind === 'coin' ? Math.round((base.coins * pct) / 100) : undefined,
+            })
+        }
+        pctLine(`🔥 ${g.streak.current}-day streak`, Math.min(20, Math.max(0, g.streak.current - 1) * 2), 'sun')
+        pctLine('🏡 Cozy Cabin', perkValue(g.homestead, 'sunlight_pct'), 'sun')
+        if (minutes >= 45) pctLine('🌬️ Windmill (long session)', perkValue(g.homestead, 'long_session_sunlight_pct'), 'sun')
+        const hour = new Date().getHours()
+        if (hour >= 19 || hour < 5) pctLine('🏮 Lanterns (evening)', perkValue(g.homestead, 'night_sunlight_pct'), 'sun')
+        pctLine('🪣 Village Well', perkValue(g.homestead, 'coins_pct'), 'coin')
+        return { sunPct, coinPct }
+    }
+
     public completeBreak(): void {
         this.ensureToday()
         this.mutate((g) => {
@@ -440,12 +544,20 @@ export default class ForestEngine {
         })
     }
 
-    public abortSession(elapsedMinutes: number, taskContext?: { taskText?: string; notePath?: string }): PlantedTree | null {
+    /**
+     * Ends a work session before it finished. The tree withers in hardcore mode, unless
+     * `forgive` is set: the session's task was done, so stopping is not giving up.
+     */
+    public abortSession(
+        elapsedMinutes: number,
+        taskContext?: { taskText?: string; notePath?: string },
+        forgive = false,
+    ): PlantedTree | null {
         this.soundManager.stopAmbient()
 
         const currentPlant = get(this.activePlantStore)
         this.activePlantStore.set(null)
-        if (!currentPlant) return null
+        if (!currentPlant || forgive) return null
         if (!this.settings().hardcoreMode || elapsedMinutes < 1) return null
 
         if (this.settings().forestSounds) this.soundManager.playWitherSound()
@@ -787,6 +899,7 @@ export default class ForestEngine {
     // -----------------------------------------------------------------------
 
     public async logToDailyNote(tree: PlantedTree, duration: number, sunlight: number, coins: number): Promise<void> {
+        const status = tree.status === 'young' ? 'early' : 'completed'
         try {
             const dailyNote = await utils.getDailyNoteFile()
             if (!dailyNote || !(dailyNote instanceof TFile)) return
@@ -797,7 +910,7 @@ export default class ForestEngine {
             const noteLink = tree.notePath ? `[[${tree.notePath.replace(/\.md$/, '')}]]` : ''
             const label = [tree.taskText, noteLink].filter(Boolean).join(' · ') || 'Focus session'
 
-            const line = `- 🌲 **Pomodoro Forest** (${timeStr}): ${label} · *${speciesName}* · [duration:: ${duration}m] [tree:: ${tree.speciesId}] [sunlight:: +${sunlight}] [coins:: +${coins}] [status:: completed]`
+            const line = `- 🌲 **Pomodoro Forest** (${timeStr}): ${label} · *${speciesName}* · [duration:: ${duration}m] [tree:: ${tree.speciesId}] [sunlight:: +${sunlight}] [coins:: +${coins}] [status:: ${status}]`
             await this.plugin.app.vault.append(dailyNote, `\n${line}`)
         } catch {
             // Daily notes not enabled/configured — skip silently

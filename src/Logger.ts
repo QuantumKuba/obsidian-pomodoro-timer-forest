@@ -12,6 +12,8 @@ export type TimerLog = {
     session: number
     task: TaskLog
     finished: boolean
+    /** Ended before the timer because its task was done, and harvested as a young tree. */
+    early: boolean
 }
 
 export type TaskLog = Pick<
@@ -37,7 +39,7 @@ export type TaskLog = Pick<
     | 'tags'
 >
 
-export type LogContext = TimerState & { task: TaskItem }
+export type LogContext = TimerState & { task: TaskItem; early?: boolean }
 
 export default class Logger {
     private plugin: PomodoroTimerPlugin
@@ -124,6 +126,7 @@ export default class Logger {
             session: ctx.duration,
             task: ctx.task,
             finished: ctx.count == ctx.elapsed,
+            early: !!ctx.early,
         }
     }
 
@@ -147,8 +150,8 @@ export default class Logger {
                 return ''
             }
         } else {
-            // Built-in log: ignore unfinished session
-            if (!log.finished) {
+            // Built-in log: ignore unfinished session, unless it ended because its task was done
+            if (!log.finished && !log.early) {
                 return ''
             }
 

@@ -37,6 +37,8 @@ export interface Settings {
     enableCelebrationParticles: boolean
     dailyGoal: number
     rewardTaskCompletion: boolean
+    /** Offer to end a work session early once its focused task is checked off. */
+    earlyHarvest: boolean
     logForestToDailyNote: boolean
     forestSounds: boolean
 }
@@ -64,6 +66,7 @@ export default class PomodoroSettings extends PluginSettingTab {
         enableCelebrationParticles: true,
         dailyGoal: 4,
         rewardTaskCompletion: true,
+        earlyHarvest: true,
         logForestToDailyNote: false,
         forestSounds: true,
     }
@@ -159,6 +162,16 @@ export default class PomodoroSettings extends PluginSettingTab {
                 toggle.setValue(this._settings.rewardTaskCompletion ?? true)
                 toggle.onChange((value) => {
                     this.updateSettings({ rewardTaskCompletion: value })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Early harvest when the task is done')
+            .setDesc('Checking off the task you are focusing on during a session lets you end it early without withering. After 5 minutes of focus this grows a young tree worth ¾ of the rewards for the minutes focused; finishing the session still earns the most.')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.earlyHarvest ?? true)
+                toggle.onChange((value) => {
+                    this.updateSettings({ earlyHarvest: value })
                 })
             })
 

@@ -63,6 +63,7 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
         totalPomodoros: 0,
         treesGrown: 0,
         treesWithered: 0,
+        earlyHarvests: 0,
         tasksCompleted: 0,
         breaksCompleted: 0,
         questsCompleted: 0,

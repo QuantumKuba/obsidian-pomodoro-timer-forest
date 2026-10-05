@@ -75,7 +75,7 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
     g.inventory = { 'tree:sakura': 2, 'tree:ancient_oak': 1, 'building:lantern': 1 }
     g.achievements = ACHIEVEMENTS.map((a) => a.id).filter((id) => !['trees_200', 'streak_30', 'hours_100', 'tasks_100', 'collector'].includes(id))
     g.lifetimeStats = {
-        totalFocusMinutes: 4380, totalPomodoros: 171, treesGrown: 168, treesWithered: 9,
+        totalFocusMinutes: 4380, totalPomodoros: 171, treesGrown: 168, treesWithered: 9, earlyHarvests: 12,
         tasksCompleted: 142, breaksCompleted: 133, questsCompleted: 61, chestsOpened: 24,
     }
 

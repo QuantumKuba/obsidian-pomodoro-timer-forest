@@ -133,6 +133,43 @@ export function upgradeCost(building: HomesteadBuilding, currentLevel: number): 
 }
 
 // ---------------------------------------------------------------------------
+// Session rewards
+// ---------------------------------------------------------------------------
+
+export type BaseReward = { sunlight: number; coins: number; xp: number }
+
+/** What a fully grown tree pays before streak and building bonuses. */
+export function sessionBaseReward(minutes: number): BaseReward {
+    return {
+        sunlight: Math.max(5, Math.round(minutes * 1.2)),
+        coins: Math.max(1, Math.floor(minutes / 10)),
+        xp: minutes,
+    }
+}
+
+/**
+ * Share of the per-minute session reward paid when the focused task is done and the session
+ * is harvested before the timer ends. Below 1, so for every minute on the clock finishing the
+ * session always pays more: harvesting early can't be used to farm rewards with short tasks.
+ */
+export const EARLY_HARVEST_RATE = 0.75
+
+/** Focus needed before an early harvest grows anything: 5 minutes, or half of a shorter session. */
+export function earlyHarvestMinMinutes(sessionMinutes: number): number {
+    return Math.min(5, sessionMinutes / 2)
+}
+
+/** What an early harvest pays for the minutes actually focused, before streak and building bonuses. */
+export function earlyHarvestBaseReward(focusedMinutes: number): BaseReward {
+    const m = Math.max(0, focusedMinutes)
+    return {
+        sunlight: Math.round(m * 1.2 * EARLY_HARVEST_RATE),
+        coins: Math.floor((m / 10) * EARLY_HARVEST_RATE),
+        xp: Math.round(m * EARLY_HARVEST_RATE),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Charm & vitality
 // ---------------------------------------------------------------------------
 

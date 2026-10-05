@@ -10,6 +10,7 @@ import StorageManager from './services/StorageManager'
 import ForestEngine from './services/ForestEngine'
 import TaskRewardWatcher from './services/TaskRewardWatcher'
 import { setPlugin, resetStoresForDebug } from './stores'
+import { get } from 'svelte/store'
 
 export default class PomodoroTimerPlugin extends Plugin {
     private settingTab?: PomodoroSettings
@@ -102,6 +103,17 @@ export default class PomodoroTimerPlugin extends Plugin {
             callback: () => {
                 this.timer?.reset()
                 new Notice('Timer reset')
+            },
+        })
+
+        this.addCommand({
+            id: 'harvest-early',
+            name: 'Harvest focus session early (focused task is done)',
+            checkCallback: (checking) => {
+                const t = this.timer ? get(this.timer) : null
+                if (!t?.taskDone) return false
+                if (!checking) this.timer?.harvestEarly()
+                return true
             },
         })
 

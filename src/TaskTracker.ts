@@ -176,6 +176,14 @@ export default class TaskTracker implements TaskTrackerStore {
 
     public async active(task: TaskItem) {
         await this.ensureBlockId(task)
+        const file = this.plugin.app.vault.getAbstractFileByPath(task.path)
+        // Watch the note, so ticking the task off is noticed even if the note is never opened
+        if (file instanceof TFile) void this.plugin.taskRewards?.prime(file)
+        // Moving on to another task means the session carries on with it
+        const current = this.state.task
+        if (current && (current.path !== task.path || current.blockLink !== task.blockLink)) {
+            this.plugin.timer?.forgetTaskDone()
+        }
         // A copy: the label below is edited without touching the list
         this.store.update((state) => ({ ...state, task: { ...task } }))
     }

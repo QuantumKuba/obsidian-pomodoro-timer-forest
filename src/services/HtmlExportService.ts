@@ -1,6 +1,6 @@
 import type { GamificationData } from '../types/forest'
 import { getSpecies } from '../assets/floraCatalog'
-import { SPECIES_SVGS, GROWTH_STAGE_SVGS, BIOME_CONFIGS } from '../assets/floraAssets'
+import { BIOME_CONFIGS, plantedTreeSvg } from '../assets/floraAssets'
 import { renderGrove, renderVillage } from '../render/VillageScene'
 import { ACHIEVEMENTS, dateKey, levelProgress, levelTitle, villageCharm, vitalityState } from './Progression'
 
@@ -25,7 +25,7 @@ export function generateStandaloneForestHtml(data: GamificationData, vaultName =
         .slice(-24)
         .reverse()
         .map((t) => {
-            const svg = t.status === 'withered' ? GROWTH_STAGE_SVGS.withered : SPECIES_SVGS[t.speciesId] || SPECIES_SVGS.classic_pine
+            const svg = plantedTreeSvg(t)
             const name = getSpecies(t.speciesId)?.name || t.speciesId
             const label = t.taskText || t.notePath?.split('/').pop()?.replace(/\.md$/, '') || 'Focus session'
             const when = new Date(t.plantedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })

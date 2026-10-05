@@ -3,7 +3,7 @@ import { onDestroy } from 'svelte'
 import { fly, scale, fade } from 'svelte/transition'
 import { backOut } from 'svelte/easing'
 import { pluginInstance } from '../stores'
-import { SPECIES_SVGS, GROWTH_STAGE_SVGS, ICONS } from '../assets/floraAssets'
+import { SPECIES_SVGS, GROWTH_STAGE_SVGS, ICONS, growthSvg } from '../assets/floraAssets'
 import type { RewardEvent } from '../types/forest'
 import { writable } from 'svelte/store'
 
@@ -36,6 +36,7 @@ onDestroy(() => timers.forEach((t) => window.clearTimeout(t)))
 function art(e: RewardEvent): string {
     if (e.kind === 'wither') return GROWTH_STAGE_SVGS.withered
     if (e.kind === 'harvest' && e.speciesId) return SPECIES_SVGS[e.speciesId] || SPECIES_SVGS.classic_pine
+    if (e.kind === 'early' && e.speciesId) return growthSvg('sapling', e.speciesId)
     if (e.kind === 'chest') return ICONS.chest
     if (e.kind === 'levelup' || e.kind === 'achievement' || e.kind === 'quest') return ICONS.star
     return ICONS.sapling
@@ -63,7 +64,7 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
         <div class="pf-card-wrap" transition:fade={{ duration: 180 }}>
             <div class="pf-card {card.kind}" in:scale={{ start: 0.7, duration: 420, easing: backOut }}>
                 {#if card.kind !== 'wither'}<div class="rays"></div>{/if}
-                <div class="art {card.kind === 'harvest' ? 'grow' : ''}">{@html art(card)}</div>
+                <div class="art {card.kind === 'harvest' || card.kind === 'early' ? 'grow' : ''}">{@html art(card)}</div>
                 {#if card.levelUp}<div class="lvl-num">Level {card.levelUp}</div>{/if}
                 <h3>{card.title}</h3>
                 {#if card.subtitle}<p class="sub">{card.subtitle}</p>{/if}

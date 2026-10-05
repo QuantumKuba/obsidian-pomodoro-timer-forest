@@ -8,6 +8,7 @@ import Logger, { type LogContext } from 'Logger'
 import DEFAULT_NOTIFICATION from 'Notification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
+import { earlyHarvestMinMinutes } from './services/Progression'
 
 export type Mode = 'WORK' | 'BREAK'
 
@@ -51,11 +52,17 @@ export type TimerState = {
     breakLen: number
     count: number
     duration: number
+    /** Elapsed millis when the focused task was checked off during this work session. */
+    taskDoneAt: number | null
 }
 
 export type TimerStore = TimerState & {
     remained: TimerRemained
     finished: boolean
+    /** The focused task is done and the work session can end early without withering. */
+    taskDone: boolean
+    /** Elapsed millis from which ending early harvests a young tree. */
+    earlyHarvestAt: number
 }
 
 export default class Timer implements Readable<TimerStore> {
@@ -93,6 +100,7 @@ export default class Timer implements Readable<TimerStore> {
             inSession: false,
             duration: plugin.getSettings().workLen,
             count,
+            taskDoneAt: null,
         }
 
         let store = writable(this.state)
@@ -103,6 +111,8 @@ export default class Timer implements Readable<TimerStore> {
             ...$state,
             remained: this.remain($state.count, $state.elapsed),
             finished: $state.count == $state.elapsed,
+            taskDone: $state.inSession && $state.mode === 'WORK' && $state.taskDoneAt !== null,
+            earlyHarvestAt: this.earlyHarvestAt($state),
         }))
 
         this.subscribe = this.store.subscribe
@@ -209,6 +219,7 @@ export default class Timer implements Readable<TimerStore> {
                 s.duration = s.mode === 'WORK' ? s.workLen : s.breakLen
                 s.count = s.duration * 60 * 1000
                 s.startTime = now
+                s.taskDoneAt = null
                 if (s.mode === 'WORK') {
                     const task = this.plugin.tracker?.task
                     const file = this.plugin.tracker?.file
@@ -247,6 +258,7 @@ export default class Timer implements Readable<TimerStore> {
         })
         state.startTime = null
         state.elapsed = 0
+        state.taskDoneAt = null
         return state
     }
 
@@ -334,19 +346,114 @@ export default class Timer implements Readable<TimerStore> {
             })
             state.startTime = null
             state.elapsed = 0
+            state.taskDoneAt = null
             return state
         })
     }
 
-    /** Leaving a work session early withers the tree (after the first minute, if enabled). */
+    /**
+     * Leaving a work session early withers the tree (after the first minute, if enabled),
+     * unless its task was done: then stopping is finishing, not giving up.
+     */
     private abandonGrowingTree(state: TimerState) {
         if (!state.inSession || state.mode !== 'WORK') return
         const task = this.plugin.tracker?.task
         const file = this.plugin.tracker?.file
-        this.plugin.forestEngine?.abortSession(state.elapsed / 60000, {
-            taskText: task?.name || task?.text,
-            notePath: task?.path || file?.path,
+        this.plugin.forestEngine?.abortSession(
+            state.elapsed / 60000,
+            {
+                taskText: task?.name || task?.text,
+                notePath: task?.path || file?.path,
+            },
+            state.taskDoneAt !== null,
+        )
+    }
+
+    private earlyHarvestAt(state: TimerState): number {
+        return this.toMillis(earlyHarvestMinMinutes(state.count / 60000))
+    }
+
+    /**
+     * Called when the focused task is checked off. During a work session this offers to end
+     * the session early (see harvestEarly) instead of sitting out the rest of the timer.
+     */
+    public markTaskDone() {
+        if (!this.plugin.getSettings().earlyHarvest) return
+        const s = this.state
+        if (!s.inSession || s.mode !== 'WORK' || s.taskDoneAt !== null) return
+        this.update((state) => ({ ...state, taskDoneAt: state.elapsed }))
+        if (!this.plugin.hasVisibleForestView()) this.noticeTaskDone()
+    }
+
+    /** The focused task was unchecked again, or the focus moved on to another task. */
+    public forgetTaskDone() {
+        if (this.state.taskDoneAt === null) return
+        this.update((state) => ({ ...state, taskDoneAt: null }))
+    }
+
+    private noticeTaskDone() {
+        const s = this.state as TimerStore
+        const ready = s.elapsed >= this.earlyHarvestAt(s)
+        const fragment = new DocumentFragment()
+        fragment.createSpan({
+            text: ready
+                ? `✅ Task done with ${s.remained.human.replace(/ /g, '')} to spare. Open the timer to harvest your tree early, or keep focusing for the full tree.`
+                : '✅ Task done! Open the timer to end the session without withering, or pick your next task and keep focusing.',
         })
+        fragment.addEventListener('click', () => void this.plugin.activateView())
+        new Notice(fragment, 10000)
+    }
+
+    /**
+     * Ends a work session whose task is done. With enough focus behind it a young tree is
+     * harvested for the minutes focused; before that the session simply ends. It never
+     * withers. Past halfway it counts on the task as a pomodoro and a break follows.
+     */
+    public harvestEarly() {
+        const s = this.state
+        if (!s.inSession || s.mode !== 'WORK' || s.taskDoneAt === null) return
+        const ctx = this.createLogContext(s)
+        const harvest = s.elapsed >= this.earlyHarvestAt(s)
+        const halfway = s.elapsed * 2 >= s.count
+
+        // Before anything else can start a new plant
+        if (harvest) {
+            this.plugin.forestEngine?.harvestEarly(ctx.elapsed / 60000, ctx.duration, {
+                taskText: ctx.task.name || ctx.task.text,
+                notePath: ctx.task.path,
+                tags: ctx.task.tags,
+            })
+        }
+        this.finishDoneTask(ctx, halfway, harvest).catch((err) =>
+            console.error('[Pomodoro Timer Forest] Failed to log the early finish', err),
+        )
+
+        let autostart = false
+        this.update((state) => {
+            if (!harvest) this.abandonGrowingTree(state)
+            if (halfway) {
+                autostart = state.autostart
+                return this.endSession(state)
+            }
+            // Too short for a pomodoro and its break: ready for the next task's session
+            this.endSession(state)
+            state.mode = 'WORK'
+            state.duration = state.workLen
+            state.count = this.toMillis(state.workLen)
+            return state
+        })
+        if (autostart) this.start()
+    }
+
+    private async finishDoneTask(ctx: LogContext, countPomodoro: boolean, harvested: boolean) {
+        const tracker = this.plugin.tracker
+        if (countPomodoro) await tracker?.updateActual()
+        // The task is done: don't carry it into the next session
+        const current = tracker?.task
+        if (current && current.path === ctx.task.path && current.blockLink === ctx.task.blockLink) {
+            tracker?.clear()
+        }
+        await this.logger.log({ ...ctx, early: harvested })
     }
 
     public toggleMode(callback?: (state: TimerState) => void) {
