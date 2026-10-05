@@ -40,6 +40,8 @@ Start a session and a seed is planted inside the timer. As the minutes pass it s
 
 Every finished tree becomes a sapling you can plant. Spend what you earn on buildings that give **real perks**: a Cozy Cabin for more Sunlight, a Village Well for more Coins, a Watermill that protects your streak while you rest. Lay paths, dig a brook, put a bridge over it, and expand your island from 5×5 up to 8×8.
 
+Add **garden plots** and your focus grows carrots, tomatoes, wheat and pumpkins too: every focused minute grows them, every ticked task waters them, and a crop never wilts while you're away. A scarecrow speeds them up, and a chicken coop brings hens and fresh eggs for your first tree of the day.
+
 <p align="center">
   <img src="docs/images/homestead-full.png" alt="The full-page Homestead Village view with an upgradeable Cozy Cabin selected" width="90%">
 </p>
@@ -48,7 +50,7 @@ Open it as a full-page tab, or keep a compact version in the sidebar under the t
 
 ## A village that lives on your clock
 
-The sky follows your real time of day. Windows glow at dusk, fireflies come out at night, sails turn, chimneys smoke and villagers wander between the trees. When you've been away the village gets a little sleepier, and one session wakes it back up.
+The sky follows your real time of day. Windows glow at dusk, fireflies come out at night, sails turn, chimneys smoke and villagers stroll the paths, stop by the well and gather at the campfire after dark. Click one and they'll tell you how your day is going. When you've been away the village gets a little sleepier, and one session wakes it back up.
 
 <p align="center">
   <img src="docs/images/day-cycle.png" alt="The same village at dawn, day, dusk and night" width="90%">
@@ -73,7 +75,7 @@ Unlock new species as you level up: from a humble Classic Pine to a glowing Cele
     <td align="center" valign="top" width="25%"><img src="docs/images/panel-sidebar.png" alt="Timer with a growing cherry blossom and the village below"><br><sub><b>Focus &amp; village</b><br>A growing plant inside the timer, your goal for the day, and the village right beneath it.</sub></td>
     <td align="center" valign="top" width="25%"><img src="docs/images/panel-reward.png" alt="Reward card after a finished session"><br><sub><b>Harvest</b><br>Every bonus is itemised, so you see exactly what you earned.</sub></td>
     <td align="center" valign="top" width="25%"><img src="docs/images/panel-market.png" alt="Market with buildings, prices and perks"><br><sub><b>Market</b><br>Buildings with perks that grow when you upgrade them.</sub></td>
-    <td align="center" valign="top" width="25%"><img src="docs/images/panel-journey.png" alt="Daily quests, achievements and lifetime stats" ><br><sub><b>Journey</b><br>Daily quests, a chest, 18 achievements and your lifetime stats.</sub></td>
+    <td align="center" valign="top" width="25%"><img src="docs/images/panel-journey.png" alt="Daily quests, achievements and lifetime stats" ><br><sub><b>Journey</b><br>Daily quests, a chest, 20 achievements and your lifetime stats.</sub></td>
   </tr>
 </table>
 
@@ -98,7 +100,7 @@ Unlock new species as you level up: from a humble Classic Pine to a glowing Cele
 
 ## Share your village
 
-One click exports a **self-contained, animated HTML snapshot** of your village that opens in any browser, or a JSON summary for building your own dashboard.
+One click exports a **self-contained HTML snapshot** of your village, with its animated scenery, that opens in any browser, or a JSON summary for building your own dashboard.
 
 ## Quick start
 

@@ -61,9 +61,10 @@ The loop is designed to pull you back daily without punishing you for resting.
 | Streak bonus | +2% per streak day (max +20%) | | | |
 | Check off a markdown task `[ ]`→`[x]` | | 3 (+2 if it had 🍅) | 5 | +2 vitality, max 30 rewarded/day, each task once/day |
 | Finish a break | Tea Gazebo perk | | 3 | |
+| Harvest a ripe crop | | 2–15 by crop | 3–18 by crop | Plot is re-sown; counts as a village action |
 | Daily quest (3/day, deterministic by date) | 20–35 | 3–4 | 15–25 | Auto-claimed |
 | Daily chest (all 3 quests) | 60 | 10 | 40 | + random unlocked sapling |
-| Achievement (18) | varies | varies | varies | |
+| Achievement (20) | varies | varies | varies | |
 | Level up | 25 × level | 3 × level | | Unlocks species, buildings, biomes, land |
 
 - **Sunlight** comes from focus; **Coins** mostly from tasks and quests. Tasks are worth ticking off.
@@ -72,6 +73,7 @@ The loop is designed to pull you back daily without punishing you for resting.
 - **Streak**: breaks after a missed day unless the River Watermill has shields left this month.
 - **Withering** (setting): giving up a work session after the first minute leaves a withered tree in today's grove. The UI asks for confirmation first. A session whose focused task was checked off never withers.
 - **Early harvest** (setting, on by default): when the task the timer is focused on goes `[ ]`→`[x]` during a work session (matched by its block id), the session can end early. From `min(5, session/2)` minutes it grants a `young` tree with `round(1.2·m·0.75)` sunlight, `floor(m/10·0.75)` coins and `round(0.75·m)` XP for `m` focused minutes, with the streak and building percentages applied. No sapling, no `completedPomodoros`, no first-tree, daily-goal or `sessions` / `tagged_session` quest progress; it does check in the streak, add focus minutes, progress `minutes` and `linked_task` quests, and add +4 vitality. Before the minimum it ends with no tree. Past halfway it adds a 🍅 to the task and moves on to the break. Per minute it always pays less than finishing, so it can't be farmed with short tasks.
+- **Garden plots** (`garden_plot`, max 6): each holds one crop in `cropId` / `cropGrowth` (focus minutes) on its `PlacedHomesteadItem`. Growth comes only from focus: `minutes × (1 + scarecrow %)` per finished session or early harvest, and `TASK_WATERING_MINUTES` (5) per rewarded task. Nothing grows with wall-clock time and **crops never wilt**; a ripe crop waits. Harvesting grants the crop's Coins and XP and re-sows the same crop at 0. A new plot starts with carrots, changing crop keeps the minutes grown (capped at the new crop's total), and stowing a plot harvests a ripe crop first. Slower crops pay slightly more per minute (0.04–0.06 Coins/min), so patience is rewarded, but a single plot never out-earns the session that grows it.
 - **Village building**: every finished session puts a sapling of the tree you grew into your inventory. Purchases also go into inventory and are then placed on a tile. Items can be moved, stowed back to inventory and upgraded. Paths, brooks and decorations can be bought repeatedly. Land expands from 5×5 to 8×8.
 
 ## 3. Flora Catalog
@@ -112,6 +114,20 @@ Perks scale with level: `base + perLevel × (level − 1)`. Upgrade cost: `0.6 �
 | Glass Conservatory | 10 | 850 / 80 | ✓ | 5 | +15% (+10%) XP |
 | Dutch Windmill | 12 | 800 / 80 | ✓ | 5 | +20% (+10%) Sunlight on 45m+ sessions |
 
+| Garden Plot | 2 | 60 / 6 | max 6 | 1 | — (soil tile that grows a crop) |
+| Hay Bale | 2 | 30 / 3 | | 1 | — |
+| Friendly Scarecrow | 3 | 90 / 9 | | 3 | Crops grow 15% (+10%) faster |
+| Chicken Coop | 4 | 260 / 26 | ✓ | 3 | +3 (+2) Coins with the first tree of the day; 1 + level hens |
+
+### Crops
+
+| Crop ID | Name | Level | Focus minutes | Harvest (🪙 / XP) |
+|---|---|---|---|---|
+| `carrot` | Carrots | 1 | 50 | 2 / 3 |
+| `tomato` | Tomatoes | 3 | 100 | 5 / 6 |
+| `wheat` | Golden Wheat | 5 | 150 | 8 / 10 |
+| `pumpkin` | Pumpkins | 8 | 250 | 15 / 18 |
+
 Land: 6×6 at level 3 (300/30), 7×7 at level 7 (700/70), 8×8 at level 12 (1400/140).
 
 ### Biomes (unlocked by level)
@@ -122,7 +138,16 @@ Land: 6×6 at level 3 (300/30), 7×7 at level 7 (700/70), 8×8 at level 12 (1400
 - 🌌 **Twilight Sanctuary** (12): indigo moss that always glows.
 
 ### Visuals
-The village and the daily grove render as an isometric floating island (`src/render/VillageScene.ts`). The sky follows the real time of day: dawn, day, dusk and night, with sun/moon, stars and drifting clouds. After dusk, lit windows and lanterns cast glows. Windmill sails, the watermill wheel, chimney smoke, flames, water and trees are animated with CSS. Villagers wander between open tiles. All animation stops with *Low animation frame rate* or `prefers-reduced-motion`.
+The village and the daily grove render as an isometric floating island (`src/render/VillageScene.ts`). The sky follows the real time of day: dawn, day, dusk and night, with sun/moon, stars and drifting clouds. After dusk, lit windows and lanterns cast glows. Windmill sails, the watermill wheel, chimney smoke, flames, water and trees are animated with CSS. All animation stops with *Low animation frame rate* or `prefers-reduced-motion`.
+
+### Villagers and hens
+The renderer stays a pure SVG string; anything that walks is added on top by `src/render/VillageLife.ts`, which the village tab feeds each rendered scene.
+
+- `src/render/villageGrid.ts` classifies every tile (grass, path, bridge, water, soil, object) and finds routes. Actors walk between the centres of side-by-side tiles over grass, paths and bridges only, with paths and bridges preferred, so they never cross a tree, building, plot or open water.
+- Scene objects and actors share one draw list sorted by `x + y` (`data-depth`). As an actor moves it is re-slotted between the objects, so it passes behind anything nearer the viewer.
+- Villagers (count from vitality and buildings) stroll, visit buildings and ripe plots, and favour the campfire at dusk and night. Hens (1 + coop level) stay within two tiles of the coop. Clicking one makes it hop and speak; villagers comment on today's trees, streak and ripe crops, and cheer on harvests, quests, chests, achievements and level-ups. Their lines only ever encourage.
+- Actor state lives in `VillageLife`, not the markup, so they carry on when the scene re-renders. The loop pauses while the scene is off screen.
+- With motion off, and in HTML snapshots, the renderer draws everyone standing (`standingActors`), sorted into the same draw list.
 
 ## 5. Smart Tag Auto-Detection Rules
 When a focus session starts, the plugin collects hashtags from the tracked task, its text, and the note (frontmatter + inline tags). The first tag mapped to an unlocked species picks the seed (and counts toward the "#tagged" quest):

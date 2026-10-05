@@ -9,6 +9,8 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 - [Rewards](#rewards)
 - [Levels and unlocks](#levels-and-unlocks)
 - [Building your village](#building-your-village)
+  - [Garden plots and crops](#garden-plots-and-crops)
+  - [Villagers and hens](#villagers-and-hens)
 - [Daily quests and achievements](#daily-quests-and-achievements)
 - [Streaks, vitality and withering](#streaks-vitality-and-withering)
 - [Smart seeds (tags)](#smart-seeds-tags)
@@ -72,6 +74,7 @@ Unchecking the task takes the offer back. Switching to another task does the sam
 | Reaching your daily goal | +40 | +5 | +20 |
 | Ticking a task `[ ]` → `[x]` | | +3 (+2 if it was a 🍅 task, or the timer's task mid-session) | +5 |
 | Finishing a break | Tea Gazebo perk | | +3 |
+| Harvesting a [crop](#garden-plots-and-crops) | | 2–15, by crop | 3–18, by crop |
 | Each daily quest | 20–35 | 3–4 | 15–25 |
 | Daily chest (all three quests) | +60 | +10 | +40, plus a sapling |
 
@@ -86,8 +89,8 @@ Everything you do earns XP. Levels unlock species, buildings, biomes and more la
 | Level | Unlocks (examples) |
 |---|---|
 | 1 | Classic Pine, Sunflower, Campfire, Cobblestone Path, Lantern, Bench |
-| 2–4 | Oak, Lavender, Maple, Well, Brook, Footbridge, Tea Gazebo, Sakura Grove biome, 6×6 land |
-| 5–8 | Cherry Blossom, Willow, Bamboo, Cabin, Torii Gate, Watermill, Autumn Valley and Alpine Frost biomes |
+| 2–4 | Oak, Lavender, Maple, Well, Brook, Footbridge, Tea Gazebo, Garden Plot, Hay Bale, Scarecrow, Chicken Coop, tomatoes, Sakura Grove biome, 6×6 land |
+| 5–8 | Cherry Blossom, Willow, Bamboo, Cabin, Torii Gate, Watermill, wheat and pumpkins, Autumn Valley and Alpine Frost biomes |
 | 9–14 | Bonsai, Fairy Ring, Celestial Gold Tree, Conservatory, Windmill, Twilight Sanctuary biome, 8×8 land |
 
 The full table lives in the [spec](../FOREST_SPEC.md#3-flora-catalog).
@@ -110,16 +113,44 @@ The full table lives in the [spec](../FOREST_SPEC.md#3-flora-catalog).
 | Glass Conservatory | + % XP from everything |
 | River Watermill | Streak shields for days you rest |
 | Hearth Campfire | The village fades more slowly on days off |
+| Friendly Scarecrow | Crops grow + % faster |
+| Chicken Coop | + Coins with your first tree of the day (fresh eggs) |
 
 - **Paths, brooks and bridges** shape the ground. Put a footbridge on a brook tile.
 - **Biomes** change the ground, foliage and hills. **Land** grows from 5×5 up to 8×8.
 - The sky follows your computer's clock: dawn, day, dusk and night, with lights and fireflies after dark.
 
+### Garden plots and crops
+
+A **Garden Plot** (market, level 2, up to six) is a tile of tilled soil with a crop on it. Crops grow with your **focus minutes**, not with the clock:
+
+- Every minute of a focus session (or an early harvest) grows every plot by a minute. A **Friendly Scarecrow** makes that faster.
+- Every task you tick off **waters** the garden: each crop grows 5 more minutes.
+- A ripe crop shows a gold marker. Click the plot, or **🧺 Harvest** above the village, to pick it. The plot is sown again right away.
+- Crops **never wilt**. A ripe crop waits for you as long as it takes, and a plot left alone just pauses.
+
+| Crop | Level | Focus minutes | Harvest |
+|---|---|---|---|
+| 🥕 Carrots | 1 | 50 | 2 Coins, 3 XP |
+| 🍅 Tomatoes | 3 | 100 | 5 Coins, 6 XP |
+| 🌾 Golden Wheat | 5 | 150 | 8 Coins, 10 XP |
+| 🎃 Pumpkins | 8 | 250 | 15 Coins, 18 XP |
+
+Select a plot to choose its crop. Switching crops keeps the minutes already grown, and stowing a plot picks a ripe crop first. Planting and harvesting both count for the *Tend your village* quest.
+
+### Villagers and hens
+
+Villagers come out as your village gets livelier and gains buildings. They walk around what you build, keep to paths and bridges where they can, stop by the well, the bench or a ripe garden plot, and gather at the campfire after dark. A **Chicken Coop** adds hens that potter around it.
+
+Click a villager and they'll tell you how today is going. They cheer when you finish a tree, a quest or a level.
+
+With *Low animation frame rate* on, or when your system asks for reduced motion, everyone stands still instead.
+
 ## Daily quests and achievements
 
 Each morning the *Journey* tab shows **three quests**, picked by date. They are things like *Focus for 75 minutes*, *Check off 3 tasks*, *Take a proper break*, *Focus on a specific task* or *Tend your village*. Finish all three to open the **daily chest**.
 
-There are **18 achievements** (first tree, streaks, focus hours, tasks, breaks, full plot, and more), each with a reward and a progress bar.
+There are **20 achievements** (first tree, streaks, focus hours, tasks, breaks, harvests, full plot, and more), each with a reward and a progress bar.
 
 ## Streaks, vitality and withering
 
@@ -182,7 +213,7 @@ An early harvest logs the same line with `[status:: early]` and the minutes actu
 
 In the *Journey* tab:
 
-- **Download village snapshot (.html):** a single self-contained page with your animated village, stats and recent trees. Open it in any browser or share it.
+- **Download village snapshot (.html):** a single self-contained page with your village, stats and recent trees. The scenery is animated; villagers stand still in a snapshot. Open it in any browser or share it.
 - **Copy dashboard JSON** (also available as the command *Copy forest data as JSON (for a web dashboard)*): a structured summary (levels, streak, village layout, the last 30 days) for building your own dashboard. The schema is in the [spec](../FOREST_SPEC.md#7-web-dashboard-export-schema).
 
 ## Your data
