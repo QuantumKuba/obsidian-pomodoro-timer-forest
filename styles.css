@@ -87,15 +87,30 @@ If your plugin does not need CSS, delete this file.
     user-select: none;
 }
 
-.pf-scene .pf-villager,
+.pf-scene .pf-actor,
 .pf-scene .pf-shade,
 .pf-scene .pf-lights,
 .pf-scene .pf-ground,
 .pf-scene .pf-halo,
 .pf-scene .pf-firefly,
 .pf-scene .pf-butterfly,
-.pf-scene .pf-mist {
+.pf-scene .pf-mist-layer {
     pointer-events: none;
+}
+
+/* Villagers and hens that walk around (VillageLife) can be clicked */
+.pf-scene .pf-actor[data-actor] {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.pf-scene .pf-actor[data-actor]:hover .pf-actor-body {
+    filter: brightness(1.12) drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));
+}
+
+.pf-scene .pf-leg-a,
+.pf-scene .pf-leg-b {
+    transform-box: fill-box;
 }
 
 .pf-scene .pf-stars {
@@ -214,6 +229,15 @@ If your plugin does not need CSS, delete this file.
     .pf-scene:not(.pf-still) .pf-hit.pf-target {
         animation: pf-pulse 1.4s ease-in-out infinite;
     }
+    .pf-scene:not(.pf-still) .pf-ripe {
+        animation: pf-bob 1.1s ease-in-out infinite alternate;
+    }
+    .pf-scene .pf-walking .pf-leg-a {
+        animation: pf-step 0.28s ease-in-out infinite alternate;
+    }
+    .pf-scene .pf-walking .pf-leg-b {
+        animation: pf-step 0.28s ease-in-out infinite alternate-reverse;
+    }
 
     /* Every looping animation starts from the wall clock (--t) plus its own offset (--d),
        so a re-rendered scene continues where the previous one was instead of restarting. */
@@ -226,7 +250,8 @@ If your plugin does not need CSS, delete this file.
     .pf-scene:not(.pf-still) .pf-halo,
     .pf-scene:not(.pf-still) .pf-firefly,
     .pf-scene:not(.pf-still) .pf-butterfly,
-    .pf-scene:not(.pf-still) .pf-mist {
+    .pf-scene:not(.pf-still) .pf-mist,
+    .pf-scene:not(.pf-still) .pf-ripe {
         animation-delay: calc(var(--t, 0s) + var(--d, 0s));
     }
 }
@@ -282,6 +307,14 @@ If your plugin does not need CSS, delete this file.
 @keyframes pf-mist {
     from { transform: translateX(-10px); }
     to { transform: translateX(10px); }
+}
+@keyframes pf-bob {
+    from { transform: translateY(0); }
+    to { transform: translateY(-2.5px); }
+}
+@keyframes pf-step {
+    from { transform: translateY(0); }
+    to { transform: translateY(-1.3px); }
 }
 @keyframes pf-pulse {
     0%, 100% { stroke-opacity: 0.4; }

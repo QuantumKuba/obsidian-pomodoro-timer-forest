@@ -2,10 +2,14 @@
 import { afterUpdate, createEventDispatcher, onDestroy, onMount } from 'svelte'
 import { gamificationStore, pluginInstance, clockMinute, settings, charm, vitality, levelInfo } from '../stores'
 import { renderVillage, homesteadItemSprite } from '../render/VillageScene'
+import VillageLife from '../render/VillageLife'
 import { SPECIES_SVGS, BUILDING_SVGS, BIOME_CONFIGS, ICONS } from '../assets/floraAssets'
-import { getBuilding, getSpecies, LAND_EXPANSIONS, BIOME_UNLOCK_LEVELS, TREE_MAX_LEVEL } from '../assets/floraCatalog'
-import { perkText } from '../services/Progression'
-import type { BiomeType, PlacedHomesteadItem } from '../types/forest'
+import {
+    getBuilding, getSpecies, getCrop, cropProgress, isRipePlot,
+    CROPS, GARDEN_PLOT_ID, LAND_EXPANSIONS, BIOME_UNLOCK_LEVELS, TREE_MAX_LEVEL,
+} from '../assets/floraCatalog'
+import { perkText, TASK_WATERING_MINUTES } from '../services/Progression'
+import type { BiomeType, PlacedHomesteadItem, RewardEvent } from '../types/forest'
 
 export let full = false
 
@@ -23,16 +27,24 @@ $: selected = g.homestead.find((i) => i.id === selectedId) || null
 $: skySlot = Math.floor($clockMinute.getTime() / 300_000)
 // Selection/placement highlights are NOT part of the scene markup: changing them
 // must not rebuild the SVG (that would restart every animation). See afterUpdate.
+// Villagers and hens walk around unless motion is switched off; then they are drawn standing
+const calm = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+$: live = !$settings.lowFps && !calm
 $: sceneHtml = renderVillage(g, {
     interactive: true,
     date: new Date(skySlot * 300_000),
     still: $settings.lowFps,
     idPrefix: sceneId,
+    liveActors: live,
 })
 
+const life = new VillageLife()
 let frame: HTMLElement
+let lifeLayer: HTMLElement
 afterUpdate(() => {
     if (!frame) return
+    if (live) life.sync(frame, lifeLayer, g, $settings.dailyGoal || 4)
+    else life.clear()
     const occupied = new Set(g.homestead.map((i) => `${i.gridX},${i.gridY}`))
     const targeting = !!placingKey || !!movingId
     frame.querySelectorAll<SVGElement>('.pf-hit').forEach((tile) => {
@@ -61,7 +73,43 @@ function itemName(item: PlacedHomesteadItem): string {
     return item.customName || (item.itemType === 'tree' ? getSpecies(item.itemId)?.name : getBuilding(item.itemId)?.name) || item.itemId
 }
 
+/** Pick ripe crops (all of them when no ids are given) and show what each plot gave. */
+function harvest(ids?: string[]) {
+    const picked = engine?.harvestCrops(ids) ?? []
+    for (const crop of picked) {
+        const plot = g.homestead.find((i) => i.id === crop.id)
+        if (plot) life.pop({ x: plot.gridX, y: plot.gridY }, `+${crop.coins}`)
+    }
+    if (picked.length) life.cheer()
+}
+
+// The villagers celebrate the big moments with you
+const CHEERS: Partial<Record<RewardEvent['kind'], string>> = {
+    harvest: 'A new tree! Well done!',
+    early: 'Task done. Nice work!',
+    levelup: 'The village is growing!',
+    chest: 'Ooh, what was in the chest?',
+    quest: 'Quest done!',
+    achievement: 'That calls for a celebration!',
+}
+const cheered = new Set<string>()
+let watching = false
+const stopWatching = engine?.rewardEvents.subscribe((events) => {
+    for (const event of events) {
+        if (cheered.has(event.id)) continue
+        cheered.add(event.id)
+        // Events from before this view opened were celebrated elsewhere
+        if (watching && CHEERS[event.kind]) life.cheer(CHEERS[event.kind])
+    }
+})
+watching = true
+
 function onSceneClick(e: MouseEvent) {
+    const actor = (e.target as Element).closest('[data-actor]')
+    if (actor && !placingKey && !movingId) {
+        life.poke(actor.getAttribute('data-actor') || '')
+        return
+    }
     const el = (e.target as Element).closest('[data-x]')
     if (!el || !engine) {
         cancelModes()
@@ -93,6 +141,8 @@ function onSceneClick(e: MouseEvent) {
         return
     }
     selectedId = occupant ? occupant.id : null
+    // A ripe plot is picked with the same click that selects it
+    if (occupant && isRipePlot(occupant)) harvest([occupant.id])
 }
 
 export function startPlacing(key: string) {
@@ -120,11 +170,18 @@ function selectBiome(id: BiomeType) {
 }
 
 onMount(() => window.addEventListener('keydown', onKey))
-onDestroy(() => window.removeEventListener('keydown', onKey))
+onDestroy(() => {
+    window.removeEventListener('keydown', onKey)
+    stopWatching?.()
+    life.destroy()
+})
 
 $: upgrade = selected && engine ? engine.getUpgradeInfo(selected) : null
 $: selBuilding = selected?.itemType === 'building' ? getBuilding(selected.itemId) : undefined
 $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxLevel ?? 1
+$: plot = selected?.itemType === 'building' && selected.itemId === GARDEN_PLOT_ID ? selected : null
+$: crop = plot ? getCrop(plot.cropId) : null
+$: ripeCount = g.homestead.filter(isRipePlot).length
 </script>
 
 <div class="pf-village" class:full>
@@ -144,6 +201,9 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
             {/each}
         </div>
         <div class="village-stats">
+            {#if ripeCount}
+                <button class="harvest-all" title="Pick every ripe crop" on:click={() => harvest()}>🧺 Harvest {ripeCount}</button>
+            {/if}
             <span title="Charm grows with every tree, building and upgrade">💐 {$charm} charm</span>
             <span title={$vitality.blurb}>🌿 {$vitality.label}</span>
         </div>
@@ -153,6 +213,7 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
         <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
         <div class="scene-frame" bind:this={frame} class:placing={placingKey || movingId} on:click={onSceneClick}>
             {@html sceneHtml}
+            <div class="life-layer" bind:this={lifeLayer}></div>
             {#if placingKey || movingId}
                 <div class="mode-banner">
                     <span>{placingKey ? `Tap an empty tile to place ${placingName}` : 'Tap an empty tile to move it there'}</span>
@@ -168,8 +229,18 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
                         <div class="insp-art">{@html homesteadItemSprite(selected)}</div>
                         <div class="insp-info">
                             <h4>{itemName(selected)}</h4>
-                            <span class="stars">{'★'.repeat(selected.level)}<span class="dim">{'★'.repeat(Math.max(0, maxLevel - selected.level))}</span></span>
-                            {#if selBuilding?.perk}
+                            {#if maxLevel > 1}
+                                <span class="stars">{'★'.repeat(selected.level)}<span class="dim">{'★'.repeat(Math.max(0, maxLevel - selected.level))}</span></span>
+                            {/if}
+                            {#if plot && crop}
+                                {@const progress = cropProgress(plot)}
+                                <p class="perk">
+                                    {crop.icon} {crop.name} ·
+                                    {progress >= 1 ? 'ready to harvest!' : `${Math.floor(plot.cropGrowth || 0)} of ${crop.growMinutes} focus minutes`}
+                                </p>
+                                <div class="crop-bar" class:ripe={progress >= 1}><div style="width:{Math.round(progress * 100)}%"></div></div>
+                                <p class="perk next">Grows with every minute you focus. Each finished task waters it (+{TASK_WATERING_MINUTES}m). It never wilts.</p>
+                            {:else if selBuilding?.perk}
                                 <p class="perk">⚡ {perkText(selBuilding, selected.level)}</p>
                                 {#if !upgrade?.maxed}<p class="perk next">Next: {perkText(selBuilding, selected.level + 1)}</p>{/if}
                             {:else if selected.itemType === 'tree'}
@@ -179,15 +250,39 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
                             {/if}
                         </div>
                     </div>
+                    {#if plot && crop}
+                        <div class="crops">
+                            {#each CROPS as c (c.id)}
+                                {@const locked = $levelInfo.level < c.unlockLevel}
+                                <button
+                                    class="crop"
+                                    class:active={c.id === crop.id}
+                                    disabled={locked}
+                                    title={locked
+                                        ? `${c.name} unlock at level ${c.unlockLevel}`
+                                        : `${c.name}: ${c.growMinutes} focus minutes for ${c.coins} coins and ${c.xp} XP. ${c.description}`}
+                                    on:click={() => plot && engine?.plantCrop(plot.id, c.id)}>
+                                    <span class="crop-icon">{locked ? '🔒' : c.icon}</span>
+                                    <span class="crop-time">{locked ? `Lv ${c.unlockLevel}` : `${c.growMinutes}m`}</span>
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
                     <div class="insp-actions">
-                        {#if upgrade && !upgrade.maxed}
+                        {#if plot && crop && cropProgress(plot) >= 1}
+                            <button class="primary" on:click={() => plot && harvest([plot.id])}>
+                                🧺 Harvest · {@html ICONS.coin}{crop.coins} +{crop.xp} XP
+                            </button>
+                        {:else if plot}
+                            <!-- nothing to buy for a plot: it grows by itself -->
+                        {:else if upgrade && !upgrade.maxed}
                             <button
                                 class="primary"
                                 disabled={g.sunlight < upgrade.sunlight || g.coins < upgrade.coins}
                                 on:click={() => selected && engine?.upgradeHomesteadItem(selected.id)}>
                                 ✨ {selected.itemType === 'tree' ? 'Nurture' : 'Upgrade'} · {@html ICONS.sunlight}{upgrade.sunlight} {@html ICONS.coin}{upgrade.coins}
                             </button>
-                        {:else if upgrade?.maxed}
+                        {:else if upgrade?.maxed && maxLevel > 1}
                             <span class="maxed">Fully upgraded ✨</span>
                         {/if}
                         <button on:click={() => { movingId = selected?.id ?? null; placingKey = null }}>↔ Move</button>
@@ -314,6 +409,115 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 .scene-frame.placing { box-shadow: 0 0 0 2px var(--interactive-accent); }
+/* While placing or moving, clicks go to the tiles, not to whoever stands on them */
+.scene-frame.placing :global(.pf-actor) { pointer-events: none; }
+.life-layer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+.life-layer :global(.pf-bubble) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    max-width: 150px;
+    padding: 4px 9px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    text-align: center;
+    color: #3a2c1a;
+    background: #fffdf6;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+    animation: pf-bubble-in 0.18s ease-out;
+}
+.life-layer :global(.pf-bubble)::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -4px;
+    width: 8px;
+    height: 8px;
+    margin-left: -4px;
+    background: inherit;
+    transform: rotate(45deg);
+}
+.life-layer :global(.pf-pop) {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+    transform: translate(-50%, -100%);
+    animation: pf-pop-rise 1.4s ease-out forwards;
+}
+.life-layer :global(.pf-pop-coin) {
+    width: 0.8em;
+    height: 0.8em;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff1b8, #ffc94a 55%, #e19b16);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+@keyframes -global-pf-bubble-in {
+    from { opacity: 0; scale: 0.7; }
+    to { opacity: 1; scale: 1; }
+}
+@keyframes -global-pf-pop-rise {
+    0% { opacity: 0; translate: 0 6px; }
+    15% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; translate: 0 -34px; }
+}
+.harvest-all {
+    height: auto;
+    padding: 2px 9px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 99px;
+    color: #4a2d00;
+    background: #ffc94a;
+    cursor: pointer;
+}
+.crop-bar {
+    height: 5px;
+    margin-top: 5px;
+    border-radius: 9px;
+    overflow: hidden;
+    background: var(--background-modifier-border);
+}
+.crop-bar div {
+    height: 100%;
+    border-radius: 9px;
+    background: linear-gradient(90deg, #8bc34a, #5a9e3a);
+    transition: width 0.4s;
+}
+.crop-bar.ripe div { background: linear-gradient(90deg, #ffd54f, #ffb300); }
+.crops {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 10px;
+}
+.crop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    height: auto;
+    padding: 5px 2px 4px;
+    border-radius: 9px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    cursor: pointer;
+}
+.crop.active { border-color: var(--interactive-accent); box-shadow: 0 0 0 1px var(--interactive-accent); }
+.crop:disabled { opacity: 0.5; cursor: default; }
+.crop-icon { font-size: 1.05rem; line-height: 1.2; }
+.crop-time { font-size: 0.62rem; color: var(--text-muted); }
 .mode-banner {
     position: absolute;
     left: 8px;

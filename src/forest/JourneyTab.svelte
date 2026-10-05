@@ -108,6 +108,7 @@ function downloadHtml() {
             <div class="stat"><b>{health}%</b><span>forest health</span></div>
             <div class="stat"><b>{stats.questsCompleted}</b><span>quests</span></div>
             <div class="stat"><b>{stats.breaksCompleted}</b><span>breaks taken</span></div>
+            {#if stats.cropsHarvested}<div class="stat"><b>{stats.cropsHarvested}</b><span>crops harvested</span></div>{/if}
             <div class="stat"><b>{g.xp}</b><span>XP · next lvl at {xpForLevel($levelInfo.level + 1)}</span></div>
         </div>
     </section>

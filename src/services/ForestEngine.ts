@@ -16,17 +16,23 @@ import type {
 } from '../types/forest'
 import {
     BIOME_UNLOCK_LEVELS,
+    CROPS,
     FLORA_SPECIES,
+    GARDEN_PLOT_ID,
     HOMESTEAD_BUILDINGS,
     LAND_EXPANSIONS,
     TREE_MAX_LEVEL,
+    cropProgress,
     getBuilding,
+    getCrop,
     getSpecies,
+    isRipePlot,
 } from '../assets/floraCatalog'
 import {
     ACHIEVEMENTS,
     CHEST_REWARD,
     EARLY_HARVEST_RATE,
+    TASK_WATERING_MINUTES,
     VITALITY_DAILY_FADE,
     VITALITY_FLOOR,
     addDays,
@@ -138,7 +144,7 @@ export default class ForestEngine {
         } else {
             // No view open to celebrate in — fall back to compact notices.
             for (const e of events) {
-                if (e.kind === 'task') continue
+                if (e.kind === 'task' || e.kind === 'crop') continue
                 const parts = [e.sunlight && `+${e.sunlight}☀️`, e.coins && `+${e.coins}🪙`, e.xp && `+${e.xp} XP`].filter(Boolean)
                 new Notice(`${e.title}${parts.length ? `\n${parts.join('  ')}` : ''}`)
             }
@@ -339,6 +345,11 @@ export default class ForestEngine {
             if (firstToday) {
                 bonusXp += 10
                 lines.push({ label: '🌅 First tree of the day', xp: 10 })
+                const eggs = perkValue(g.homestead, 'first_tree_coins')
+                if (eggs) {
+                    bonusCoins += eggs
+                    lines.push({ label: '🥚 Fresh eggs from the coop', coins: eggs })
+                }
             }
             const goal = settings.dailyGoal || 4
             if (log.completedPomodoros + 1 === goal) {
@@ -358,6 +369,7 @@ export default class ForestEngine {
             const key = `tree:${speciesId}`
             g.inventory[key] = (g.inventory[key] || 0) + 1
             lines.push({ label: `🌱 ${species.name} sapling added to your village inventory` })
+            this.growCrops(g, durationMinutes, lines)
 
             log.trees.push(newTree)
             log.totalMinutes += durationMinutes
@@ -448,6 +460,7 @@ export default class ForestEngine {
             this.checkInStreak(g, today)
             const { sunPct, coinPct } = this.focusBonuses(g, base, minutes, lines)
             lines.push({ label: `🌳 Finish the full ${sessionMinutes}m next time for a sapling and a tree toward your goal` })
+            this.growCrops(g, minutes, lines)
 
             const earned = this.grant(g, {
                 sunlight: base.sunlight * (1 + sunPct / 100),
@@ -618,6 +631,8 @@ export default class ForestEngine {
             const log = this.todayLog(g)
             log.tasksCompleted = (log.tasksCompleted || 0) + 1
             g.vitality = Math.min(100, g.vitality + 2)
+            // A finished task waters the garden
+            this.growCrops(g, TASK_WATERING_MINUTES)
             this.emit({ kind: 'task', title: text.length > 60 ? `${text.slice(0, 57)}…` : text, ...earned, lines })
             this.progressQuests(g, 'tasks', 1)
         })
@@ -692,6 +707,7 @@ export default class ForestEngine {
         for (const sp of FLORA_SPECIES) if (sp.unlockLevel > levelBefore && sp.unlockLevel <= levelAfter) unlocks.push(`🌳 ${sp.name} in the nursery`)
         for (const b of HOMESTEAD_BUILDINGS) if (b.unlockLevel > levelBefore && b.unlockLevel <= levelAfter) unlocks.push(`🏗️ ${b.name} in the market`)
         for (const land of LAND_EXPANSIONS) if (land.unlockLevel > levelBefore && land.unlockLevel <= levelAfter) unlocks.push(`🧭 Land expansion to ${land.size}×${land.size}`)
+        for (const crop of CROPS) if (crop.unlockLevel > levelBefore && crop.unlockLevel <= levelAfter) unlocks.push(`${crop.icon} ${crop.name} for your garden plots`)
 
         const earned = this.grant(g, { sunlight: 25 * levelAfter, coins: 3 * levelAfter })
         this.emit({
@@ -758,6 +774,10 @@ export default class ForestEngine {
             new Notice(`${building.name} unlocks at village level ${building.unlockLevel}.`)
             return false
         }
+        if (building.limit && this.ownedCount(g0, buildingId) >= building.limit) {
+            new Notice(`A village has room for ${building.limit} of these — yours has them all.`)
+            return false
+        }
         if (!this.canAfford(building.sunlightCost, building.coinsCost)) return false
 
         this.mutate((g) => {
@@ -769,6 +789,11 @@ export default class ForestEngine {
         })
         if (this.settings().forestSounds) this.soundManager.playCoin()
         return true
+    }
+
+    /** Copies of a building owned, placed or still in the inventory. */
+    public ownedCount(g: GamificationData, buildingId: string): number {
+        return g.homestead.filter((i) => i.itemType === 'building' && i.itemId === buildingId).length + (g.inventory[`building:${buildingId}`] || 0)
     }
 
     private isFree(g: GamificationData, x: number, y: number, ignoreId?: string): boolean {
@@ -795,6 +820,8 @@ export default class ForestEngine {
                 gridX,
                 gridY,
                 level: 1,
+                // A new plot is sown right away, so there is always something growing
+                ...(itemType === 'building' && itemId === GARDEN_PLOT_ID ? { cropId: CROPS[0].id, cropGrowth: 0 } : {}),
             })
             this.progressQuests(g, 'village_action', 1)
         })
@@ -815,6 +842,9 @@ export default class ForestEngine {
 
     /** Return a placed item to the inventory (its level is kept only while placed). */
     public stowHomesteadItem(id: string): void {
+        // A ripe crop is picked first, so stowing a plot never throws a harvest away
+        const placed = this.state.homestead.find((i) => i.id === id)
+        if (placed && isRipePlot(placed)) this.harvestCrops([id])
         this.mutate((g) => {
             const item = g.homestead.find((i) => i.id === id)
             if (!item) return
@@ -822,6 +852,87 @@ export default class ForestEngine {
             const key = `${item.itemType}:${item.itemId}`
             g.inventory[key] = (g.inventory[key] || 0) + 1
         })
+    }
+
+    // -----------------------------------------------------------------------
+    // Garden plots
+    // -----------------------------------------------------------------------
+
+    /**
+     * Crops grow with focus, never with the clock: a plot left alone simply waits. Adds a
+     * line to `lines` when there is something worth telling. Returns how many crops ripened.
+     */
+    private growCrops(g: GamificationData, minutes: number, lines?: RewardLine[]): number {
+        const boost = 1 + perkValue(g.homestead, 'crop_growth_pct') / 100
+        let growing = 0
+        let ripened = 0
+        for (const item of g.homestead) {
+            if (item.itemType !== 'building' || item.itemId !== GARDEN_PLOT_ID || cropProgress(item) >= 1) continue
+            const crop = getCrop(item.cropId)
+            item.cropId = crop.id
+            item.cropGrowth = Math.min(crop.growMinutes, Math.round(((item.cropGrowth || 0) + minutes * boost) * 10) / 10)
+            growing += 1
+            if (item.cropGrowth >= crop.growMinutes) ripened += 1
+        }
+        if (lines && ripened) lines.push({ label: `🧺 ${ripened} crop${ripened > 1 ? 's are' : ' is'} ready to harvest in your village` })
+        else if (lines && growing) lines.push({ label: '🌾 Your crops grew with your focus' })
+        return ripened
+    }
+
+    /**
+     * Sow a different crop in a garden plot. A ripe crop is harvested first. A growing one
+     * keeps the minutes it has: changing your mind never throws focus away.
+     */
+    public plantCrop(itemId: string, cropId: string): boolean {
+        const item = this.state.homestead.find((i) => i.id === itemId)
+        const crop = CROPS.find((c) => c.id === cropId)
+        if (!item || !crop || item.itemId !== GARDEN_PLOT_ID) return false
+        if (levelFromXp(this.state.xp) < crop.unlockLevel) {
+            new Notice(`${crop.name} unlock at village level ${crop.unlockLevel}.`)
+            return false
+        }
+        if (isRipePlot(item)) this.harvestCrops([itemId])
+        this.mutate((g) => {
+            const target = g.homestead.find((i) => i.id === itemId)
+            if (!target) return
+            target.cropId = crop.id
+            target.cropGrowth = Math.min(target.cropGrowth || 0, crop.growMinutes)
+            this.progressQuests(g, 'village_action', 1)
+        })
+        return true
+    }
+
+    /**
+     * Pick the ripe crops among `ids` (all ripe plots when omitted). Each plot is sown again
+     * with the same crop. Returns what was harvested, for the UI to celebrate.
+     */
+    public harvestCrops(ids?: string[]): { id: string; coins: number; xp: number }[] {
+        const ripe = this.state.homestead.filter((i) => isRipePlot(i) && (!ids || ids.includes(i.id)))
+        if (!ripe.length) return []
+
+        const harvested: { id: string; coins: number; xp: number }[] = []
+        this.mutate((g) => {
+            const counts = new Map<string, number>()
+            let coins = 0
+            let xp = 0
+            for (const { id } of ripe) {
+                const item = g.homestead.find((i) => i.id === id)
+                if (!item) continue
+                const crop = getCrop(item.cropId)
+                coins += crop.coins
+                xp += crop.xp
+                counts.set(crop.id, (counts.get(crop.id) || 0) + 1)
+                item.cropGrowth = 0
+                harvested.push({ id, coins: crop.coins, xp: crop.xp })
+            }
+            const earned = this.grant(g, { coins, xp })
+            g.lifetimeStats.cropsHarvested = (g.lifetimeStats.cropsHarvested || 0) + harvested.length
+            const names = [...counts].map(([cropId, n]) => `${getCrop(cropId).icon} ${getCrop(cropId).name}${n > 1 ? ` ×${n}` : ''}`)
+            this.emit({ kind: 'crop', title: `Harvested ${names.join(', ')}`, ...earned, lines: [] })
+            this.progressQuests(g, 'village_action', 1)
+        })
+        if (this.settings().forestSounds) this.soundManager.playCoin()
+        return harvested
     }
 
     public getUpgradeInfo(item: PlacedHomesteadItem): { sunlight: number; coins: number; maxed: boolean } {

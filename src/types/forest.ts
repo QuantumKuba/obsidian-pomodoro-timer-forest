@@ -34,6 +34,8 @@ export type PerkKind =
     | 'vitality_keep_pct' // village fades % slower on missed days
     | 'task_coins' // flat extra coins per checked-off task
     | 'night_sunlight_pct' // +% sunlight for sessions finished 19:00–05:00
+    | 'crop_growth_pct' // crops in garden plots grow % faster
+    | 'first_tree_coins' // flat coins with the first tree of the day
 
 export interface BuildingPerk {
     kind: PerkKind
@@ -45,16 +47,31 @@ export interface HomesteadBuilding {
     id: string
     name: string
     description: string
-    category: 'building' | 'landmark' | 'decoration' | 'path'
+    category: 'building' | 'landmark' | 'decoration' | 'path' | 'farm'
     sunlightCost: number
     coinsCost: number
     unlockLevel: number
     /** Buildings/landmarks are unique, decorations/paths can be bought many times. */
     unique: boolean
+    /** Most copies of a repeatable item one village can own. */
+    limit?: number
     maxLevel: number
     charm: number
     perk?: BuildingPerk
     iconSvg: string
+}
+
+/** Something to grow in a garden plot. Crops grow with focus minutes and never wither. */
+export interface CropType {
+    id: string
+    name: string
+    icon: string
+    description: string
+    /** Focus minutes from planting to harvest. */
+    growMinutes: number
+    coins: number
+    xp: number
+    unlockLevel: number
 }
 
 export interface PlantedTree {
@@ -77,6 +94,9 @@ export interface PlacedHomesteadItem {
     gridY: number
     level: number
     customName?: string
+    /** Garden plots only: what is growing, and the focus minutes it has grown so far. */
+    cropId?: string
+    cropGrowth?: number
 }
 
 export interface DailyForestLog {
@@ -156,6 +176,7 @@ export interface GamificationData {
         breaksCompleted: number
         questsCompleted: number
         chestsOpened: number
+        cropsHarvested: number
     }
     preferences: {
         hardcoreMode: boolean // withers tree if aborted
@@ -213,7 +234,7 @@ export interface RewardLine {
 /** A celebratory event shown in the UI (session harvest, task, quest, level-up…). */
 export interface RewardEvent {
     id: string
-    kind: 'harvest' | 'early' | 'wither' | 'task' | 'break' | 'quest' | 'chest' | 'achievement' | 'levelup'
+    kind: 'harvest' | 'early' | 'wither' | 'task' | 'break' | 'crop' | 'quest' | 'chest' | 'achievement' | 'levelup'
     title: string
     subtitle?: string
     speciesId?: string

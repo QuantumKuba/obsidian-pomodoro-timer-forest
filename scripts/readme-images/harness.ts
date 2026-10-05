@@ -41,6 +41,8 @@ setPlugin({
         rewardEvents,
         dismissReward() {},
         selectSpecies() {},
+        harvestCrops() { return [] },
+        plantCrop() { return true },
         confettiEngine: { attach() {}, detach() {}, destroy() {} },
         getUpgradeInfo(item: PlacedHomesteadItem) {
             if (item.itemType === 'tree') return { sunlight: 40 * item.level, coins: 4 * item.level, maxed: item.level >= 3 }

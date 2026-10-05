@@ -10,13 +10,16 @@ import type { BiomeType, GamificationData, PlacedHomesteadItem, PlantedTree } fr
 import {
     BUILDING_SVGS,
     DECOR_SVGS,
+    HEN_SVGS,
     LIGHT_SOURCES,
     SPECIES_SVGS,
     VILLAGER_SVGS,
+    cropSvg,
     plantedTreeSvg,
 } from '../assets/floraAssets'
-import { getBuilding } from '../assets/floraCatalog'
+import { GARDEN_PLOT_ID, cropProgress, getBuilding, getCrop } from '../assets/floraCatalog'
 import { SCENE_CSS } from './sceneCss'
+import { buildGrid, mainArea, type Tile, type VillageGrid } from './villageGrid'
 
 const TW = 64 // tile width
 const TH = 32 // tile height
@@ -104,6 +107,13 @@ function hash(...n: (number | string)[]): number {
         h ^= s.charCodeAt(i)
         h = Math.imul(h, 16777619)
     }
+    // Final mix: without it, inputs that differ only in their last character land next to
+    // each other, and "scattered" stars or fireflies line up in a row.
+    h ^= h >>> 16
+    h = Math.imul(h, 0x85ebca6b)
+    h ^= h >>> 13
+    h = Math.imul(h, 0xc2b2ae35)
+    h ^= h >>> 16
     return (h >>> 0) / 4294967296
 }
 
@@ -128,15 +138,16 @@ function diamond(cx: number, cy: number, w = TW, h = TH): string {
     return `${f(cx)},${f(cy - h / 2)} ${f(cx + w / 2)},${f(cy)} ${f(cx)},${f(cy + h / 2)} ${f(cx - w / 2)},${f(cy)}`
 }
 
-interface Layout {
+export interface Layout {
     size: number
     width: number
     height: number
     top: number
+    /** Centre of a tile in viewBox units. Fractional tiles work too. */
     tile: (x: number, y: number) => { cx: number; cy: number }
 }
 
-function layout(size: number): Layout {
+export function sceneLayout(size: number): Layout {
     const width = size * TW + 48
     const top = SKY
     const height = top + size * TH + CLIFF + 34
@@ -228,7 +239,9 @@ function islandBase(L: Layout, pal: BiomePalette): string {
     return out
 }
 
-function groundTile(kind: 'grass' | 'path' | 'water', cx: number, cy: number, pal: BiomePalette, x: number, y: number): string {
+type GroundKind = 'path' | 'water' | 'soil'
+
+function groundTile(kind: 'grass' | GroundKind, cx: number, cy: number, pal: BiomePalette, x: number, y: number): string {
     if (kind === 'water') {
         return `<g><polygon points="${diamond(cx, cy)}" fill="#3f9fd8"/><polygon points="${diamond(cx, cy + 1.5, TW - 8, TH - 4)}" fill="#5bb8ea"/>
             <path class="pf-water" d="M${f(cx - 16)} ${f(cy - 2)} q6 -3 12 0 t12 0" stroke="#d6f2ff" stroke-width="1.4" fill="none" stroke-linecap="round"/>
@@ -247,7 +260,17 @@ function groundTile(kind: 'grass' | 'path' | 'water', cx: number, cy: number, pa
         return `<g><polygon points="${diamond(cx, cy)}" fill="#9a8a78"/><polygon points="${diamond(cx, cy, TW - 6, TH - 3)}" fill="#8b7b6a"/>${stones}</g>`
     }
     const fill = (x + y) % 2 === 0 ? pal.tileA : pal.tileB
-    return `<polygon points="${diamond(cx, cy)}" fill="${fill}" stroke="${pal.tileEdge}" stroke-opacity=".35" stroke-width=".6"/>`
+    const grass = `<polygon points="${diamond(cx, cy)}" fill="${fill}" stroke="${pal.tileEdge}" stroke-opacity=".35" stroke-width=".6"/>`
+    if (kind === 'soil') {
+        // Tilled earth with two raised ridges; cropSvg() plants along the same ridges
+        const p = (u: number, v: number) => `${f(cx + (u - v) * (TW / 2))} ${f(cy + (u + v) * (TH / 2))}`
+        let ridges = ''
+        for (const v of [-0.22, 0.22]) {
+            ridges += `<path d="M${p(-0.36, v)}L${p(0.36, v)}" stroke="#8a6240" stroke-width="5.5" stroke-linecap="round"/><path d="M${p(-0.36, v - 0.06)}L${p(0.36, v - 0.06)}" stroke="#a67c52" stroke-width="1.3" stroke-linecap="round"/>`
+        }
+        return `<g>${grass}<polygon points="${diamond(cx, cy + 1, TW - 7, TH - 3.5)}" fill="#4a3120"/><polygon points="${diamond(cx, cy, TW - 8, TH - 4)}" fill="#644529"/>${ridges}</g>`
+    }
+    return grass
 }
 
 // ---------------------------------------------------------------------------
@@ -262,16 +285,30 @@ export interface SceneItem {
     key?: string
     level?: number
     light?: { x: number; y: number; r: number; color: string }
+    /** Shows a bobbing "ready" marker above the item. */
+    ripe?: boolean
+}
+
+/** A villager or animal standing in the scene. `x`/`y` are tile coordinates and may be fractional. */
+export interface SceneActor {
+    x: number
+    y: number
+    svg: string
+    className: string
+    flip?: boolean
 }
 
 export interface SceneOptions {
     size: number
     biome: BiomeType
     items: SceneItem[]
-    ground?: Map<string, 'path' | 'water'>
+    ground?: Map<string, GroundKind>
     date?: Date
     vitality?: number
-    villagers?: number
+    /** Drawn between the items, so an actor behind a tree is hidden by it. */
+    actors?: SceneActor[]
+    /** Tiles nothing stands on, for ambient life. Defaults to every tile without an item. */
+    open?: Tile[]
     interactive?: boolean
     selected?: { x: number; y: number } | null
     highlightEmpty?: boolean
@@ -284,7 +321,7 @@ export interface SceneOptions {
 }
 
 export function renderIsoScene(opts: SceneOptions): string {
-    const L = layout(opts.size)
+    const L = sceneLayout(opts.size)
     const date = opts.date || new Date()
     const sky = skyFor(date)
     const pal = BIOME_PALETTES[opts.biome] || BIOME_PALETTES.meadow
@@ -292,7 +329,7 @@ export function renderIsoScene(opts: SceneOptions): string {
     const vitality = opts.vitality ?? 70
     const mood = vitality >= 75 ? 'thriving' : vitality >= 45 ? 'healthy' : vitality >= 20 ? 'sleepy' : 'dormant'
     const occupied = new Set(opts.items.map((i) => `${i.x},${i.y}`))
-    const ground = opts.ground || new Map<string, 'path' | 'water'>()
+    const ground = opts.ground || new Map<string, GroundKind>()
 
     // Animation phases are anchored to the wall clock (--t), so a re-rendered scene
     // continues exactly where the previous one was instead of restarting.
@@ -346,16 +383,31 @@ export function renderIsoScene(opts: SceneOptions): string {
         svg += `</g>`
     }
 
-    // Objects, painter-sorted back to front
-    const sorted = [...opts.items].sort((a, b) => a.x + a.y - (b.x + b.y) || a.x - b.x)
+    // Objects and actors in one list, painter-sorted back to front. Each carries its depth so
+    // the live village (VillageLife) can slot walking villagers in between them.
+    type Drawn = { depth: number; order: number; item?: SceneItem; actor?: SceneActor }
+    const drawn: Drawn[] = [
+        ...opts.items.map((item) => ({ depth: item.x + item.y, order: item.x, item })),
+        ...(opts.actors || []).map((actor) => ({ depth: actor.x + actor.y + 0.01, order: actor.x, actor })),
+    ].sort((a, b) => a.depth - b.depth || a.order - b.order)
     const lights: string[] = []
-    for (const item of sorted) {
+    svg += `<g class="pf-objects">`
+    for (const { depth, item, actor } of drawn) {
+        if (actor) {
+            const { cx, cy } = L.tile(actor.x, actor.y)
+            svg += `<g class="pf-actor ${actor.className}" data-depth="${f(depth)}" transform="translate(${f(cx)} ${f(cy)})"><g class="pf-actor-body"${actor.flip ? ' transform="scale(-1 1)"' : ''}>${actor.svg}</g></g>`
+            continue
+        }
+        if (!item) continue
         const { cx, cy } = L.tile(item.x, item.y)
         const delay = f(-hash(item.x, item.y, 'sway') * 5)
-        svg += `<g class="pf-item" style="--d:${delay}s"${item.key ? ` data-item="${item.key}" data-x="${item.x}" data-y="${item.y}"` : ''}>`
+        svg += `<g class="pf-item" data-depth="${depth}" style="--d:${delay}s"${item.key ? ` data-item="${item.key}" data-x="${item.x}" data-y="${item.y}"` : ''}>`
         svg += placeSprite(item.svg, cx, cy + 3, item.scale)
         if (item.level && item.level > 1) {
             svg += `<text x="${f(cx)}" y="${f(cy + 13)}" class="pf-stars" text-anchor="middle">${'★'.repeat(Math.min(5, item.level))}</text>`
+        }
+        if (item.ripe) {
+            svg += `<g transform="translate(${f(cx)} ${f(cy - 21)})"><g class="pf-ripe" style="--d:${delay}s"><circle r="5.6" fill="#fff8e1" stroke="#e39b2d" stroke-width="1"/><path d="M0 -3.8Q0 0 3.8 0Q0 0 0 3.8Q0 0 -3.8 0Q0 0 0 -3.8Z" fill="#ffb300"/></g></g>`
         }
         svg += `</g>`
         if (item.light) {
@@ -364,24 +416,22 @@ export function renderIsoScene(opts: SceneOptions): string {
             lights.push(`<circle class="pf-halo" cx="${f(lx)}" cy="${f(ly)}" r="${f(item.light.r * item.scale * 2.2)}" fill="url(#${id}-glow)"/>`)
         }
     }
+    svg += `</g>`
 
-    // Villagers wander between open tiles when the village is lively
-    const walkable: { cx: number; cy: number }[] = []
-    for (let y = 0; y < L.size; y++)
-        for (let x = 0; x < L.size; x++) {
-            const k = `${x},${y}`
-            if (ground.get(k) === 'water') continue
-            const blocked = opts.items.some((i) => i.x === x && i.y === y && !ground.has(k))
-            if (!blocked) walkable.push(L.tile(x, y))
+    const openTiles = opts.open || allTiles(L.size).filter((t) => !occupied.has(`${t.x},${t.y}`))
+    const walkable = openTiles.map((t) => L.tile(t.x, t.y))
+
+    // Mist settles in while the village rests. Soft wisps under the night shade, so they
+    // read as haze in every light instead of as shapes.
+    if (mood === 'dormant' || mood === 'sleepy') {
+        svg += `<defs><radialGradient id="${id}-mist"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".55" stop-color="#fff" stop-opacity=".3"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>`
+        svg += `<g class="pf-mist-layer" opacity="${mood === 'dormant' ? 0.5 : 0.24}">`
+        for (let i = 0; i < L.size + 1; i++) {
+            const { cx, cy } = L.tile(hash(id, 'mx', i) * (L.size - 1), hash(id, 'my', i) * (L.size - 1))
+            const rx = 30 + hash(id, 'mr', i) * 28
+            svg += `<ellipse class="pf-mist" style="--d:-${f(hash(i, 'md') * 12)}s" cx="${f(cx)}" cy="${f(cy - 3)}" rx="${f(rx)}" ry="${f(rx * 0.24)}" fill="url(#${id}-mist)"/>`
         }
-    const villagers = Math.min(opts.villagers ?? 0, VILLAGER_SVGS.length * 2, Math.floor(walkable.length / 2))
-    for (let v = 0; v < villagers; v++) {
-        const pts: { cx: number; cy: number }[] = []
-        for (let i = 0; i < 4; i++) pts.push(walkable[Math.floor(hash(id, 'walk', v, i, date.getDate()) * walkable.length)])
-        const d = `M${f(pts[0].cx)} ${f(pts[0].cy)} ` + pts.slice(1).map((p) => `L${f(p.cx)} ${f(p.cy)}`).join(' ') + ' Z'
-        const dur = 26 + hash(v, 'dur') * 20
-        svg += `<g class="pf-villager"><animateMotion dur="${f(dur)}s" begin="-${f((wallClock() + hash(v, 'b') * dur) % dur)}s" repeatCount="indefinite" path="${d}"/>
-            ${placeSprite(VILLAGER_SVGS[v % VILLAGER_SVGS.length], 0, 0, 0.8, 23, 16, 24)}</g>`
+        svg += `</g>`
     }
 
     // Night shading + warm light halos
@@ -390,7 +440,7 @@ export function renderIsoScene(opts: SceneOptions): string {
     }
     if (sky.lights || pal.alwaysGlow) svg += `<g class="pf-lights">${lights.join('')}</g>`
 
-    // Ambient life: fireflies at night, butterflies by day, mist when dormant
+    // Ambient life: fireflies at night, butterflies by day
     if ((sky.phase === 'night' || sky.phase === 'dusk' || pal.alwaysGlow) && vitality >= 45) {
         const n = mood === 'thriving' ? 14 : 7
         for (let i = 0; i < n; i++) {
@@ -405,13 +455,82 @@ export function renderIsoScene(opts: SceneOptions): string {
                 <ellipse class="pf-wing" cx="-2" cy="0" rx="2.2" ry="1.6" fill="${color}"/><ellipse class="pf-wing" cx="2" cy="0" rx="2.2" ry="1.6" fill="${color}"/></g></g>`
         }
     }
-    if (mood === 'dormant' || mood === 'sleepy') {
-        const { cx, cy } = L.tile((L.size - 1) / 2, (L.size - 1) / 2)
-        svg += `<g class="pf-mist" opacity="${mood === 'dormant' ? 0.55 : 0.28}"><ellipse cx="${f(cx - 40)}" cy="${f(cy)}" rx="${f(L.size * 16)}" ry="14" fill="#fff"/><ellipse cx="${f(cx + 50)}" cy="${f(cy + 20)}" rx="${f(L.size * 14)}" ry="12" fill="#fff"/></g>`
-    }
-
     svg += `</svg>`
     return svg
+}
+
+function allTiles(size: number): Tile[] {
+    const tiles: Tile[] = []
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) tiles.push({ x, y })
+    return tiles
+}
+
+// ---------------------------------------------------------------------------
+// Villagers and animals
+// ---------------------------------------------------------------------------
+
+/** An actor's sprite with its feet at the origin, ready to be moved with a translate. */
+export function actorSprite(kind: 'villager' | 'hen', variant: number): string {
+    return kind === 'hen'
+        ? placeSprite(HEN_SVGS[variant % HEN_SVGS.length], 0, 0, 0.8, 11, 12, 12)
+        : placeSprite(VILLAGER_SVGS[variant % VILLAGER_SVGS.length], 0, 0, 0.8, 23, 16, 24)
+}
+
+/** Villagers come out as the village gets livelier and gains buildings. */
+export function villagerCount(g: GamificationData): number {
+    const buildings = g.homestead.filter((i) => {
+        const category = i.itemType === 'building' ? getBuilding(i.itemId)?.category : 'path'
+        return category !== 'path' && category !== 'farm'
+    }).length
+    const moodVillagers = g.vitality >= 75 ? 5 : g.vitality >= 45 ? 3 : g.vitality >= 20 ? 1 : 0
+    return Math.min(moodVillagers, 1 + buildings, VILLAGER_SVGS.length * 2)
+}
+
+export function findCoop(g: GamificationData): PlacedHomesteadItem | undefined {
+    return g.homestead.find((i) => i.itemType === 'building' && i.itemId === 'chicken_coop' && i.gridX < g.landSize && i.gridY < g.landSize)
+}
+
+/** A coop keeps a hen per level, plus one. They stay in while the village is dormant. */
+export function henCount(g: GamificationData): number {
+    const coop = findCoop(g)
+    return coop && g.vitality >= 20 ? 1 + coop.level : 0
+}
+
+/** Walkable tiles within a short waddle of the coop. */
+export function henRange(tiles: Tile[], coop: Tile): Tile[] {
+    return tiles.filter((t) => Math.max(Math.abs(t.x - coop.x), Math.abs(t.y - coop.y)) <= 2)
+}
+
+/** Where everyone stands when nothing moves: still scenes and exported snapshots. */
+function standingActors(g: GamificationData, grid: VillageGrid, seed: string, day: number): SceneActor[] {
+    const area = mainArea(grid)
+    const taken = new Set<string>()
+    const actors: SceneActor[] = []
+    const stand = (pool: Tile[], kind: 'villager' | 'hen', n: number) => {
+        if (!pool.length) return
+        for (let attempt = 0; attempt < 6; attempt++) {
+            const tile = pool[Math.floor(hash(seed, kind, n, attempt, day) * pool.length)]
+            const key = `${tile.x},${tile.y}`
+            if (taken.has(key)) continue
+            taken.add(key)
+            actors.push({
+                x: tile.x + (hash(seed, kind, n, 'ox') - 0.5) * 0.3,
+                y: tile.y + (hash(seed, kind, n, 'oy') - 0.5) * 0.3,
+                svg: actorSprite(kind, n),
+                className: kind === 'hen' ? 'pf-hen' : 'pf-villager',
+                flip: hash(seed, kind, n, 'flip') > 0.5,
+            })
+            return
+        }
+    }
+    const villagers = Math.min(villagerCount(g), Math.floor(area.length / 2))
+    for (let v = 0; v < villagers; v++) stand(area, 'villager', v)
+    const coop = findCoop(g)
+    if (coop) {
+        const range = henRange(area, { x: coop.gridX, y: coop.gridY })
+        for (let h = 0; h < henCount(g); h++) stand(range, 'hen', h)
+    }
+    return actors
 }
 
 // ---------------------------------------------------------------------------
@@ -435,10 +554,13 @@ export interface VillageRenderOptions {
     idPrefix?: string
     className?: string
     embedCss?: boolean
+    /** Leave villagers and animals out: VillageLife adds them and walks them around. */
+    liveActors?: boolean
 }
 
 export function renderVillage(g: GamificationData, opts: VillageRenderOptions = {}): string {
-    const ground = new Map<string, 'path' | 'water'>()
+    const { liveActors, ...sceneOpts } = opts
+    const ground = new Map<string, GroundKind>()
     const items: SceneItem[] = []
     for (const item of g.homestead) {
         if (item.gridX >= g.landSize || item.gridY >= g.landSize) continue
@@ -455,6 +577,12 @@ export function renderVillage(g: GamificationData, opts: VillageRenderOptions = 
                 continue
             }
         }
+        if (item.itemType === 'building' && item.itemId === GARDEN_PLOT_ID) {
+            const progress = cropProgress(item)
+            ground.set(key, 'soil')
+            items.push({ x: item.gridX, y: item.gridY, svg: cropSvg(getCrop(item.cropId).id, progress), scale: 1, key: item.id, ripe: progress >= 1 })
+            continue
+        }
         const isTree = item.itemType === 'tree'
         items.push({
             x: item.gridX,
@@ -467,16 +595,17 @@ export function renderVillage(g: GamificationData, opts: VillageRenderOptions = 
         })
     }
 
-    const buildings = g.homestead.filter((i) => i.itemType === 'building' && getBuilding(i.itemId)?.category !== 'path').length
-    const moodVillagers = g.vitality >= 75 ? 5 : g.vitality >= 45 ? 3 : g.vitality >= 20 ? 1 : 0
+    const grid = buildGrid(g.homestead, g.landSize)
+    const seed = opts.idPrefix || 'pf'
     return renderIsoScene({
         size: g.landSize,
         biome: g.activeBiome,
         items,
         ground,
         vitality: g.vitality,
-        villagers: Math.min(moodVillagers, 1 + buildings),
-        ...opts,
+        actors: liveActors ? [] : standingActors(g, grid, seed, (opts.date || new Date()).getDate()),
+        open: mainArea(grid),
+        ...sceneOpts,
     })
 }
 
@@ -500,5 +629,5 @@ export function renderGrove(
         key: t.id,
         light: t.status === 'mature' ? LIGHT_SOURCES[t.speciesId] : undefined,
     }))
-    return renderIsoScene({ size, biome, items, vitality: 80, villagers: 0, interactive: false, ...opts, className: 'pf-grove' })
+    return renderIsoScene({ size, biome, items, vitality: 80, interactive: false, ...opts, className: 'pf-grove' })
 }

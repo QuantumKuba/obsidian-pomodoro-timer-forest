@@ -6,7 +6,7 @@ import { freshGamificationData } from '../../src/services/StorageManager'
 import { ACHIEVEMENTS, addDays, dateKey, generateQuestBoard, xpForLevel } from '../../src/services/Progression'
 import type { GamificationData, PlacedHomesteadItem, PlantedTree } from '../../src/types/forest'
 
-type Row = [type: 'tree' | 'building', id: string, x: number, y: number, level?: number]
+type Row = [type: 'tree' | 'building', id: string, x: number, y: number, level?: number, crop?: [id: string, minutes: number]]
 
 /** (x, y): x runs down-right, y runs down-left; higher x+y is closer to the viewer. */
 export const VILLAGE: Row[] = [
@@ -18,6 +18,12 @@ export const VILLAGE: Row[] = [
     ['tree', 'autumn_maple', 0, 1, 3],
     ['building', 'greenhouse', 2, 1, 3],
     ['tree', 'classic_pine', 7, 1, 3],
+    // kitchen garden behind the windmill, watched by a scarecrow
+    ['building', 'scarecrow', 4, 1, 2],
+    ['building', 'garden_plot', 5, 1, 1, ['carrot', 50]],
+    ['building', 'garden_plot', 6, 1, 1, ['tomato', 70]],
+    ['building', 'garden_plot', 5, 2, 1, ['wheat', 130]],
+    ['building', 'garden_plot', 6, 2, 1, ['pumpkin', 250]],
     // village core
     ['building', 'cabin', 1, 2, 4],
     ['building', 'stone_well', 4, 2, 3],
@@ -27,6 +33,8 @@ export const VILLAGE: Row[] = [
     ['tree', 'willow', 5, 3, 2],
     ['tree', 'bamboo', 6, 3, 2],
     ['tree', 'sunflower', 1, 4, 1],
+    ['building', 'chicken_coop', 0, 4, 2],
+    ['building', 'hay_bale', 7, 4],
     ['building', 'lantern', 2, 4, 2],
     ['building', 'campfire', 4, 4, 3],
     ['building', 'watermill', 5, 4, 3],
@@ -68,15 +76,16 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
     g.unlockedBiomes = ['meadow', 'sakura_garden', 'autumn_valley', 'alpine_frost', 'twilight_moss']
     g.unlockedSpecies = ['classic_pine', 'sunflower', 'ancient_oak', 'lavender', 'autumn_maple', 'sakura', 'willow', 'bamboo', 'bonsai', 'mushroom_circle']
     g.selectedSpeciesId = 'sakura'
-    g.homestead = VILLAGE.map(([itemType, itemId, gridX, gridY, level], i): PlacedHomesteadItem => ({
+    g.homestead = VILLAGE.map(([itemType, itemId, gridX, gridY, level, crop], i): PlacedHomesteadItem => ({
         id: `s${i}`, itemType, itemId, gridX, gridY, level: level ?? 1,
+        ...(crop ? { cropId: crop[0], cropGrowth: crop[1] } : {}),
     }))
     g.unlockedBuildings = Array.from(new Set(g.homestead.filter((i) => i.itemType === 'building').map((i) => i.itemId)))
     g.inventory = { 'tree:sakura': 2, 'tree:ancient_oak': 1, 'building:lantern': 1 }
     g.achievements = ACHIEVEMENTS.map((a) => a.id).filter((id) => !['trees_200', 'streak_30', 'hours_100', 'tasks_100', 'collector'].includes(id))
     g.lifetimeStats = {
         totalFocusMinutes: 4380, totalPomodoros: 171, treesGrown: 168, treesWithered: 9, earlyHarvests: 12,
-        tasksCompleted: 142, breaksCompleted: 133, questsCompleted: 61, chestsOpened: 24,
+        tasksCompleted: 142, breaksCompleted: 133, questsCompleted: 61, chestsOpened: 24, cropsHarvested: 37,
     }
 
     // A believable last five weeks of activity for the grove heat-map

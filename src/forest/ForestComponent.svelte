@@ -1,7 +1,7 @@
 <script lang="ts">
 import { tick } from 'svelte'
 import { gamificationStore, questBoard, levelInfo, vitality, todayLog, settings } from '../stores'
-import { FLORA_SPECIES, HOMESTEAD_BUILDINGS } from '../assets/floraCatalog'
+import { FLORA_SPECIES, HOMESTEAD_BUILDINGS, isRipePlot } from '../assets/floraCatalog'
 import HudBar from './HudBar.svelte'
 import RewardToasts from './RewardToasts.svelte'
 import VillageTab from './VillageTab.svelte'
@@ -19,6 +19,7 @@ let village: VillageTab
 
 $: g = $gamificationStore
 $: toPlace = Object.values(g.inventory).reduce((a, b) => a + (b > 0 ? b : 0), 0)
+$: ripeCrops = g.homestead.filter(isRipePlot).length
 $: questsLeft = $questBoard ? $questBoard.quests.filter((q) => !q.claimed).length : 0
 $: chestReady = !!$questBoard && questsLeft === 0 && !$questBoard.chestClaimed
 $: affordable =
@@ -55,7 +56,7 @@ function greeting(): string {
 
     <nav class="tabs">
         <button class:active={activeTab === 'village'} on:click={() => (activeTab = 'village')}>
-            🏡 Village{#if toPlace}<span class="badge">{toPlace}</span>{/if}
+            🏡 Village{#if ripeCrops}<span class="badge gold" title="Crops are ready to harvest">🧺</span>{:else if toPlace}<span class="badge">{toPlace}</span>{/if}
         </button>
         <button class:active={activeTab === 'grove'} on:click={() => (activeTab = 'grove')}>🌲 Grove</button>
         <button class:active={activeTab === 'market'} on:click={() => (activeTab = 'market')}>

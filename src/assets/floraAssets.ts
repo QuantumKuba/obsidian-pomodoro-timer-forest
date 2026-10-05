@@ -701,7 +701,79 @@ function waterStream(): string {
     return svg(s)
 }
 
+// ───────────────────────── homestead farm ─────────────────────────
+/** A two-leaf seedling with its base at (x, y). */
+const seedling = (x: number, y: number) =>
+    LN(`M${r1(x)} ${r1(y)}L${r1(x)} ${r1(y - 2.6)}`, '#4f8a3a', 0.8) +
+    P(`M${r1(x)} ${r1(y - 2.4)}Q${r1(x - 3)} ${r1(y - 5)} ${r1(x - 3.2)} ${r1(y - 2.2)}Q${r1(x - 1.4)} ${r1(y - 1.6)} ${r1(x)} ${r1(y - 2.4)}Z`, '#7cc152', false) +
+    P(`M${r1(x)} ${r1(y - 2.4)}Q${r1(x + 3)} ${r1(y - 5)} ${r1(x + 3.2)} ${r1(y - 2.2)}Q${r1(x + 1.4)} ${r1(y - 1.6)} ${r1(x)} ${r1(y - 2.4)}Z`, '#8fd163', false)
+
+function gardenPlot(): string {
+    let s = tileBase()
+    s += rect(12, 12, 40, 38, '#6b4a2e', ` rx="6"${OL}`) + rect(13.5, 13.5, 37, 15, '#7d5836', ' rx="5" opacity=".6"')
+    for (const y of [22, 33, 44]) s += LN(`M16 ${y}Q32 ${y - 2.4} 48 ${y}`, '#4f3520', 2.6) + LN(`M16 ${y - 1.5}Q32 ${y - 3.9} 48 ${y - 1.5}`, '#94683f', 0.9)
+    for (const y of [20, 31, 42]) for (const x of [22, 32, 42]) s += seedling(x, x === 32 ? y - 1 : y)
+    return svg(s)
+}
+
+function scarecrow(): string {
+    let s = OLN('M32 56L32 22', WOOD[0], 2.4) + OLN('M17 31L47 31', WOOD[1], 2.2)
+    s += LN('M17 31L13.5 29M17 31L13 31.5M17 31L14 33.6M47 31L50.5 29M47 31L51 31.5M47 31L50 33.6', '#e3c264', 1)
+    // plaid shirt with a patch and a straw hem
+    s += P('M21 28.6L43 28.6L44.5 34L38.6 35L39.4 46.4Q32 48.4 24.6 46.4L25.4 35L19.5 34Z', '#c8553d')
+    s += P('M21.6 29.2L27 29.2L26.4 34.4L25.8 45.8L25 45.6L25.9 34.6L20.3 33.6Z', '#e07a5f', false)
+    s += LN('M28.5 29L28 47M35.5 29L36 47M22 32L42.6 32M25.2 39L38.8 39M25 43.4L39 43.4', '#8e3524', 0.6, ' opacity=".7"')
+    s += LN('M26 46.6L25.4 49.6M28.6 47.2L28.4 50.4M31.4 47.5L31.4 50.8M34.4 47.4L34.8 50.4M37.4 46.9L38.2 49.8', '#e3c264', 1)
+    s += rect(33, 35.6, 4, 3.6, '#5b8fb5', ` rx=".5" transform="rotate(8 35 37)"${OL}`)
+    // burlap head with stitched eyes and smile
+    s += LN('M27.6 26.6L26.4 28.8M36.4 26.6L37.6 28.8M32 27.4L32 29.2', '#e3c264', 1)
+    s += C(32, 21.5, 6.2, '#e6cf9c', OL) + C(30.4, 19.8, 3.6, '#f3e2b8', ' opacity=".7"')
+    s += LN('M29.2 20.4L30.8 22M30.8 20.4L29.2 22M33.4 20.4L35 22M35 20.4L33.4 22', INK, 0.7)
+    s += LN('M29.4 24.2Q32 26.2 34.6 24.2', INK, 0.7) + LN('M30.6 24.6L30.6 25.6M32 25L32 26M33.4 24.6L33.4 25.6', INK, 0.5)
+    // straw hat
+    s += E(32, 16.6, 10.5, 2.6, '#d9a441', OL) + P('M26 16.4Q26.4 9.4 32 9.2Q37.6 9.4 38 16.4Q32 18 26 16.4Z', '#e8bb5a')
+    s += P('M26.8 15.4Q27.2 10.6 31 9.8Q28.6 12 28.4 15.9Z', '#f6d98a', false) + LN('M26.3 15.2Q32 16.8 37.7 15.2', '#b5523b', 1.4)
+    return svg(shadow(13, 3.6) + sway(s))
+}
+
+function chickenCoop(): string {
+    let s = shadow(21, 4.8)
+    s += OLN('M18.5 49L18.5 56M45.5 46L45.5 53M37.5 49L37.5 56', WOOD[0], 2.2)
+    // walls: front, then the shaded side
+    s += P('M15 30L27 19.4L39 30L39 50L15 50Z', WOOD[2]) + P('M39 30L49 26L49 46L39 50Z', WOOD[1])
+    s += LN('M15 35L39 35M15 40L39 40M15 45L39 45', '#a8733f', 0.7) + LN('M39 35L49 31M39 40L49 36M39 45L49 41', '#84572f', 0.7)
+    s += P('M15.6 30.4L18.6 27.8L18.6 49.4L15.6 49.4Z', '#dcab74', false)
+    // pop hole with straw, round vent, ramp
+    s += P('M23.5 50L23.5 41Q23.5 36.4 27.5 36.4Q31.5 36.4 31.5 41L31.5 50Z', '#3b2616') + C(27, 27.4, 2, '#3b2616', OL)
+    s += LN('M24.4 49.6L23.2 47.2M26.4 49.8L26 47M28.6 49.8L29.2 47.2M30.6 49.6L31.8 47.6', '#e3c264', 0.9)
+    s += P('M24 50L31 50L26.6 58L18.6 58Z', '#b98450') + LN('M22.9 52L29.9 52M21.7 54L28.7 54M20.5 56L27.5 56', WOOD[0], 0.8)
+    // roof
+    s += P('M27 17.2L37.6 13.2L52.4 26.4L41.4 31.8Z', ROOF[1]) + P('M12.4 31.6L27 17.2L28.8 18.6L15.4 31.8Z', ROOF[0])
+    s += P('M27.8 17.6L37.2 14L38.8 15.4L29.4 19.2Z', ROOF[2], false) + LN('M31.2 21.4L41.8 17.2M35.2 25.2L45.8 21M39 28.8L49.6 24.6', ROOF[0], 0.7)
+    s += LN('M27 17.2L41.4 31.8', '#6a2c20', 1.4)
+    // basket of eggs
+    s += P('M41.4 53.6L49.6 53.6L48.6 57.8L42.4 57.8Z', '#b07a45') + LN('M41.6 55L49.4 55M42 56.6L49 56.6', '#8a5a30', 0.5)
+    s += E(43.8, 53.2, 1.5, 1.9, '#fff8ea', OL) + E(47.2, 53.2, 1.5, 1.9, '#f3e3c8', OL) + E(45.5, 52.4, 1.5, 1.9, '#fffdf6', OL)
+    return svg(s)
+}
+
+function hayBale(): string {
+    let s = shadow(18, 4.4)
+    s += P('M25 31.6L42 31.6Q50 33 50 44Q50 55 42 56.4L25 56.4Z', '#e0b64e')
+    s += P('M26 32L42 32Q46.4 32.8 48.4 36.4L26 36.4Z', '#f2d47c', false) + P('M26 52.4L48.6 51.6Q46.6 55.4 42 56.2L26 56.2Z', '#c4972f', false)
+    s += LN('M34 31.8Q37.6 44 34 56.2M41 31.8Q44.6 44 41 56.2', '#b5852c', 1)
+    s += LN('M29 40L47 40.6M30 47.6L48.6 47', '#c99c36', 0.6, ' opacity=".7"')
+    s += E(25.6, 44, 7.6, 12.4, '#edc866', OL) + E(24.4, 41.6, 4.4, 7.4, '#f6dc8e', ' opacity=".6"')
+    s += LN('M25.6 44Q28.2 41 25.6 38.6Q22.2 40.2 22.4 45Q23.4 50.8 26.6 51.2Q30.2 48.8 30.2 43.4Q29.6 36.6 25.6 35', '#b5852c', 0.9)
+    s += LN('M46 56.6L49 58.2M19.6 54.6L17 56.4M37 31.6L38.4 29.2M30 56.4L29 58.6', '#e0b64e', 0.9)
+    return svg(s)
+}
+
 export const BUILDING_SVGS: Record<string, string> = {
+    garden_plot: gardenPlot(),
+    scarecrow: scarecrow(),
+    chicken_coop: chickenCoop(),
+    hay_bale: hayBale(),
     cabin: cabin(),
     watermill: watermill(),
     stone_well: stoneWell(),
@@ -821,8 +893,9 @@ export const ICONS = {
 const OLs = ` stroke="${INK}" stroke-opacity=".45" stroke-width=".55" stroke-linejoin="round"`
 function villager(o: { skin: string; top: string; body: string; legs: string; hair: string; front?: string; back?: string; dress?: boolean }): string {
     let s = `<ellipse cx="8" cy="23" rx="4.2" ry="1.1" fill="#1a140e" opacity=".28"/>` + (o.back || '')
-    s += `<rect x="5.9" y="18" width="1.8" height="4.6" rx=".6" fill="${o.legs}"/><rect x="8.3" y="18" width="1.8" height="4.6" rx=".6" fill="${o.legs}"/>`
-    s += `<ellipse cx="6.7" cy="22.8" rx="1.3" ry=".7" fill="#3b2a20"/><ellipse cx="9.3" cy="22.8" rx="1.3" ry=".7" fill="#3b2a20"/>`
+    // each leg is its own group so it can step while the villager walks
+    s += `<g class="pf-leg-a"><rect x="5.9" y="18" width="1.8" height="4.6" rx=".6" fill="${o.legs}"/><ellipse cx="6.7" cy="22.8" rx="1.3" ry=".7" fill="#3b2a20"/></g>`
+    s += `<g class="pf-leg-b"><rect x="8.3" y="18" width="1.8" height="4.6" rx=".6" fill="${o.legs}"/><ellipse cx="9.3" cy="22.8" rx="1.3" ry=".7" fill="#3b2a20"/></g>`
     s += o.dress
         ? `<path d="M5 12.2Q8 10.4 11 12.2L12.2 20Q8 21 3.8 20Z" fill="${o.body}"${OLs}/>`
         : `<path d="M4.9 12.2Q8 10.4 11.1 12.2L11.6 18.8Q8 19.6 4.4 18.8Z" fill="${o.body}"${OLs}/>`
@@ -861,6 +934,63 @@ export const VILLAGER_SVGS: string[] = [
         front: `<path d="M13 11.4L13.4 23" stroke="#8a5a30" stroke-width="1" stroke-linecap="round"/><circle cx="13" cy="11.3" r=".9" fill="#a8743f"/><path d="M5.2 12.4Q8 13.8 10.8 12.4" stroke="#e8b84a" stroke-width=".8"/>`,
     }),
 ]
+
+// ───────────────────────── hens (12x12, feet at 6,11, facing right) ─────────────────────────
+const hen = (body: string, wing: string) =>
+    `<svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="6" cy="11" rx="3.4" ry=".9" fill="#1a140e" opacity=".25"/>` +
+    `<path d="M5 9.4V11M6.8 9.4V11" stroke="#e39b2d" stroke-width=".6" stroke-linecap="round"/>` +
+    `<path d="M2.4 6.4Q1 4.4 2.4 3.2Q3.2 4.8 4.4 5.4Z" fill="${wing}"${OLs}/>` +
+    `<ellipse cx="5.6" cy="7.2" rx="3.5" ry="2.7" fill="${body}"${OLs}/>` +
+    `<path d="M3.6 7Q5.4 5.6 7.2 7.2Q5.4 8.9 3.6 7Z" fill="${wing}"/>` +
+    `<circle cx="8.6" cy="4.6" r="1.9" fill="${body}"${OLs}/>` +
+    `<path d="M7.7 3Q8.1 1.7 8.8 2.7Q9.4 1.8 9.8 3.2Z" fill="#dc4a3a"/>` +
+    `<path d="M10.3 4.4L11.7 5L10.3 5.6Z" fill="#f0a020"/>` +
+    `<circle cx="9.1" cy="4.3" r=".35" fill="${INK}"/><path d="M9.5 5.7Q9.9 6.8 9.2 6.6Z" fill="#dc4a3a"/></svg>`
+
+export const HEN_SVGS: string[] = [hen('#fbf6ea', '#e6d9bf'), hen('#b5713c', '#8f5527')]
+
+// ───────────────────────── crops (drawn over a tilled tile whose centre is at 32,53) ─────────────────────────
+/** Six plants on the two ridges of a garden plot, back to front. */
+const CROP_SPOTS: Pt[] = [[30.4, 45.2], [39, 49.5], [16.3, 52.2], [47.7, 53.8], [25, 56.5], [33.6, 60.8]]
+
+type CropArt = (x: number, y: number, k: number, ripe: boolean) => string
+
+const CROP_ART: Record<string, CropArt> = {
+    carrot: (x, y, k, ripe) =>
+        LN(`M${x} ${y}Q${r1(x - 1.5 * k)} ${r1(y - 4 * k)} ${r1(x - 3.2 * k)} ${r1(y - 6.4 * k)}M${x} ${y}L${x} ${r1(y - 7.8 * k)}M${x} ${y}Q${r1(x + 1.5 * k)} ${r1(y - 4 * k)} ${r1(x + 3.2 * k)} ${r1(y - 6.4 * k)}`, '#3f8a3f', 1.5) +
+        LN(`M${x} ${y}Q${r1(x - 1.2 * k)} ${r1(y - 3.6 * k)} ${r1(x - 2.6 * k)} ${r1(y - 5.6 * k)}M${x} ${r1(y - 1)}L${x} ${r1(y - 7 * k)}M${x} ${y}Q${r1(x + 1.2 * k)} ${r1(y - 3.6 * k)} ${r1(x + 2.6 * k)} ${r1(y - 5.6 * k)}`, '#8cc867', 0.6) +
+        (ripe ? P(`M${r1(x - 2)} ${r1(y - 0.4)}Q${x} ${r1(y - 3)} ${r1(x + 2)} ${r1(y - 0.4)}Q${x} ${r1(y + 1.2)} ${r1(x - 2)} ${r1(y - 0.4)}Z`, '#f08a2c') + LN(`M${r1(x - 0.8)} ${r1(y - 1.2)}L${r1(x + 0.2)} ${r1(y - 1.4)}`, '#ffc27a', 0.5) : ''),
+    tomato: (x, y, k, ripe) =>
+        LN(`M${r1(x + 0.5)} ${y}L${r1(x + 0.5)} ${r1(y - 9.4 * k)}`, '#a06e40', 0.9) +
+        C(x, y - 4 * k, 3.6 * k, '#2f6b3a', OL) + C(x - 0.3, y - 4.5 * k, 2.8 * k, '#4f9a4a') + C(x - 1.1, y - 5.5 * k, 1.1 * k, '#8cc867') +
+        (ripe
+            ? C(x - 1.8, y - 3, 1.3, '#e5432f', OL) + C(x + 1.8, y - 4.8, 1.3, '#e5432f', OL) + C(x + 0.4, y - 1.6, 1.2, '#f0603e', OL) +
+              C(x - 2.2, y - 3.4, 0.4, '#ffc2b0') + C(x + 1.4, y - 5.2, 0.4, '#ffc2b0')
+            : ''),
+    wheat: (x, y, k, ripe) =>
+        [-2, 0, 2].map((dx) => {
+            const tx = r1(x + dx), ty = r1(y - (dx ? 8.6 : 10) * k)
+            return LN(`M${x} ${y}Q${r1(x + dx * 0.5)} ${r1(y - 5 * k)} ${tx} ${ty}`, ripe ? '#d2a236' : '#6fae47', 1) +
+                (ripe ? E(tx, ty - 1.4, 1, 2.3, '#f0c95a', ` transform="rotate(${dx * 9} ${tx} ${ty})"${OL}`) : LN(`M${tx} ${ty}L${tx} ${r1(ty - 1.6)}`, '#a6d77a', 0.8))
+        }).join(''),
+    pumpkin: (x, y, k, ripe) =>
+        E(x - 2.4, y - 1.6, 2.8 * k, 1.7 * k, '#3f8a3f', OL) + E(x + 2.2, y - 2.4, 2.6 * k, 1.6 * k, '#4f9a4a', OL) +
+        LN(`M${r1(x - 3.6)} ${r1(y - 1.6)}L${r1(x - 1.2)} ${r1(y - 1.6)}M${r1(x + 1)} ${r1(y - 2.4)}L${r1(x + 3.4)} ${r1(y - 2.4)}`, '#8cc867', 0.5) +
+        (ripe
+            ? E(x, y - 2.4, 3.5, 2.9, '#e8792a', OL) + E(x, y - 2.4, 1.5, 2.8, '#f59a45') + E(x - 1, y - 3.4, 0.9, 1.1, '#ffc27a', ' opacity=".8"') +
+              LN(`M${x} ${r1(y - 5.2)}Q${r1(x + 0.4)} ${r1(y - 6.6)} ${r1(x + 1.4)} ${r1(y - 6.6)}`, '#4f8a3a', 1)
+            : LN(`M${x} ${r1(y - 1)}Q${r1(x + 1.6 * k)} ${r1(y - 4.6 * k)} ${r1(x - 0.6)} ${r1(y - 5.4 * k)}`, '#4f9a4a', 0.8)),
+}
+
+/** The plants of a garden plot. `progress` runs 0..1; at 1 the crop is ripe. */
+export function cropSvg(cropId: string, progress: number): string {
+    const art = CROP_ART[cropId] || CROP_ART.carrot
+    const ripe = progress >= 1
+    // seedlings for the first third, then the crop's own plants growing up to full size
+    const k = ripe ? 1 : Math.round((0.55 + 0.45 * ((progress - 0.3) / 0.7)) * 10) / 10
+    const plants = CROP_SPOTS.map(([x, y]) => (progress < 0.3 ? seedling(x, y) : art(x, y, k, ripe))).join('')
+    return svg(cropId === 'wheat' && progress >= 0.3 ? sway(plants) : plants)
+}
 
 // ───────────────────────── ground scatter decorations (16x16, base at 8,14) ─────────────────────────
 const deco = (b: string) =>

@@ -9,8 +9,12 @@ import { writable } from 'svelte/store'
 
 const events = pluginInstance?.forestEngine?.rewardEvents ?? writable<RewardEvent[]>([])
 
-$: small = $events.filter((e) => e.kind === 'task' || e.kind === 'break').slice(-3)
-$: card = $events.find((e) => e.kind !== 'task' && e.kind !== 'break')
+/** Small things get a passing toast; everything else gets a card. */
+const isToast = (e: RewardEvent) => e.kind === 'task' || e.kind === 'break' || e.kind === 'crop'
+const TOAST_ICONS: Record<string, string> = { task: '✅', break: '🍵', crop: '🧺' }
+
+$: small = $events.filter(isToast).slice(-3)
+$: card = $events.find((e) => !isToast(e))
 
 const timers = new Map<string, number>()
 // `card` is listed so a queued card starts its timer once it becomes visible
@@ -18,9 +22,9 @@ $: card, $events.forEach(schedule)
 
 function schedule(e: RewardEvent) {
     if (timers.has(e.id)) return
-    const ms = e.kind === 'task' || e.kind === 'break' ? 3800 : e.kind === 'levelup' || e.kind === 'chest' ? 12000 : 9000
+    const ms = isToast(e) ? 3800 : e.kind === 'levelup' || e.kind === 'chest' ? 12000 : 9000
     // Cards wait their turn: the clock only starts once the card is on screen
-    if (e.kind !== 'task' && e.kind !== 'break' && card?.id !== e.id) return
+    if (!isToast(e) && card?.id !== e.id) return
     timers.set(e.id, window.setTimeout(() => dismiss(e.id), ms))
 }
 
@@ -52,7 +56,7 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
     {#each small as e (e.id)}
         <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
         <div class="toast {e.kind}" in:fly={{ y: -12, duration: 250 }} out:fade={{ duration: 200 }} on:click={() => dismiss(e.id)}>
-            <span class="t-icon">{e.kind === 'task' ? '✅' : '🍵'}</span>
+            <span class="t-icon">{TOAST_ICONS[e.kind]}</span>
             <span class="t-text">{e.title}</span>
             <span class="t-amt">{@html amounts(e)}</span>
         </div>
@@ -124,7 +128,7 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
     text-decoration: line-through;
     text-decoration-color: rgba(102, 187, 106, 0.7);
 }
-.toast.break .t-text { text-decoration: none; }
+.toast.break .t-text, .toast.crop .t-text { text-decoration: none; }
 .t-amt :global(svg), .lines em :global(svg), .tot :global(svg) {
     width: 13px;
     height: 13px;

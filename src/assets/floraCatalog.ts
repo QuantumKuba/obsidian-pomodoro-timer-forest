@@ -1,4 +1,4 @@
-import type { BiomeType, FloraSpecies, HomesteadBuilding } from '../types/forest'
+import type { BiomeType, CropType, FloraSpecies, HomesteadBuilding, PlacedHomesteadItem } from '../types/forest'
 import { SPECIES_SVGS, BUILDING_SVGS } from './floraAssets'
 
 export const FLORA_SPECIES: FloraSpecies[] = [
@@ -217,6 +217,33 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         iconSvg: BUILDING_SVGS.water_stream,
     },
     {
+        id: 'garden_plot',
+        name: 'Garden Plot',
+        description: 'Tilled soil for a crop. It grows with every minute you focus and waits for you to harvest it.',
+        category: 'farm',
+        sunlightCost: 60,
+        coinsCost: 6,
+        unlockLevel: 2,
+        unique: false,
+        limit: 6,
+        maxLevel: 1,
+        charm: 2,
+        iconSvg: BUILDING_SVGS.garden_plot,
+    },
+    {
+        id: 'hay_bale',
+        name: 'Hay Bale',
+        description: 'A rolled bale of golden hay. Smells like late summer.',
+        category: 'decoration',
+        sunlightCost: 30,
+        coinsCost: 3,
+        unlockLevel: 2,
+        unique: false,
+        maxLevel: 1,
+        charm: 1,
+        iconSvg: BUILDING_SVGS.hay_bale,
+    },
+    {
         id: 'stone_well',
         name: 'Village Well',
         description: 'An old cobblestone well. Fresh water keeps the village prosperous.',
@@ -242,6 +269,34 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         maxLevel: 1,
         charm: 4,
         iconSvg: BUILDING_SVGS.bridge,
+    },
+    {
+        id: 'scarecrow',
+        name: 'Friendly Scarecrow',
+        description: 'Keeps the crows away and the crops company, so they grow faster.',
+        category: 'decoration',
+        sunlightCost: 90,
+        coinsCost: 9,
+        unlockLevel: 3,
+        unique: false,
+        maxLevel: 3,
+        charm: 2,
+        perk: { kind: 'crop_growth_pct', base: 15, perLevel: 10 },
+        iconSvg: BUILDING_SVGS.scarecrow,
+    },
+    {
+        id: 'chicken_coop',
+        name: 'Chicken Coop',
+        description: 'Hens that roam the village and lay fresh eggs for your first tree of the day.',
+        category: 'building',
+        sunlightCost: 260,
+        coinsCost: 26,
+        unlockLevel: 4,
+        unique: true,
+        maxLevel: 3,
+        charm: 5,
+        perk: { kind: 'first_tree_coins', base: 3, perLevel: 2 },
+        iconSvg: BUILDING_SVGS.chicken_coop,
     },
     {
         id: 'gazebo',
@@ -335,6 +390,66 @@ export function getSpecies(id: string): FloraSpecies | undefined {
 
 export function getBuilding(id: string): HomesteadBuilding | undefined {
     return HOMESTEAD_BUILDINGS.find((b) => b.id === id)
+}
+
+/** Crops for garden plots. Slower crops pay a little more per minute. */
+export const CROPS: CropType[] = [
+    {
+        id: 'carrot',
+        name: 'Carrots',
+        icon: '🥕',
+        description: 'Quick and cheerful: ready after about two focus sessions.',
+        growMinutes: 50,
+        coins: 2,
+        xp: 3,
+        unlockLevel: 1,
+    },
+    {
+        id: 'tomato',
+        name: 'Tomatoes',
+        icon: '🍅',
+        description: 'The pomodoro itself. Ripens over a good day of focus.',
+        growMinutes: 100,
+        coins: 5,
+        xp: 6,
+        unlockLevel: 3,
+    },
+    {
+        id: 'wheat',
+        name: 'Golden Wheat',
+        icon: '🌾',
+        description: 'A swaying golden patch for steady, patient work.',
+        growMinutes: 150,
+        coins: 8,
+        xp: 10,
+        unlockLevel: 5,
+    },
+    {
+        id: 'pumpkin',
+        name: 'Pumpkins',
+        icon: '🎃',
+        description: 'Slow and heavy. The biggest harvest for the longest focus.',
+        growMinutes: 250,
+        coins: 15,
+        xp: 18,
+        unlockLevel: 8,
+    },
+]
+
+export const GARDEN_PLOT_ID = 'garden_plot'
+
+/** Unknown or missing ids fall back to carrots, so a plot is never empty. */
+export function getCrop(id?: string): CropType {
+    return CROPS.find((c) => c.id === id) || CROPS[0]
+}
+
+/** How far a plot's crop has grown, 0..1 (1 = ready to harvest). */
+export function cropProgress(item: Pick<PlacedHomesteadItem, 'cropId' | 'cropGrowth'>): number {
+    return Math.max(0, Math.min(1, (item.cropGrowth || 0) / getCrop(item.cropId).growMinutes))
+}
+
+export function isRipePlot(item: PlacedHomesteadItem): boolean {
+    return item.itemType === 'building' && item.itemId === GARDEN_PLOT_ID && cropProgress(item) >= 1
 }
 
 export const BIOME_UNLOCK_LEVELS: Record<BiomeType, number> = {

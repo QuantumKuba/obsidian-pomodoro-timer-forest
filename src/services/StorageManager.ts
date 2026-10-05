@@ -68,6 +68,7 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
         breaksCompleted: 0,
         questsCompleted: 0,
         chestsOpened: 0,
+        cropsHarvested: 0,
     },
     preferences: {
         hardcoreMode: true,

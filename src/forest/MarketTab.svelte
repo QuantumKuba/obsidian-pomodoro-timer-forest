@@ -83,12 +83,13 @@ function placedCount(id: string): number {
             {/each}
         </div>
     {:else}
-        <p class="hint">Buildings grant lasting perks that grow with upgrades. Paths, brooks and decorations can be bought as often as you like.</p>
+        <p class="hint">Buildings grant lasting perks that grow with upgrades. Paths, brooks and decorations can be bought as often as you like. Garden plots grow crops while you focus.</p>
         <div class="grid">
             {#each HOMESTEAD_BUILDINGS as b (b.id)}
                 {@const owned = b.unique && g.unlockedBuildings.includes(b.id)}
                 {@const locked = level < b.unlockLevel}
                 {@const afford = g.sunlight >= b.sunlightCost && g.coins >= b.coinsCost}
+                {@const atLimit = !!b.limit && placedCount(b.id) >= b.limit}
                 <div class="card" class:owned class:locked>
                     <div class="art">{@html b.iconSvg}{#if locked}<span class="lock">🔒 Lv {b.unlockLevel}</span>{/if}</div>
                     <div class="body">
@@ -103,10 +104,12 @@ function placedCount(id: string): number {
                                 <span class="muted">Reach level {b.unlockLevel} to build</span>
                             {:else}
                                 <span class="cost">{@html ICONS.sunlight}{b.sunlightCost} {@html ICONS.coin}{b.coinsCost}</span>
-                                {#if !b.unique && placedCount(b.id)}<span class="muted">own {placedCount(b.id)}</span>{/if}
-                                <button class="buy" disabled={!afford} title={shortfall(b.sunlightCost, b.coinsCost)} on:click={() => buyBuilding(b)}>
-                                    {@html afford ? 'Build' : shortfallHtml(b.sunlightCost, b.coinsCost)}
-                                </button>
+                                {#if !b.unique && placedCount(b.id)}<span class="muted">own {placedCount(b.id)}{b.limit ? `/${b.limit}` : ''}</span>{/if}
+                                {#if !atLimit}
+                                    <button class="buy" disabled={!afford} title={shortfall(b.sunlightCost, b.coinsCost)} on:click={() => buyBuilding(b)}>
+                                        {@html afford ? 'Build' : shortfallHtml(b.sunlightCost, b.coinsCost)}
+                                    </button>
+                                {/if}
                             {/if}
                         </div>
                     </div>

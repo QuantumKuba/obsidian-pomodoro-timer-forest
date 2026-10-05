@@ -122,6 +122,10 @@ export function perkText(building: HomesteadBuilding, level = 1): string {
             return `+${v} Coin${v > 1 ? 's' : ''} per checked-off task`
         case 'night_sunlight_pct':
             return `+${v}% Sunlight for evening sessions (19:00–05:00)`
+        case 'crop_growth_pct':
+            return `Crops grow ${v}% faster`
+        case 'first_tree_coins':
+            return `+${v} Coins with your first tree of the day`
     }
 }
 
@@ -168,6 +172,9 @@ export function earlyHarvestBaseReward(focusedMinutes: number): BaseReward {
         xp: Math.round(m * EARLY_HARVEST_RATE),
     }
 }
+
+/** Every checked-off task waters the garden: its crops grow as if this many minutes were focused. */
+export const TASK_WATERING_MINUTES = 5
 
 // ---------------------------------------------------------------------------
 // Charm & vitality
@@ -334,6 +341,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     {
         id: 'charm_50', icon: '💐', title: 'Picturesque', description: 'Reach 50 village charm.',
         reward: { sunlight: 120, coins: 12, xp: 60 }, check: (g) => villageCharm(g.homestead) >= 50, progress: (g) => [villageCharm(g.homestead), 50],
+    },
+    {
+        id: 'first_harvest', icon: '🧺', title: 'Green Thumb', description: 'Harvest your first crop from a garden plot.',
+        reward: { sunlight: 30, coins: 3, xp: 20 }, check: (g) => (s(g).cropsHarvested || 0) >= 1, progress: (g) => [s(g).cropsHarvested || 0, 1],
+    },
+    {
+        id: 'harvest_30', icon: '🌾', title: 'Market Day', description: 'Harvest 30 crops.',
+        reward: { sunlight: 120, coins: 12, xp: 60 }, check: (g) => (s(g).cropsHarvested || 0) >= 30, progress: (g) => [s(g).cropsHarvested || 0, 30],
     },
     {
         id: 'quests_20', icon: '📯', title: 'Errand Runner', description: 'Complete 20 daily quests.',
