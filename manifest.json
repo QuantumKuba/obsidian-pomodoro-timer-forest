@@ -1,7 +1,7 @@
 {
 	"id": "pomodoro-timer-forest",
 	"name": "Pomodoro Timer Forest",
-	"version": "1.1.1",
+	"version": "1.2.0",
 	"minAppVersion": "1.7.2",
 	"description": "Grow a tree with every focus session and turn your focus, tasks and streaks into a living village. A gamified pomodoro timer with daily quests, perks and achievements.",
 	"author": "QuantumKuba",
