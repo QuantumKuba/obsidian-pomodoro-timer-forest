@@ -24,5 +24,8 @@ data.json
 # README image generator scratch output
 scripts/readme-images/.build
 
+# Bundled unit tests
+tests/.build
+
 # CodeGraph
 .codegraph

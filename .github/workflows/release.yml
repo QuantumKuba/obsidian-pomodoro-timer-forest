@@ -3,7 +3,7 @@ name: Release
 # To release: bump the version (`npm version <x.y.z> --no-git-tag-version`), commit, then
 #   git tag <x.y.z> && git push origin <x.y.z>
 #   gh workflow run release.yml --ref <x.y.z>      # if the tag push didn't start the workflow by itself
-# The workflow builds the plugin from the lockfile, attests main.js, manifest.json and
+# The workflow runs the tests, builds the plugin from the lockfile, attests main.js, manifest.json and
 # styles.css, and publishes the GitHub release. Its tag must equal the manifest version.
 on:
   push:
@@ -43,6 +43,7 @@ jobs:
       - name: Build
         run: |
           npm ci
+          npm test
           npm run build
 
       - name: Attest build provenance
