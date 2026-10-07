@@ -9,11 +9,14 @@ import { writable } from 'svelte/store'
 
 const events = pluginInstance?.forestEngine?.rewardEvents ?? writable<RewardEvent[]>([])
 
+/** Events another part of the view shows in its own way (a board shows its cards' rewards on the card). */
+export let hide: (e: RewardEvent) => boolean = () => false
+
 /** Small things get a passing toast; everything else gets a card. */
 const isToast = (e: RewardEvent) => e.kind === 'task' || e.kind === 'break' || e.kind === 'crop'
 const TOAST_ICONS: Record<string, string> = { task: '✅', break: '🍵', crop: '🧺' }
 
-$: small = $events.filter(isToast).slice(-3)
+$: small = $events.filter((e) => isToast(e) && !hide(e)).slice(-3)
 $: card = $events.find((e) => !isToast(e))
 
 const timers = new Map<string, number>()

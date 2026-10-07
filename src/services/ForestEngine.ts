@@ -3,6 +3,8 @@ import type PomodoroTimerPlugin from '../main'
 import type {
     ActiveSessionPlant,
     BiomeType,
+    BoardLaneRole,
+    BoardMemory,
     DailyForestLog,
     DailyQuest,
     ForestExportPayload,
@@ -30,15 +32,22 @@ import {
 } from '../assets/floraCatalog'
 import {
     ACHIEVEMENTS,
+    BOARD_CLEAR_MIN_CARDS,
+    BOARD_CLEAR_REWARD,
+    BOARD_HISTORY_LIMIT,
+    BOARD_MILESTONES,
     CHEST_REWARD,
     EARLY_HARVEST_RATE,
     TASK_WATERING_MINUTES,
     VITALITY_DAILY_FADE,
     VITALITY_FLOOR,
     addDays,
+    boardMilestoneReward,
+    cardReward,
     dateKey,
     daysBetween,
     earlyHarvestBaseReward,
+    estimateOnTarget,
     earlyHarvestMinMinutes,
     generateQuestBoard,
     levelFromXp,
@@ -46,6 +55,7 @@ import {
     sessionBaseReward,
     upgradeCost,
     type BaseReward,
+    type CardCompletion,
 } from './Progression'
 import SoundManager, { type AmbientSoundType } from './SoundManager'
 import ConfettiEngine from './ConfettiEngine'
@@ -67,6 +77,27 @@ export interface SessionCompletionResult {
 }
 
 type Grant = { sunlight?: number; coins?: number; xp?: number }
+
+/** A card that was just finished: ticked off, or moved into a done lane. */
+export interface FinishedCard extends Omit<CardCompletion, 'today'> {
+    /** The board note, its name, and the card's key on it. */
+    path: string
+    board: string
+    key: string
+    /** The card's text, as plain as possible. */
+    label: string
+}
+
+/** A card as the board watcher sees it, for the board's memory. */
+export interface BoardCardState {
+    key: string
+    lane: string
+    role: BoardLaneRole
+}
+
+function emptyBoard(title: string): BoardMemory {
+    return { title, cards: {}, shipped: 0, history: [], milestones: [] }
+}
 
 export default class ForestEngine {
     private storage: StorageManager
@@ -200,7 +231,9 @@ export default class ForestEngine {
             shieldUsed = this.resolveStreak(g, today)
 
             if (g.questBoard?.date !== today) {
-                g.questBoard = generateQuestBoard(today, settings.dailyGoal || 4, settings.workLen || 25)
+                g.questBoard = generateQuestBoard(today, settings.dailyGoal || 4, settings.workLen || 25, {
+                    boards: Object.keys(g.boards || {}).length > 0,
+                })
             }
             g.lastVisitDate = today
         }, { persist: false })
@@ -637,6 +670,154 @@ export default class ForestEngine {
             this.progressQuests(g, 'tasks', 1)
         })
         if (this.settings().forestSounds) this.soundManager.playCoin()
+    }
+
+    // -----------------------------------------------------------------------
+    // Kanban boards
+    // -----------------------------------------------------------------------
+
+    /**
+     * Called by the board watcher when a card is finished. Every card counts once a day, like a
+     * task, and shares the daily cap with tasks; past the cap it still counts as work done, it
+     * just pays nothing. With task rewards turned off the game leaves cards alone, and only the
+     * board's own statistics keep counting.
+     */
+    public onCardCompleted(card: FinishedCard): void {
+        this.ensureToday()
+        const today = dateKey()
+        const rewardKey = `${card.path}::${card.key}`
+        const g0 = this.state
+        const rewarded = g0.rewardedTaskKeys?.date === today ? g0.rewardedTaskKeys.keys : []
+        if (rewarded.includes(rewardKey)) return
+        const playing = this.settings().rewardTaskCompletion
+        const paying = playing && rewarded.length < DAILY_TASK_REWARD_CAP
+
+        this.mutate((g) => {
+            if (g.rewardedTaskKeys?.date !== today) g.rewardedTaskKeys = { date: today, keys: [] }
+            g.rewardedTaskKeys.keys.push(rewardKey)
+
+            const board = (g.boards[card.path] ??= emptyBoard(card.board))
+            const started = board.cards[card.key]?.started
+            board.shipped += 1
+            board.history.push({
+                date: today,
+                days: started ? Math.max(0, daysBetween(started, today)) : null,
+                actual: card.actual,
+                expected: card.expected,
+                onTime: card.due ? today <= card.due : null,
+            })
+            if (board.history.length > BOARD_HISTORY_LIMIT) board.history.splice(0, board.history.length - BOARD_HISTORY_LIMIT)
+            if (!playing) return
+
+            const log = this.todayLog(g, today)
+            log.cardsCompleted = (log.cardsCompleted || 0) + 1
+            g.lifetimeStats.cardsCompleted = (g.lifetimeStats.cardsCompleted || 0) + 1
+            if (estimateOnTarget(card.actual, card.expected)) g.lifetimeStats.cardsOnEstimate = (g.lifetimeStats.cardsOnEstimate || 0) + 1
+
+            if (paying) {
+                const { coins, xp, lines } = cardReward({ ...card, today })
+                const bench = perkValue(g.homestead, 'task_coins')
+                if (bench) lines.push({ label: '🪑 Garden Bench', coins: bench })
+                const earned = this.grant(g, { coins: coins + bench, xp })
+                // A card is a task too: it counts for task quests and the task tally
+                g.lifetimeStats.tasksCompleted += 1
+                log.tasksCompleted = (log.tasksCompleted || 0) + 1
+                g.vitality = Math.min(100, g.vitality + 2)
+                this.growCrops(g, TASK_WATERING_MINUTES)
+                const title = card.label.length > 60 ? `${card.label.slice(0, 57)}…` : card.label
+                this.emit({ kind: 'task', title, subtitle: card.board, ref: rewardKey, ...earned, lines })
+                this.progressQuests(g, 'tasks', 1)
+                this.progressQuests(g, 'cards', 1)
+                if (card.focused || card.actual > 0) this.progressQuests(g, 'card_focus', 1)
+            }
+
+            for (const m of BOARD_MILESTONES) {
+                if (board.shipped < m || board.milestones.includes(m)) continue
+                board.milestones.push(m)
+                const reward = boardMilestoneReward(m)
+                const earned = this.grant(g, reward)
+                this.emit({
+                    kind: 'achievement',
+                    title: `${m} cards finished on ${card.board}`,
+                    subtitle: 'A board milestone. Steady work adds up.',
+                    ...earned,
+                    lines: [{ label: `Milestone · ${m} cards`, ...reward }],
+                })
+            }
+        })
+        if (paying && this.settings().forestSounds) this.soundManager.playCoin()
+    }
+
+    /** Every card on a board is finished. Celebrated once a day per board. */
+    public onBoardCleared(path: string, title: string, cards: number): void {
+        if (cards < BOARD_CLEAR_MIN_CARDS || !this.settings().rewardTaskCompletion) return
+        const today = dateKey()
+        if (this.state.boards[path]?.clearedOn === today) return
+        this.mutate((g) => {
+            const board = (g.boards[path] ??= emptyBoard(title))
+            board.clearedOn = today
+            g.lifetimeStats.boardsCleared = (g.lifetimeStats.boardsCleared || 0) + 1
+            const reward = BOARD_CLEAR_REWARD
+            const earned = this.grant(g, reward)
+            this.emit({
+                kind: 'achievement',
+                title: `${title} is clear`,
+                subtitle: `All ${cards} cards finished. Take a moment before the next thing.`,
+                ...earned,
+                lines: [{ label: 'Board cleared', ...reward }],
+            })
+        })
+    }
+
+    /**
+     * Keeps a board's memory in step with its cards: which lane each card is in and since when.
+     * Cards that are gone are forgotten. `renames` carries a card's memory over when its text,
+     * and so its key, changed. Does nothing (and saves nothing) when nothing changed.
+     */
+    public syncBoard(path: string, title: string, cards: BoardCardState[], renames: [string, string][] = []): void {
+        const today = dateKey()
+        const before = this.state.boards?.[path]
+        const prev = { ...(before?.cards ?? {}) }
+        for (const [from, to] of renames) if (prev[from] && !prev[to]) prev[to] = prev[from]
+
+        const next: BoardMemory['cards'] = {}
+        for (const c of cards) {
+            const p = prev[c.key]
+            if (!p) {
+                next[c.key] = { lane: c.lane, since: today, seen: today, ...(c.role === 'active' ? { started: today } : {}) }
+            } else if (p.lane !== c.lane) {
+                next[c.key] = { ...p, lane: c.lane, since: today, ...(c.role === 'active' && !p.started ? { started: today } : {}) }
+            } else {
+                next[c.key] = p
+            }
+        }
+        if (before && before.title === title && JSON.stringify(before.cards) === JSON.stringify(next)) return
+        this.mutate((g) => {
+            const board = (g.boards[path] ??= emptyBoard(title))
+            board.title = title
+            board.cards = next
+        })
+    }
+
+    /** A board note was renamed or moved. */
+    public renameBoard(oldPath: string, newPath: string, title: string): void {
+        const board = this.state.boards?.[oldPath]
+        if (!board || this.state.boards[newPath]) return
+        this.mutate((g) => {
+            g.boards[newPath] = { ...g.boards[oldPath], title }
+            delete g.boards[oldPath]
+        })
+    }
+
+    /** Sets the role of a lane by hand, or (null) goes back to reading it from the lane. */
+    public setLaneRole(path: string, title: string, lane: string, role: BoardLaneRole | null): void {
+        this.mutate((g) => {
+            const board = (g.boards[path] ??= emptyBoard(title))
+            const roles = { ...(board.laneRoles ?? {}) }
+            if (role) roles[lane] = role
+            else delete roles[lane]
+            board.laneRoles = roles
+        })
     }
 
     // -----------------------------------------------------------------------

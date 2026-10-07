@@ -104,6 +104,7 @@ function downloadHtml() {
             <div class="stat"><b>{Math.floor(stats.totalFocusMinutes / 60)}h {stats.totalFocusMinutes % 60}m</b><span>focused</span></div>
             <div class="stat"><b>{stats.treesGrown}</b><span>trees grown</span></div>
             <div class="stat"><b>{stats.tasksCompleted}</b><span>tasks done</span></div>
+            {#if stats.cardsCompleted}<div class="stat"><b>{stats.cardsCompleted}</b><span>board cards finished</span></div>{/if}
             <div class="stat"><b>{g.streak.longest}d</b><span>longest streak</span></div>
             <div class="stat"><b>{health}%</b><span>forest health</span></div>
             <div class="stat"><b>{stats.questsCompleted}</b><span>quests</span></div>

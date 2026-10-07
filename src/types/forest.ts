@@ -108,6 +108,49 @@ export interface DailyForestLog {
     breaksCompleted?: number
     /** Sessions ended early because their task was done; not counted in completedPomodoros. */
     earlyHarvests?: number
+    /** Cards finished on Kanban boards (they count as tasks too). */
+    cardsCompleted?: number
+}
+
+/** What a board lane is for: waiting, being worked on, or finished. */
+export type BoardLaneRole = 'backlog' | 'active' | 'done'
+
+/** What is remembered about a card on a board, to tell how long it has been waiting. */
+export interface BoardCardMemory {
+    /** The lane it is in, and the day it got there. */
+    lane: string
+    since: string
+    /** The day it was first seen on the board. */
+    seen: string
+    /** The day it first entered an in-progress lane. */
+    started?: string
+}
+
+/** A finished card, for the board's statistics. */
+export interface BoardShipment {
+    date: string
+    /** Days from first in progress to done; null when it never sat in an in-progress lane. */
+    days: number | null
+    actual: number
+    expected: number
+    /** Finished by its due date; null without one. */
+    onTime: boolean | null
+}
+
+/** Progress kept for one Kanban board, by the note's path. */
+export interface BoardMemory {
+    title: string
+    cards: Record<string, BoardCardMemory>
+    /** Cards finished on this board, ever. */
+    shipped: number
+    /** The most recent finished cards, oldest first. */
+    history: BoardShipment[]
+    /** Shipped-card milestones already celebrated. */
+    milestones: number[]
+    /** Lane roles chosen by hand, by lane title (otherwise read from the lane). */
+    laneRoles?: Record<string, BoardLaneRole>
+    /** The last day every card on the board was finished. */
+    clearedOn?: string
 }
 
 export type QuestKind =
@@ -118,6 +161,8 @@ export type QuestKind =
     | 'linked_task'
     | 'village_action'
     | 'tagged_session'
+    | 'cards'
+    | 'card_focus'
 
 export interface DailyQuest {
     id: string
@@ -163,6 +208,8 @@ export interface GamificationData {
     achievements: string[]
     rewardedTaskKeys: { date: string; keys: string[] }
     dailyLogs: Record<string, DailyForestLog>
+    /** Kanban boards by note path. */
+    boards: Record<string, BoardMemory>
     tagMappings: TagFloraMapping[]
     ambientSound: 'none' | 'rain' | 'forest_stream' | 'breeze'
     ambientVolume: number
@@ -177,6 +224,10 @@ export interface GamificationData {
         questsCompleted: number
         chestsOpened: number
         cropsHarvested: number
+        cardsCompleted: number
+        /** Cards finished within their pomodoro estimate. */
+        cardsOnEstimate: number
+        boardsCleared: number
     }
     preferences: {
         hardcoreMode: boolean // withers tree if aborted
@@ -243,5 +294,7 @@ export interface RewardEvent {
     xp: number
     lines: RewardLine[]
     levelUp?: number
+    /** `<board path>::<card key>` when the event is about a card on a board. */
+    ref?: string
     at: number
 }

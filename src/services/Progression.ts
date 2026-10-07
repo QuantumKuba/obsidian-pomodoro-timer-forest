@@ -11,6 +11,7 @@ import type {
     PerkKind,
     PlacedHomesteadItem,
     QuestKind,
+    RewardLine,
 } from '../types/forest'
 import { FLORA_SPECIES, getBuilding, getSpecies } from '../assets/floraCatalog'
 
@@ -177,6 +178,78 @@ export function earlyHarvestBaseReward(focusedMinutes: number): BaseReward {
 export const TASK_WATERING_MINUTES = 5
 
 // ---------------------------------------------------------------------------
+// Kanban boards
+// ---------------------------------------------------------------------------
+
+/**
+ * A finished card was planned well when its pomodoros came within a quarter of the estimate
+ * (at least one either way). Rewards planning honestly, not planning big.
+ */
+export function estimateOnTarget(actual: number, expected: number): boolean {
+    if (expected <= 0 || actual <= 0) return false
+    return Math.abs(actual - expected) <= Math.max(1, Math.round(expected * 0.25))
+}
+
+export interface CardCompletion {
+    /** Pomodoros counted on the card, and the estimate. */
+    actual: number
+    expected: number
+    /** `YYYY-MM-DD`, or '' without a due date. */
+    due: string
+    /** The timer was focused on the card while it was finished. */
+    focused: boolean
+    /** Every limited lane of the board is within its limit; null when no lane has one. */
+    withinWip: boolean | null
+    today: string
+}
+
+/**
+ * What finishing a card pays before building perks. A card is a task with more behind it, so
+ * it pays a little more, and most of that comes from the work done on it, not from the move.
+ */
+export function cardReward(c: CardCompletion): { coins: number; xp: number; lines: RewardLine[] } {
+    let coins = 3
+    let xp = 6
+    const lines: RewardLine[] = [{ label: 'Card finished', coins: 3, xp: 6 }]
+    if (c.actual > 0) {
+        const bonus = Math.min(c.actual, 8) * 2
+        coins += 2
+        xp += bonus
+        lines.push({ label: `🍅 ${c.actual} pomodoro${c.actual === 1 ? '' : 's'} of focus behind it`, coins: 2, xp: bonus })
+    } else if (c.focused) {
+        coins += 2
+        lines.push({ label: '🍅 Finished while focusing on it', coins: 2 })
+    }
+    if (estimateOnTarget(c.actual, c.expected)) {
+        xp += 4
+        lines.push({ label: `🎯 Estimate on target (${c.actual}/${c.expected})`, xp: 4 })
+    }
+    if (c.due && c.today <= c.due) {
+        coins += 2
+        lines.push({ label: '📅 Done on time', coins: 2 })
+    }
+    if (c.withinWip) {
+        xp += 2
+        lines.push({ label: '🌊 Lanes within their limits', xp: 2 })
+    }
+    return { coins, xp, lines }
+}
+
+/** Cards finished on one board that are celebrated, and what each pays. */
+export const BOARD_MILESTONES = [10, 25, 50, 100, 250, 500]
+
+export function boardMilestoneReward(cards: number): BaseReward {
+    return { sunlight: cards * 2, coins: Math.ceil(cards / 5), xp: cards }
+}
+
+/** Finishing every card on a board of at least this many cards counts as clearing it. */
+export const BOARD_CLEAR_MIN_CARDS = 5
+export const BOARD_CLEAR_REWARD: BaseReward = { sunlight: 30, coins: 4, xp: 25 }
+
+/** How many finished cards the board statistics remember. */
+export const BOARD_HISTORY_LIMIT = 60
+
+// ---------------------------------------------------------------------------
 // Charm & vitality
 // ---------------------------------------------------------------------------
 
@@ -239,11 +312,18 @@ const QUEST_POOL: QuestTemplate[] = [
     { kind: 'tagged_session', make: () => ({ title: 'Grow a tree from a #tagged note or task', target: 1 }) },
 ]
 
-export function generateQuestBoard(date: string, dailyGoal: number, workLen: number): DailyQuestBoard {
+/** Only offered to players who use Kanban boards. */
+const BOARD_QUESTS: QuestTemplate[] = [
+    { kind: 'cards', make: () => ({ title: 'Finish 2 cards on a board', target: 2 }) },
+    { kind: 'card_focus', make: () => ({ title: 'Finish a card you focused on', target: 1 }) },
+]
+
+export function generateQuestBoard(date: string, dailyGoal: number, workLen: number, opts: { boards?: boolean } = {}): DailyQuestBoard {
     const rand = seededRandom(`quests-${date}`)
     // Always one "core" focus quest, then two others drawn from the rest.
     const core = rand() < 0.5 ? QUEST_POOL[0] : QUEST_POOL[1]
     const others = QUEST_POOL.filter((q) => q !== QUEST_POOL[0] && q !== QUEST_POOL[1])
+    if (opts.boards) others.push(...BOARD_QUESTS)
     const picked: QuestTemplate[] = [core]
     while (picked.length < 3 && others.length) {
         picked.push(others.splice(Math.floor(rand() * others.length), 1)[0])
@@ -328,6 +408,26 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     {
         id: 'tasks_100', icon: '📜', title: 'List Slayer', description: 'Check off 100 tasks.',
         reward: { sunlight: 200, coins: 30, xp: 120 }, check: (g) => s(g).tasksCompleted >= 100, progress: (g) => [s(g).tasksCompleted, 100],
+    },
+    {
+        id: 'cards_1', icon: '📌', title: 'Off the Board', description: 'Finish your first card on a Kanban board.',
+        reward: { sunlight: 20, coins: 3, xp: 15 }, check: (g) => (s(g).cardsCompleted || 0) >= 1, progress: (g) => [s(g).cardsCompleted || 0, 1],
+    },
+    {
+        id: 'cards_25', icon: '🌊', title: 'Momentum', description: 'Finish 25 cards on your boards.',
+        reward: { sunlight: 80, coins: 10, xp: 50 }, check: (g) => (s(g).cardsCompleted || 0) >= 25, progress: (g) => [s(g).cardsCompleted || 0, 25],
+    },
+    {
+        id: 'cards_100', icon: '🚀', title: 'Throughput', description: 'Finish 100 cards on your boards.',
+        reward: { sunlight: 250, coins: 30, xp: 140 }, check: (g) => (s(g).cardsCompleted || 0) >= 100, progress: (g) => [s(g).cardsCompleted || 0, 100],
+    },
+    {
+        id: 'estimates_10', icon: '🎯', title: 'Calibrated', description: 'Finish 10 cards within their pomodoro estimate.',
+        reward: { sunlight: 100, coins: 12, xp: 60 }, check: (g) => (s(g).cardsOnEstimate || 0) >= 10, progress: (g) => [s(g).cardsOnEstimate || 0, 10],
+    },
+    {
+        id: 'board_clear', icon: '🧹', title: 'Clean Slate', description: `Finish every card on a board of ${BOARD_CLEAR_MIN_CARDS} or more.`,
+        reward: { sunlight: 60, coins: 6, xp: 40 }, check: (g) => (s(g).boardsCleared || 0) >= 1,
     },
     {
         id: 'breaks_10', icon: '🍵', title: 'Mindful Rest', description: 'Finish 10 breaks — rest is part of the work.',

@@ -60,11 +60,14 @@ The loop is designed to pull you back daily without punishing you for resting.
 | Reach the daily goal (setting, default 4) | +40 | +5 | +20 | |
 | Streak bonus | +2% per streak day (max +20%) | | | |
 | Check off a markdown task `[ ]`→`[x]` | | 3 (+2 if it had 🍅) | 5 | +2 vitality, max 30 rewarded/day, each task once/day |
+| Finish a Kanban card (ticked, or moved into a done lane) | | 3 (+2 focus, +2 on time) | 6 (+2/🍅 up to 8, +4 estimate on target, +2 lanes within limits) | Counts as a task; shares the 30/day cap and once/day rule |
+| Board milestone (10, 25, 50, 100, 250, 500 cards on one board) | 2 × cards | cards / 5 | cards | Once per board |
+| Clear a board (every card done, ≥5 cards) | 30 | 4 | 25 | Once per board per day |
 | Finish a break | Tea Gazebo perk | | 3 | |
 | Harvest a ripe crop | | 2–15 by crop | 3–18 by crop | Plot is re-sown; counts as a village action |
 | Daily quest (3/day, deterministic by date) | 20–35 | 3–4 | 15–25 | Auto-claimed |
 | Daily chest (all 3 quests) | 60 | 10 | 40 | + random unlocked sapling |
-| Achievement (20) | varies | varies | varies | |
+| Achievement (25) | varies | varies | varies | |
 | Level up | 25 × level | 3 × level | | Unlocks species, buildings, biomes, land |
 
 - **Sunlight** comes from focus; **Coins** mostly from tasks and quests. Tasks are worth ticking off.
@@ -216,3 +219,44 @@ SORT file.name DESC
   ]
 }
 ```
+
+## 8. Kanban Boards
+
+Boards are notes in the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s markdown format, so both plugins read and write the same files.
+
+| Part | Format |
+|---|---|
+| Board marker | `kanban-plugin: board` (or `basic`, `list`, `table`) in the frontmatter |
+| Lane | A heading (`## Title`), with an optional card limit: `## Doing (3)` |
+| Complete lane | `**Complete**` right under the heading (translated like the Kanban plugin: `**Fertiggestellt**`, `**完了**`…); cards moved in are ticked, moved out are unticked |
+| Card | A top-level list item, `- [ ] text`, with its other lines indented under it (tab or 4 spaces, from the vault's *Use tabs* setting) |
+| Card id | A block id at the end of the first line, `^a1b2c3` |
+| Dates | `@{YYYY-MM-DD}` and `@@{HH:mm}` (triggers and date format from the board's settings), or Tasks / Dataview fields |
+| Archive | `***`, then `## Archive` and its cards |
+| Board settings | `%% kanban:settings` + a JSON code block at the end; `list-collapse`, `lane-width`, `date-trigger`, `time-trigger`, `date-format` and `new-card-insertion-method` are honoured |
+
+**Editing.** `src/board/BoardModel.ts` parses a note into line ranges and every edit returns the new text with only the touched lines changed. It has no Obsidian dependency and is unit-tested against the Kanban plugin's output.
+
+**Opening.** `BoardOpening` wraps `WorkspaceLeaf.setViewState` once the layout is ready (after the Kanban plugin's own wrapper, so it runs first). A board note opened as `markdown` (or as `kanban`, with *Open Kanban boards in* set to *Forest board*) opens as `pomodoro-forest-board` when the setting allows it; switching a leaf that already shows the note is never redirected. On *Automatic* nothing is redirected while the Kanban plugin is enabled.
+
+**Rewards.** `BoardWatcher` snapshots a board when it is opened (in any view) and diffs every `metadataCache` change: a card is finished when it was open and is now ticked or in a done lane, *and* it moved or its checkbox changed. Cards are matched by block id, else by their first line without tracking fields; a card whose text changed in place keeps its memory. `TaskRewardWatcher` skips a board's top-level cards (checklist items inside cards stay tasks).
+
+**Lane roles.** `done` for the Complete marker; otherwise from the title (multilingual word lists) or a per-board override in `gamification.boards[path].laneRoles`.
+
+**Memory** (`gamification.boards`, by note path):
+
+```json
+{
+  "Projects/Website relaunch.md": {
+    "title": "Website relaunch",
+    "cards": { "^onb1": { "lane": "In progress", "since": "2026-10-05", "seen": "2026-09-28", "started": "2026-10-05" } },
+    "shipped": 44,
+    "history": [{ "date": "2026-10-06", "days": 2, "actual": 3, "expected": 3, "onTime": true }],
+    "milestones": [10, 25],
+    "laneRoles": { "Waiting on client": "active" },
+    "clearedOn": "2026-09-30"
+  }
+}
+```
+
+`history` keeps the last 60 finished cards. `cards` only holds cards still on the board and is written only when a card appears, moves or disappears.

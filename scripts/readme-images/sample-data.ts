@@ -86,6 +86,7 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
     g.lifetimeStats = {
         totalFocusMinutes: 4380, totalPomodoros: 171, treesGrown: 168, treesWithered: 9, earlyHarvests: 12,
         tasksCompleted: 142, breaksCompleted: 133, questsCompleted: 61, chestsOpened: 24, cropsHarvested: 37,
+        cardsCompleted: 58, cardsOnEstimate: 17, boardsCleared: 2,
     }
 
     // A believable last five weeks of activity for the grove heat-map

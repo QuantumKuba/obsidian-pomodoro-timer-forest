@@ -282,12 +282,12 @@ export default class TaskTracker implements TaskTrackerStore {
 
     public async updateActual() {
         // update task item
-        if (
-            this.plugin.getSettings().enableTaskTracking &&
-            this.task &&
-            this.task.blockLink
-        ) {
-            const task = this.task
+        const settings = this.plugin.getSettings()
+        const task = this.task
+        const tracking =
+            settings.enableTaskTracking ||
+            (settings.boardTaskTracking && !!task && this.onBoard(task.path))
+        if (tracking && task && task.blockLink) {
             this.store.update((state) => ({
                 ...state,
                 task: state.task
@@ -296,6 +296,12 @@ export default class TaskTracker implements TaskTrackerStore {
             }))
             await this.incrTaskActual(task)
         }
+    }
+
+    /** True for a card on a Kanban board. */
+    private onBoard(path: string): boolean {
+        const file = this.plugin.app.vault.getAbstractFileByPath(path)
+        return file instanceof TFile && !!this.plugin.boardWatcher?.isBoard(file)
     }
 
     /** Counts one more finished pomodoro on the task's line in its note. */

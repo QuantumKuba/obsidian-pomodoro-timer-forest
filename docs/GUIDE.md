@@ -6,6 +6,13 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 - [Opening things](#opening-things)
 - [Growing trees](#growing-trees)
   - [Done early? Harvest early](#done-early-harvest-early)
+- [Kanban boards](#kanban-boards)
+  - [Boards and the Kanban plugin](#boards-and-the-kanban-plugin)
+  - [Lanes](#lanes)
+  - [Cards](#cards)
+  - [Focusing on a card](#focusing-on-a-card)
+  - [What finishing a card earns](#what-finishing-a-card-earns)
+  - [Board statistics](#board-statistics)
 - [Rewards](#rewards)
 - [Levels and unlocks](#levels-and-unlocks)
 - [Building your village](#building-your-village)
@@ -64,6 +71,90 @@ Finishing a session is always worth more than harvesting early. An early harvest
 
 Unchecking the task takes the offer back. Switching to another task does the same, and the timer carries on with that task. Turn the feature off with *Early harvest when the task is done* in settings. The command *Harvest focus session early (focused task is done)* does the same as the button.
 
+## Kanban boards
+
+A board is a note with lanes of cards: waiting, in progress, finished. Boards are where planning, focus and rewards meet: you pick a card, focus on it, and finishing it pays.
+
+<p align="center">
+  <img src="images/board.png" alt="A Forest board" width="100%">
+</p>
+
+| What | How |
+|---|---|
+| A new board | The command *Create a new board*, or right-click a folder → *New board* |
+| Open an existing board here | Click it (see the setting below), right-click it → *Open as Forest board*, or the command *Open this note as a Forest board* |
+| See or edit the markdown | The page icon in the board's header, the board's ⋯ menu, or the command *Open this board as markdown* |
+| Undo / redo | ⌘/Ctrl + Z, ⌘/Ctrl + Shift + Z while the board has focus |
+
+### Boards and the Kanban plugin
+
+Boards use the file format of the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban): a `kanban-plugin: board` key in the frontmatter, lanes as `##` headings, cards as list items. Any board made with the Kanban plugin opens here, and any board made here opens in the Kanban plugin. Only the lines you change are rewritten; notes between lanes, spacing and other frontmatter stay as they are.
+
+*Settings → Boards → Open Kanban boards in* decides which view a board note opens in:
+
+| Setting | Boards open in |
+|---|---|
+| Automatic (default) | The Kanban plugin's view if it is enabled, otherwise the Forest board |
+| Forest board | The Forest board, even with the Kanban plugin installed |
+| Leave as they are | Whatever Obsidian or the Kanban plugin would open; switch by hand |
+
+Switching an open board to another view is always respected. With both plugins installed you can keep the Kanban plugin as your default and still get the rewards: **cards finished in the Kanban plugin's view count too**, and so do cards you move by editing the markdown.
+
+### Lanes
+
+- **What a lane is for** is read from its title (*To do*, *In progress*, *Review*, *Done*, *Shipped*…, in several languages), shown by the icon next to it. Change it in the lane's ⋯ menu. Making a lane a done lane adds the Kanban plugin's **Complete** marker, so cards moved there are ticked off in both plugins.
+- **Card limits.** *Set a card limit…* writes it the Kanban way, `## Doing (3)`. The count turns orange when a lane holds more, and the thin bar under its title fills up as it gets full. Small limits are how work gets finished instead of just started.
+- Rename a lane by double-clicking its title. Move lanes left and right, collapse them, or delete them from the ⋯ menu. *Archive* in a done lane moves its cards to the board's archive.
+
+### Cards
+
+- **Add** cards with *Add a card*: Enter adds one and keeps the box open for the next, Shift+Enter starts a new line, Esc closes it.
+- **Drag** cards between lanes and within them. On a phone or tablet, press and hold a card for a moment, then drag. Esc cancels a drag.
+- **Click** a card to edit it. The editor has a 🍅 stepper for the planned pomodoros and a due date with *Today*, *Tomorrow* and *Next week* shortcuts. Enter saves.
+
+  <img src="images/board-edit.png" alt="A card open in its editor, with the pomodoro stepper and the due date" width="100%">
+
+- **Finish** a card with the circle on its left. With *Move ticked-off cards to the done lane* on, it also moves to the top of the done lane. The same circle opens a finished card again.
+- **Right-click** a card for everything else: focus, move to another lane, open it in the note, copy a link to it (`[[Board#^id]]`), archive, delete.
+- Cards show what is on them: planned and done pomodoros as dots, the due date (red when overdue), a future start date, checklist progress, and a priority edge from the Tasks plugin's priority emoji. Checklist items inside a card can be ticked right on the board, and clicking a tag filters the board by it.
+- **Ageing.** A card in an in-progress lane shows how many days it has been there. After *Mark cards as stale after* days (5 by default) it turns orange: finish it, split it, or move it back.
+
+Dates are read and written the way your board writes them: Kanban dates `@{2025-10-03}`, the Tasks plugin's `📅 2025-10-03`, or Dataview's `[due:: 2025-10-03]`. A new date is written as a Kanban date when the board already uses them or the Kanban plugin is installed, otherwise in your *Task format*.
+
+### Focusing on a card
+
+Press ▶ on a card (or right-click → *Focus and start the timer*) and the card becomes the timer's task:
+
+- the card gets a block ID (such as `^a1b2c3`; the Kanban plugin keeps those) so it is found wherever it moves;
+- each finished session adds a 🍅 to the card. This works even with task tracking off, unless you turn off *Count pomodoros on cards*;
+- the card shows the time left and a progress line, and the board's header shows the session with pause and resume;
+- finishing the card mid-session (moving it to done, or ticking it off) offers to [harvest early](#done-early-harvest-early).
+
+The command *Focus on the next card in progress* picks the top open card of your in-progress lane, or of the first lane if none is in progress.
+
+### What finishing a card earns
+
+A card is finished when it is ticked off or moved into a done lane. Like a task, each card pays once a day and shares the daily cap of 30 with tasks. Cards that were added straight into a done lane, or that were already in a lane when it became a done lane, pay nothing.
+
+| | Coins 🪙 | XP |
+|---|---|---|
+| Finishing a card | +3 | +6 |
+| Pomodoros counted on it | +2 | +2 per pomodoro, up to 8 |
+| Finished while the timer was on it (no pomodoro counted yet) | +2 | |
+| Estimate on target (within a quarter, or one pomodoro, of the plan) | | +4 |
+| Done by its due date | +2 | |
+| Every limited lane within its limit | | +2 |
+
+A finished card also counts as a task for quests and the task tally, and waters your garden. **Milestones** at 10, 25, 50, 100, 250 and 500 cards finished on a board pay Sunlight, Coins and XP, and **clearing a board** (finishing every card on a board of five or more) is celebrated once a day per board.
+
+### Board statistics
+
+The chart button in the board's header opens its statistics: cards finished this week (compared with last week), the average **cycle time** from in progress to done, how often your **estimates** were on target, how many cards were done **on time**, the pomodoros behind this week's cards, a two-week chart, and the progress to the next milestone.
+
+<p align="center">
+  <img src="images/board-stats.png" alt="Board statistics" width="100%">
+</p>
+
 ## Rewards
 
 | Source | Sunlight ☀️ | Coins 🪙 | XP |
@@ -73,6 +164,8 @@ Unchecking the task takes the offer back. Switching to another task does the sam
 | First tree of the day | | | +10 |
 | Reaching your daily goal | +40 | +5 | +20 |
 | Ticking a task `[ ]` → `[x]` | | +3 (+2 if it was a 🍅 task, or the timer's task mid-session) | +5 |
+| [Finishing a card](#what-finishing-a-card-earns) on a board | | +3 to +7 | +6 to +28 |
+| [Board milestone](#what-finishing-a-card-earns) (10, 25, 50… cards) | 2 per card | 1 per 5 cards | 1 per card |
 | Finishing a break | Tea Gazebo perk | | +3 |
 | Harvesting a [crop](#garden-plots-and-crops) | | 2–15, by crop | 3–18, by crop |
 | Each daily quest | 20–35 | 3–4 | 15–25 |
@@ -148,9 +241,9 @@ With *Low animation frame rate* on, or when your system asks for reduced motion,
 
 ## Daily quests and achievements
 
-Each morning the *Journey* tab shows **three quests**, picked by date. They are things like *Focus for 75 minutes*, *Check off 3 tasks*, *Take a proper break*, *Focus on a specific task* or *Tend your village*. Finish all three to open the **daily chest**.
+Each morning the *Journey* tab shows **three quests**, picked by date. They are things like *Focus for 75 minutes*, *Check off 3 tasks*, *Take a proper break*, *Focus on a specific task* or *Tend your village*. Once you use [boards](#kanban-boards), *Finish 2 cards on a board* and *Finish a card you focused on* join them. Finish all three to open the **daily chest**.
 
-There are **20 achievements** (first tree, streaks, focus hours, tasks, breaks, harvests, full plot, and more), each with a reward and a progress bar.
+There are **25 achievements** (first tree, streaks, focus hours, tasks, finished cards, estimates on target, a cleared board, breaks, harvests, full plot, and more), each with a reward and a progress bar.
 
 ## Streaks, vitality and withering
 
@@ -200,6 +293,15 @@ Under *Settings → Pomodoro Timer Forest → Forest & homestead*:
 | Low animation frame rate | Also pauses the village animations. |
 
 The village animations also stop when your system asks for reduced motion.
+
+Under *Boards*:
+
+| Setting | What it does |
+|---|---|
+| Open Kanban boards in | Automatic, Forest board or Leave as they are. See [Boards and the Kanban plugin](#boards-and-the-kanban-plugin). |
+| Count pomodoros on cards | Finished sessions add a 🍅 to the focused card, even with task tracking off (on by default). |
+| Move ticked-off cards to the done lane | Ticking a card off on the board also moves it to the done lane (on by default). |
+| Mark cards as stale after | Days in an in-progress lane before a card turns orange (5; 0 turns it off). |
 
 If daily-note logging is on, each tree adds a line like this:
 

@@ -20,7 +20,7 @@ export let onMenu: (e: MouseEvent) => void
 $: ratio = item.expected > 0 ? Math.min(100, (item.actual / item.expected) * 100) : 0
 $: due = item.due ? describeDue(item.due, item.checked) : null
 $: start = item.start ? describeStart(item.start) : null
-$: hasMeta = item.actual > 0 || item.expected > 0 || !!due || !!start
+$: hasMeta = item.actual > 0 || item.expected > 0 || !!due || !!start || !!item.lane
 
 function onKey(e: KeyboardEvent) {
     if (e.target !== e.currentTarget) return
@@ -55,6 +55,9 @@ function onKey(e: KeyboardEvent) {
 
         {#if hasMeta}
             <div class="meta">
+                {#if item.lane}
+                    <span class="chip lane" title="Lane on the board">{item.lane}</span>
+                {/if}
                 <Pomodoros actual={item.actual} expected={item.expected} />
                 {#if start}
                     <span class="chip start {start.tone}" title="Start date: {longDate(item.start)}">
@@ -158,6 +161,15 @@ function onKey(e: KeyboardEvent) {
     white-space: nowrap;
     color: var(--text-muted);
     background: var(--background-modifier-hover);
+}
+.chip.lane {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 5px;
+    color: var(--text-muted);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--background-modifier-border);
 }
 .chip.past {
     color: var(--text-faint);

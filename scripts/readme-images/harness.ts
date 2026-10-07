@@ -17,6 +17,7 @@ import { upgradeCost, xpForLevel } from '../../src/services/Progression'
 import type { PlacedHomesteadItem, RewardEvent } from '../../src/types/forest'
 import { SCENE_CSS } from '../../src/render/sceneCss'
 import { village } from './sample-data'
+import { mountBoard } from './board-scene'
 
 // main.ts injects this once for every view in the real plugin
 document.head.appendChild(Object.assign(document.createElement('style'), { textContent: SCENE_CSS }))
@@ -73,6 +74,13 @@ const levelup: RewardEvent = {
 // Chrome's CSS animations ignore virtual time; settle entrance animations for still captures.
 if (q.get('settle')) document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '.pf-card *{animation-delay:0s!important;animation-duration:.001s!important}' }))
 
+/** Obsidian's default light theme, near enough. */
+const LIGHT_THEME = `:root{--background-primary:#fff;--background-primary-alt:#fafafa;--background-secondary:#f6f6f6;--background-secondary-alt:#e3e3e3;
+--background-modifier-border:#e0e0e0;--background-modifier-border-hover:#d4d4d4;--background-modifier-hover:rgba(0,0,0,.045);--background-modifier-form-field:#fff;
+--text-normal:#222;--text-muted:#5c5c5c;--text-faint:#ababab;--text-accent:#8a5cf5;--interactive-normal:#fff;--interactive-accent:#8a5cf5;--interactive-accent-hover:#7b4ef0;
+--color-red:#e93147;--color-orange:#ec7500;--color-yellow:#e0ac00;--color-green:#08b94e;--color-blue:#086ddd;--color-cyan:#00bfbc}
+button,input,select{color:var(--text-normal)} button{box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.06)} input{background:var(--background-modifier-form-field);border:1px solid var(--background-modifier-border)}`
+
 const app = document.getElementById('app')!
 const cloneTimer = (elapsed: number, running: boolean, inSession: boolean) => {
     const count = 25 * 60_000
@@ -93,6 +101,20 @@ if (scene === 'sidebar' || scene === 'sidebar-reward' || scene === 'sidebar-leve
     })
 } else if (scene === 'tasks') {
     mountTasks()
+} else if (scene === 'board') {
+    document.head.appendChild(Object.assign(document.createElement('style'), { textContent: STYLES_CSS }))
+    const light = q.get('theme') === 'light'
+    document.body.classList.add(light ? 'theme-light' : 'theme-dark')
+    if (light) document.head.appendChild(Object.assign(document.createElement('style'), { textContent: LIGHT_THEME }))
+    // Obsidian's own styling for tags and links, which the cards' markdown uses
+    document.head.appendChild(Object.assign(document.createElement('style'), {
+        textContent: `a.tag{display:inline-block;padding:0 7px;border-radius:99px;text-decoration:none;color:var(--text-accent);background:color-mix(in srgb,var(--interactive-accent) 14%,transparent);line-height:1.5}
+        a.internal-link{color:var(--text-accent);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--text-accent) 40%,transparent)}
+        .pf-card .burst{animation-play-state:paused!important;animation-delay:-.7s!important}`,
+    }))
+    ;(HTMLElement.prototype as any).empty = function () { this.textContent = '' }
+    rewardEvents.set([])
+    mountBoard(app, q, g, rewardEvents)
 } else {
     const full = scene === 'homestead'
     if (scene === 'homestead') rewardEvents.set([])

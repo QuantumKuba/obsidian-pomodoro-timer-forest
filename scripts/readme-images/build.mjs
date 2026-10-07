@@ -56,6 +56,11 @@ ui('panel-journey', 'scene=forest&tab=journey', 356, 1510, { pad: 12 })
 ui('panel-tasks', 'scene=tasks&pins=2', 356, 860, { pad: 12 })
 ui('panel-tasks-edit', 'scene=tasks&press=.edit&nth=1&focus=1&tracking=1', 356, 1130, { pad: 12 })
 ui('homestead-full', 'scene=homestead&select=cabin', 1360, 880, { pad: 0, extra: 'body{height:880px;overflow:hidden}' })
+const boardPage = { pad: 0, extra: '#wrap,#app{height:100vh} body{overflow:hidden}' }
+ui('board', 'scene=board&burst=1', 1480, 680, boardPage)
+ui('board-light', 'scene=board&theme=light', 1480, 680, boardPage)
+ui('board-stats', 'scene=board&press=.tool&nth=0', 1480, 860, boardPage)
+ui('board-edit', 'scene=board&focus=0&press=.pf-card&nth=1', 1480, 680, boardPage)
 
 const only = process.argv[2]
 for (const s of shots) {

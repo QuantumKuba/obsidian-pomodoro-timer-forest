@@ -1,6 +1,6 @@
 import { TimerView, VIEW_TYPE_TIMER } from 'TimerView'
 import { HomesteadView, VIEW_TYPE_HOMESTEAD } from 'HomesteadView'
-import { Notice, Plugin, WorkspaceLeaf } from 'obsidian'
+import { Notice, Plugin, TFile, TFolder, WorkspaceLeaf, normalizePath } from 'obsidian'
 import PomodoroSettings, { type Settings } from 'Settings'
 import StatusBar from 'StatusBarComponent.svelte'
 import Timer from 'Timer'
@@ -9,6 +9,11 @@ import TaskTracker from 'TaskTracker'
 import StorageManager from './services/StorageManager'
 import ForestEngine from './services/ForestEngine'
 import TaskRewardWatcher from './services/TaskRewardWatcher'
+import BoardWatcher from './board/BoardWatcher'
+import BoardOpening, { VIEW_TYPE_BOARD } from './board/BoardOpening'
+import { BoardView } from './board/BoardView'
+import { newBoardText } from './board/BoardModel'
+import { obsidianLanguage } from './board/cards'
 import { setPlugin, resetStoresForDebug } from './stores'
 import { get } from 'svelte/store'
 
@@ -22,6 +27,8 @@ export default class PomodoroTimerPlugin extends Plugin {
     public storageManager!: StorageManager
     public forestEngine!: ForestEngine
     public taskRewards?: TaskRewardWatcher
+    public boardWatcher?: BoardWatcher
+    public boardOpening?: BoardOpening
     /** Resolves once saved data is loaded and the timer, tasks and game engine exist. */
     public ready!: Promise<void>
 
@@ -36,6 +43,12 @@ export default class PomodoroTimerPlugin extends Plugin {
 
         this.registerView(VIEW_TYPE_TIMER, (leaf) => new TimerView(this, leaf))
         this.registerView(VIEW_TYPE_HOMESTEAD, (leaf) => new HomesteadView(this, leaf))
+        this.registerView(VIEW_TYPE_BOARD, (leaf) => new BoardView(leaf, this))
+        this.registerHoverLinkSource(VIEW_TYPE_BOARD, { display: 'Forest boards', defaultMod: true })
+        // Installed once every plugin has loaded, so board notes open where the settings say
+        this.boardOpening = new BoardOpening(this)
+        this.app.workspace.onLayoutReady(() => this.boardOpening?.install())
+        this.registerBoardCommands()
 
         this.addRibbonIcon('trees', 'Open homestead village', () => {
             void this.activateHomesteadView()
@@ -128,6 +141,110 @@ export default class PomodoroTimerPlugin extends Plugin {
         })
     }
 
+    private registerBoardCommands(): void {
+        const activeBoard = () => this.app.workspace.getActiveViewOfType(BoardView)
+        const boardFile = () => {
+            const file = this.app.workspace.getActiveFile()
+            return file && this.boardOpening?.isBoardPath(file.path) ? file : null
+        }
+
+        this.addCommand({
+            id: 'create-board',
+            name: 'Create a new board',
+            callback: () => void this.createBoard(),
+        })
+
+        this.addCommand({
+            id: 'open-as-board',
+            name: 'Open this note as a Forest board',
+            checkCallback: (checking) => {
+                const file = boardFile()
+                if (!file || activeBoard()) return false
+                if (!checking) void this.boardOpening?.openAsBoard(this.app.workspace.getLeaf(false), file)
+                return true
+            },
+        })
+
+        this.addCommand({
+            id: 'open-board-as-markdown',
+            name: 'Open this board as markdown',
+            checkCallback: (checking) => {
+                const view = activeBoard()
+                if (!view) return false
+                if (!checking) void view.openAsMarkdown()
+                return true
+            },
+        })
+
+        this.addCommand({
+            id: 'archive-finished-cards',
+            name: 'Archive the finished cards on this board',
+            checkCallback: (checking) => {
+                const view = activeBoard()
+                if (!view) return false
+                if (!checking) view.archiveFinished()
+                return true
+            },
+        })
+
+        this.addCommand({
+            id: 'focus-next-card',
+            name: 'Focus on the next card in progress',
+            checkCallback: (checking) => {
+                const view = activeBoard()
+                if (!view) return false
+                const doc = view.getDoc()
+                const lanes = doc.lanes.map((lane) => ({ lane, role: view.roleOf(lane) }))
+                const pick =
+                    lanes.find((l) => l.role === 'active' && l.lane.cards.some((c) => !c.checked))?.lane ??
+                    lanes.find((l) => l.role === 'backlog' && l.lane.cards.some((c) => !c.checked))?.lane
+                const card = pick?.cards.find((c) => !c.checked)
+                if (!card) return false
+                if (!checking) void view.focusCard(card.key, true)
+                return true
+            },
+        })
+
+        this.registerEvent(
+            this.app.workspace.on('file-menu', (menu, file, source, leaf) => {
+                if (file instanceof TFolder) {
+                    menu.addItem((i) =>
+                        i
+                            .setTitle('New board')
+                            .setIcon('kanban')
+                            .onClick(() => void this.createBoard(file)),
+                    )
+                    return
+                }
+                if (!(file instanceof TFile) || !this.boardOpening?.isBoardPath(file.path)) return
+                if (leaf?.view instanceof BoardView) return
+                menu.addItem((i) =>
+                    i
+                        .setTitle('Open as Forest board')
+                        .setIcon('kanban')
+                        .setSection('pane')
+                        .onClick(() => void this.boardOpening?.openAsBoard(leaf ?? this.app.workspace.getLeaf(false), file)),
+                )
+            }),
+        )
+    }
+
+    /** Creates "Untitled board.md" (numbered when taken) and opens it as a board. */
+    public async createBoard(folder?: TFolder): Promise<void> {
+        const parent = folder ?? this.app.fileManager.getNewFileParent(this.app.workspace.getActiveFile()?.path ?? '')
+        const base = parent.isRoot() ? '' : `${parent.path}/`
+        let path = normalizePath(`${base}Untitled board.md`)
+        for (let n = 1; this.app.vault.getAbstractFileByPath(path); n++) path = normalizePath(`${base}Untitled board ${n}.md`)
+        try {
+            const text = newBoardText([{ title: 'To do' }, { title: 'Doing', maxItems: 3 }, { title: 'Done', complete: true }], obsidianLanguage())
+            const file = await this.app.vault.create(path, text)
+            await this.boardOpening?.openAsBoard(this.app.workspace.getLeaf(true), file)
+        } catch (err) {
+            console.error('[Pomodoro Timer Forest] Could not create the board', err)
+            new Notice('Could not create the board.')
+        }
+    }
+
     /** Everything that depends on the saved data. */
     private async initialize(): Promise<void> {
         await this.storageManager.initialize()
@@ -146,6 +263,7 @@ export default class PomodoroTimerPlugin extends Plugin {
         this.timer = new Timer(this)
         this.tasks = new Tasks(this)
         this.taskRewards = new TaskRewardWatcher(this)
+        this.boardWatcher = new BoardWatcher(this)
 
         if (this.statusBarItem) {
             this.statusBar = new StatusBar({ target: this.statusBarItem, props: { store: this.timer } })
@@ -211,7 +329,11 @@ export default class PomodoroTimerPlugin extends Plugin {
     /** True when a timer or village view is open, so rewards can be celebrated in-view. */
     public hasVisibleForestView(): boolean {
         const { workspace } = this.app
-        return [...workspace.getLeavesOfType(VIEW_TYPE_TIMER), ...workspace.getLeavesOfType(VIEW_TYPE_HOMESTEAD)].some(
+        return [
+            ...workspace.getLeavesOfType(VIEW_TYPE_TIMER),
+            ...workspace.getLeavesOfType(VIEW_TYPE_HOMESTEAD),
+            ...workspace.getLeavesOfType(VIEW_TYPE_BOARD),
+        ].some(
             (leaf) => leaf.view.containerEl.isShown(),
         )
     }

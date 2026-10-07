@@ -2,6 +2,7 @@ import { TFile, type CachedMetadata } from 'obsidian'
 import type PomodoroTimerPlugin from '../main'
 import { get } from 'svelte/store'
 import { extractTaskComponents } from '../utils'
+import { isBoardCache } from '../board/BoardWatcher'
 
 type TaskSnapshot = { checked: boolean; focused: boolean }
 
@@ -63,11 +64,14 @@ export default class TaskRewardWatcher {
         const out = new Map<string, TaskSnapshot>()
         const blocks: FileSnapshot['blocks'] = new Map()
         const lines = content.split('\n')
+        // The cards of a Kanban board are followed by the board watcher; checklists inside them stay here
+        const board = isBoardCache(cache)
         for (const item of cache.listItems || []) {
             if (item.task === undefined) continue
             const line = lines[item.position.start.line]
             const components = line ? extractTaskComponents(line) : null
             if (!components) continue
+            if (board && !/^(\t| {2,})/.test(components.indentation)) continue
             const checked = item.task === 'x' || item.task === 'X'
             const key = TaskRewardWatcher.normalize(components.body)
             const blockId = components.blockLink.trim()

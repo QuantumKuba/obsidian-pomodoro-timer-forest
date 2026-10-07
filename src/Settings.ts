@@ -12,6 +12,11 @@ type LogFileType = 'DAILY' | 'WEEKLY' | 'FILE' | 'NONE'
 type LogLevel = 'ALL' | 'WORK' | 'BREAK'
 type LogFormat = 'SIMPLE' | 'VERBOSE' | 'CUSTOM'
 export type TaskFormat = 'TASKS' | 'DATAVIEW'
+/**
+ * Which view Kanban board notes open in. `auto`: the Kanban plugin's when it is enabled,
+ * otherwise this plugin's board. `forest`: always this plugin's board. `manual`: never switch.
+ */
+export type BoardOpenMode = 'auto' | 'forest' | 'manual'
 
 export interface Settings {
     workLen: number
@@ -41,6 +46,13 @@ export interface Settings {
     earlyHarvest: boolean
     logForestToDailyNote: boolean
     forestSounds: boolean
+    boardOpenMode: BoardOpenMode
+    /** Count finished sessions on board cards even when task tracking is off. */
+    boardTaskTracking: boolean
+    /** Ticking a card off on the board also moves it into the done lane. */
+    boardMoveChecked: boolean
+    /** Cards waiting this many days in an in-progress lane are marked; 0 turns it off. */
+    boardStaleDays: number
 }
 
 export default class PomodoroSettings extends PluginSettingTab {
@@ -69,6 +81,10 @@ export default class PomodoroSettings extends PluginSettingTab {
         earlyHarvest: true,
         logForestToDailyNote: false,
         forestSounds: true,
+        boardOpenMode: 'auto',
+        boardTaskTracking: true,
+        boardMoveChecked: true,
+        boardStaleDays: 5,
     }
 
     static settings: Writable<Settings> = writable(
@@ -288,6 +304,62 @@ export default class PomodoroSettings extends PluginSettingTab {
                         { taskFormat: value as TaskFormat },
                         true,
                     )
+                })
+            })
+
+        new Setting(containerEl).setHeading().setName('Boards')
+
+        const kanbanInstalled = !!this.app.plugins?.plugins?.['obsidian-kanban']
+        new Setting(containerEl)
+            .setName('Open Kanban boards in')
+            .setDesc(
+                'Boards use the Kanban plugin\'s file format, so either plugin can open them. ' +
+                    (kanbanInstalled
+                        ? 'The Kanban plugin is enabled: with Automatic it keeps opening boards, and you can switch with “Open as Forest board”.'
+                        : 'With Automatic, boards open here unless the Kanban plugin is enabled.'),
+            )
+            .addDropdown((dropdown) => {
+                dropdown.selectEl.addClass('pomodoro-select-compact')
+                dropdown.addOptions({
+                    auto: 'Automatic',
+                    forest: 'Forest board',
+                    manual: 'Leave as they are',
+                })
+                dropdown.setValue(this._settings.boardOpenMode ?? 'auto')
+                dropdown.onChange((value: string) => {
+                    this.updateSettings({ boardOpenMode: value as BoardOpenMode })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Count pomodoros on cards')
+            .setDesc('Each finished focus session adds one to the 🍅 count of the card you focused on, even with task tracking turned off.')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.boardTaskTracking ?? true)
+                toggle.onChange((value) => {
+                    this.updateSettings({ boardTaskTracking: value })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Move ticked-off cards to the done lane')
+            .setDesc('Ticking a card off on the board also moves it to the top of the first done lane.')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.boardMoveChecked ?? true)
+                toggle.onChange((value) => {
+                    this.updateSettings({ boardMoveChecked: value })
+                })
+            })
+
+        new Setting(containerEl)
+            .setName('Mark cards as stale after')
+            .setDesc('Days a card can wait in an in-progress lane before it is marked, as a nudge to finish or move it. 0 turns this off.')
+            .addSlider((slider) => {
+                slider.setLimits(0, 21, 1)
+                slider.setValue(this._settings.boardStaleDays ?? 5)
+                slider.setDynamicTooltip()
+                slider.onChange((value) => {
+                    this.updateSettings({ boardStaleDays: value })
                 })
             })
 

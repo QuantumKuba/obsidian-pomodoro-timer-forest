@@ -5,7 +5,8 @@
  --background-primary:#1e1e1e;--background-primary-alt:#242424;--background-secondary:#262626;--background-secondary-alt:#1a1a1a;
  --background-modifier-border:#3a3a3a;--background-modifier-hover:rgba(255,255,255,.07);--background-modifier-form-field:#262626;
  --text-normal:#dadada;--text-muted:#a8a8a8;--text-faint:#6b6b6b;--text-accent:#a99cf7;--text-on-accent:#fff;
- --interactive-normal:#2f2f2f;--interactive-accent:#7f6df2;--color-green:#6dbf73;--color-red:#e5645f;--color-orange:#e9973f;--color-blue:#3b8df0;
+ --interactive-normal:#2f2f2f;--interactive-accent:#7f6df2;--interactive-accent-hover:#8875ff;--color-green:#6dbf73;--color-red:#e5645f;--color-orange:#e9973f;--color-blue:#3b8df0;
+ --color-yellow:#e0de71;--color-cyan:#53dfdd;--background-modifier-border-hover:#4a4a4a;
  --pomodoro-timer-color:var(--text-faint);--pomodoro-timer-elapsed-color:var(--color-green);--pomodoro-timer-text-color:var(--text-normal);--pomodoro-timer-dot-color:var(--color-red);
  --pomodoro-forest-sunlight:#ffa726;--pomodoro-forest-coin:#ffd700;--pomodoro-forest-streak:#ff7043;
 }

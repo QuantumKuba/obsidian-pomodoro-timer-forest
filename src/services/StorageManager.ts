@@ -44,6 +44,7 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
     achievements: [],
     rewardedTaskKeys: { date: '', keys: [] },
     dailyLogs: {},
+    boards: {},
     tagMappings: [
         { tag: '#code', speciesId: 'classic_pine' },
         { tag: '#dev', speciesId: 'classic_pine' },
@@ -69,6 +70,9 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
         questsCompleted: 0,
         chestsOpened: 0,
         cropsHarvested: 0,
+        cardsCompleted: 0,
+        cardsOnEstimate: 0,
+        boardsCleared: 0,
     },
     preferences: {
         hardcoreMode: true,
@@ -411,6 +415,7 @@ export default class StorageManager {
             inventory: { ...(raw.inventory || {}) },
             homestead: Array.isArray(raw.homestead) ? raw.homestead : base.homestead,
             dailyLogs: raw.dailyLogs || {},
+            boards: raw.boards && typeof raw.boards === 'object' ? raw.boards : {},
             achievements: raw.achievements || [],
         }
 

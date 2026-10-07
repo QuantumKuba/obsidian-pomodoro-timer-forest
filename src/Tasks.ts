@@ -9,6 +9,8 @@ import { DESERIALIZERS } from 'serializer'
 import type { TaskLineEdits } from 'serializer/TaskLineEditor'
 import TaskWriter from 'TaskWriter'
 import { settings } from 'stores'
+import { BOARD_FRONTMATTER_KEY, parseBoard } from 'board/BoardModel'
+import { stripKanbanDates } from 'board/cards'
 
 export type TaskItem = {
     path: string
@@ -31,6 +33,8 @@ export type TaskItem = {
     actual: number
     tags: string[]
     line: number
+    /** The lane of a card on a Kanban board. */
+    lane?: string
 }
 
 /** The tasks of one note, as listed in the task panel. */
@@ -244,18 +248,32 @@ export function resolveTasks(
         return []
     }
 
+    // On a Kanban board each task belongs to a lane; archived cards are left out
+    const lanes = new Map<number, string>()
+    const archived = new Set<number>()
+    const board = metadata.frontmatter?.[BOARD_FRONTMATTER_KEY] ? parseBoard(content) : null
+    if (board) {
+        for (const lane of board.lanes)
+            for (const card of lane.cards)
+                for (let i = card.start; i < card.end; i++) lanes.set(i, lane.title)
+        if (board.archive)
+            for (let i = board.archive.heading; i < board.archive.end; i++) archived.add(i)
+    }
+
     let cache: Record<number, TaskItem> = {}
     const lines = content.split('\n')
     for (let rawElement of metadata.listItems || []) {
         if (rawElement.task) {
             let lineNr = rawElement.position.start.line
+            if (archived.has(lineNr)) continue
             let line = lines[lineNr]
 
             const components = extractTaskComponents(line)
             if (!components) {
                 continue
             }
-            let detail = DESERIALIZERS[format].deserialize(components.body)
+            // On a board, Kanban dates go first: the task fields are read from the end of the line
+            let detail = DESERIALIZERS[format].deserialize(board ? stripKanbanDates(components.body) : components.body)
 
             let [actual, expected] = detail.pomodoros.split('/')
 
@@ -270,7 +288,7 @@ export function resolveTasks(
                 checked: rawElement.task != '' && rawElement.task != ' ',
                 description: detail.description,
                 done: detail.doneDate?.format(dateformat) ?? '',
-                due: detail.dueDate?.format(dateformat) ?? '',
+                due: detail.dueDate?.format(dateformat) ?? (board ? components.body.match(/(?:^|\s)@\{(\d{4}-\d{2}-\d{2})\}/)?.[1] ?? '' : ''),
                 created: detail.createdDate?.format(dateformat) ?? '',
                 cancelled: detail.cancelledDate?.format(dateformat) ?? '',
                 scheduled: detail.scheduledDate?.format(dateformat) ?? '',
@@ -281,6 +299,7 @@ export function resolveTasks(
                 actual: parseInt(actual) || 0,
                 tags: detail.tags,
                 line: lineNr,
+                lane: lanes.get(lineNr),
             }
 
             cache[lineNr] = item

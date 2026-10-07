@@ -79,8 +79,29 @@ Unlock new species as you level up: from a humble Classic Pine to a glowing Cele
   </tr>
 </table>
 
+## Kanban boards that keep work moving
+
+Plan in lanes, focus on one card at a time, and watch the work actually get finished. Boards are plain markdown in the **[Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s file format**, so the boards you already have open here as they are, and every board you make here still opens in the Kanban plugin.
+
+<p align="center">
+  <img src="docs/images/board.png" alt="A Forest board with five lanes, a card in focus with its timer running, and a reward rising from a finished card" width="100%">
+</p>
+
+- ▶️ **Focus from the card.** Press play on any card: it becomes the timer's task, its 🍅 count goes up with every session, and the card shows the time left while you work. Finish the card mid-session and the timer offers to [harvest early](docs/GUIDE.md#done-early-harvest-early).
+- ✅ **Finishing pays, and planning well pays more.** Moving a card into a done lane (or ticking it off) earns Coins and XP, with extra for the pomodoros behind it, for an estimate that was on target, for meeting its due date and for keeping your lanes within their limits.
+- 🌊 **Limits, ageing and momentum.** Card limits on lanes (`## Doing (3)`), a gentle marker on cards that have waited too long in progress, and statistics for each board: cards finished per day, cycle time, estimate accuracy and milestones at 10, 25, 50… cards.
+- 🧩 **Works with what you have.** Kanban dates (`@{2025-10-03}`), Tasks emoji fields, checklists inside cards, links, tags, block IDs, the Complete lane and the archive all carry over. If you keep using the Kanban plugin, cards finished there are rewarded too.
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%"><img src="docs/images/board-stats.png" alt="Board statistics: cards finished this week, cycle time, estimates on target, on time, focus behind them, and a two-week chart"><br><sub><b>Board statistics</b>: throughput, cycle time and how good your estimates are.</sub></td>
+    <td align="center" valign="top" width="50%"><img src="docs/images/board-light.png" alt="The same board in the light theme"><br><sub><b>Light or dark</b>: boards follow your Obsidian theme.</sub></td>
+  </tr>
+</table>
+
 ## Made for how you actually work in Obsidian
 
+- 🗂️ **Kanban boards built in.** Open your existing Kanban boards, or create one with *Create a new board*. See [above](#kanban-boards-that-keep-work-moving).
 - ✅ **Tick a task, earn a reward.** Check off a `- [ ]` task anywhere in your vault and it earns Coins and XP. Only real ticks count: pasting in already-checked tasks or toggling one back and forth earns nothing, and there's a daily cap.
 - 🌿 **Done early? Harvest early.** Tick off the task you're focusing on and the timer offers to end the session: a young tree and most of the rewards for the minutes you focused, and nothing withers. Finishing the full session still pays the most, so ticking off tiny tasks can't be farmed.
 - 🏷️ **Smart seeds.** `#write` plants a Cherry Blossom, `#code` a Pine, `#study` an Oak. Your notes and tasks choose the tree.
@@ -112,7 +133,7 @@ One click exports a **self-contained HTML snapshot** of your village, with its a
 ## Permissions and privacy
 
 - **No network requests, no accounts, no telemetry.** Everything stays in your vault.
-- **Vault files:** the plugin only reads or writes notes for features you turn on: task tracking (updates the `[🍅:: …]` field on the task you focus on), session logging (daily, weekly or a chosen note), and the optional daily-note line for each tree. Its own data is saved in the plugin's `data.json`.
+- **Vault files:** the plugin only reads or writes notes for features you turn on: task tracking (updates the `[🍅:: …]` field on the task you focus on), session logging (daily, weekly or a chosen note), the optional daily-note line for each tree, and the Kanban boards you open with it (each change you make on a board is written to that note, and focusing a card gives it a block ID such as `^a1b2c3`). Its own data is saved in the plugin's `data.json`.
 - **Clipboard:** written only when you press *Copy dashboard JSON* (or run the matching command).
 - **Notifications:** system notifications are optional and use the browser's Notification API. Otherwise you get an in-app notice.
 

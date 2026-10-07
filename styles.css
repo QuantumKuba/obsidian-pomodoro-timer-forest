@@ -322,3 +322,10 @@ If your plugin does not need CSS, delete this file.
 }
 
 /* pf-scene:end */
+
+/* ---- Forest boards: the view fills its tab edge to edge ---- */
+
+.workspace-leaf-content .view-content.pf-board-view {
+    padding: 0;
+    overflow: hidden;
+}
