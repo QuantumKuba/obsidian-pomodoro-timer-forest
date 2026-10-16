@@ -1,4 +1,4 @@
-import { getLanguage, moment, type App, type TFile } from 'obsidian'
+import { getLanguage, moment, requireApiVersion, type App, type TFile } from 'obsidian'
 import type { TaskFormat } from 'Settings'
 import type { TaskItem } from 'Tasks'
 import { DESERIALIZERS } from 'serializer'
@@ -17,7 +17,10 @@ export function kanbanPluginEnabled(app: App): boolean {
 /** The language Obsidian runs in; the Kanban plugin writes its markers in it. */
 export function obsidianLanguage(): string {
     try {
-        return getLanguage() || 'en'
+        if (requireApiVersion('1.8.7')) {
+            return getLanguage() || 'en'
+        }
+        return moment.locale() || 'en'
     } catch {
         return 'en'
     }

@@ -1,4 +1,4 @@
-import { Component, Keymap, MarkdownRenderer, Menu, Modal, Notice, Platform, Scope, Setting, TextFileView, TFile, WorkspaceLeaf } from 'obsidian'
+import { Component, Keymap, MarkdownRenderer, Menu, Modal, Notice, Platform, requireApiVersion, Scope, Setting, TextFileView, TFile, WorkspaceLeaf } from 'obsidian'
 import { get, writable } from 'svelte/store'
 import type PomodoroTimerPlugin from '../main'
 import type { BoardLaneRole } from '../types/forest'
@@ -498,15 +498,18 @@ export class ConfirmModal extends Modal {
         this.contentEl.createEl('p', { text: this.message })
         new Setting(this.contentEl)
             .addButton((b) => b.setButtonText('Cancel').onClick(() => this.close()))
-            .addButton((b) =>
-                b
-                    .setButtonText(this.cta)
-                    .setWarning()
-                    .onClick(() => {
-                        this.close()
-                        this.onConfirm()
-                    }),
-            )
+            .addButton((b) => {
+                b.setButtonText(this.cta)
+                if (requireApiVersion('1.13.0')) {
+                    b.setDestructive().setCta()
+                } else {
+                    b.buttonEl.addClass('mod-warning')
+                }
+                b.onClick(() => {
+                    this.close()
+                    this.onConfirm()
+                })
+            })
     }
 
     onClose(): void {

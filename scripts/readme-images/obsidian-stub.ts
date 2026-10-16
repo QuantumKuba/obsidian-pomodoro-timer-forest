@@ -91,5 +91,6 @@ export const moment: any = () => ({ format: () => '', isValid: () => false })
 export const normalizePath = (p: string) => p
 export const getAllTags = () => []
 export const getLanguage = () => 'en'
+export const requireApiVersion = () => true
 export type App = any
 export type SettingDefinitionItem = any
