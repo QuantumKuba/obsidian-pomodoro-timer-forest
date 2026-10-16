@@ -26,6 +26,12 @@ export class Scope {
     constructor(_parent?: unknown) {}
     register() {}
 }
+export class FuzzySuggestModal<T> extends Modal {
+    setPlaceholder() {}
+    setInstructions() {}
+}
+/** The board scene flips these for its phone shots (?mobile=1). */
+export const Platform = { isMobile: false, isPhone: false, isTablet: false, isDesktop: true, isMacOS: true, isIosApp: false, isAndroidApp: false }
 export class Component {
     load() {}
     unload() {}

@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount, tick } from 'svelte'
+import { Platform } from 'obsidian'
 import type { BoardCard } from './BoardModel'
 import { readCardMeta } from './BoardModel'
 import type { BoardContext } from './context'
@@ -22,6 +23,8 @@ let draft = card?.text ?? ''
 let area: HTMLTextAreaElement
 let root: HTMLDivElement
 let saved = false
+/** On a phone, Enter starts a new line (there is no Shift) and the button saves. */
+const mobile = Platform.isMobile
 
 $: trigger = typeof dateSettings?.['date-trigger'] === 'string' ? (dateSettings['date-trigger'] as string) : '@'
 $: meta = readCardMeta(draft, trigger)
@@ -35,6 +38,8 @@ onMount(async () => {
     const end = area?.value.length ?? 0
     area?.setSelectionRange(end, end)
     grow()
+    // Above the keyboard that just opened
+    if (mobile) window.setTimeout(() => root?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 250)
 })
 
 function grow() {
@@ -82,7 +87,7 @@ function cancel() {
 
 function onKey(e: KeyboardEvent) {
     if (e.isComposing) return
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !mobile) {
         e.preventDefault()
         save()
     } else if (e.key === 'Escape') {
@@ -153,9 +158,9 @@ const QUICK_DUES = [
             <button class="icon" title="Archive" aria-label="Archive this card" on:click={() => { cancel(); ctx.view.archiveCard(card?.key ?? '') }}><Icon name="archive" size={13} /></button>
             <button class="icon danger" title="Delete" aria-label="Delete this card" on:click={() => { cancel(); ctx.view.deleteCard(card?.key ?? '') }}><Icon name="trash" size={13} /></button>
         {/if}
-        <span class="hint">{keepOpen ? 'Enter to add · Esc to close' : ''}</span>
+        <span class="hint">{keepOpen && !mobile ? 'Enter to add · Esc to close' : ''}</span>
         <button class="cancel" title="Esc" on:click={cancel}>Cancel</button>
-        <button class="mod-cta save" title="Enter · Shift+Enter for a new line" on:click={save}>{card ? 'Save' : 'Add card'}</button>
+        <button class="mod-cta save" title={mobile ? '' : 'Enter · Shift+Enter for a new line'} on:click={save}>{card ? 'Save' : 'Add card'}</button>
     </div>
 </div>
 
@@ -258,6 +263,11 @@ textarea:focus-visible {
 }
 .quick {
     color: var(--text-faint);
+    white-space: nowrap;
+}
+.field.due {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 .actions {
     display: flex;
@@ -288,5 +298,37 @@ textarea:focus-visible {
     padding: 0 10px;
     font-size: 0.74rem;
     border-radius: 7px;
+}
+
+/* Touch screens: taller controls, and the text never zooms the page (iOS zooms under 16px) */
+:global(body.is-mobile) .pf-editor textarea {
+    font-size: max(16px, var(--pf-card-font));
+}
+:global(body.is-mobile) .pf-editor .field {
+    height: 32px;
+    font-size: 0.8rem;
+}
+:global(body.is-mobile) .pf-editor .step,
+:global(body.is-mobile) .pf-editor .quick,
+:global(body.is-mobile) .pf-editor .icon,
+:global(body.is-mobile) .pf-editor .cancel {
+    height: 28px;
+    font-size: 0.78rem;
+}
+:global(body.is-mobile) .pf-editor .step,
+:global(body.is-mobile) .pf-editor .icon {
+    width: 30px;
+}
+:global(body.is-mobile) .pf-editor .due input {
+    height: 28px;
+    font-size: 0.8rem;
+}
+:global(body.is-mobile) .pf-editor .save {
+    height: 30px;
+    padding: 0 14px;
+    font-size: 0.8rem;
+}
+:global(body.is-mobile) .pf-editor .actions {
+    gap: 4px;
 }
 </style>

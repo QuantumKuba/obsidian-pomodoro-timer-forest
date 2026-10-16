@@ -4,6 +4,7 @@
  * through the real board model; the note's text is on `window.__board.text()`.
  */
 import { writable, readable, get } from 'svelte/store'
+import { Platform } from 'obsidian'
 import BoardApp from '../../src/board/BoardApp.svelte'
 import { BoardView } from '../../src/board/BoardView'
 import { gamificationStore, settings } from '../../src/stores'
@@ -89,6 +90,11 @@ function sampleMemory(): BoardMemory {
 
 export function mountBoard(target: HTMLElement, q: URLSearchParams, g: GamificationData, rewardEvents: ReturnType<typeof writable<RewardEvent[]>>) {
     const path = 'Projects/Website relaunch.md'
+    // ?mobile=1: what Obsidian sets on a phone, so the touch-screen styles and behaviour show
+    if (q.get('mobile') === '1') {
+        document.body.classList.add('is-mobile', 'is-phone')
+        Object.assign(Platform, { isMobile: true, isPhone: true, isDesktop: false })
+    }
     gamificationStore.set({ ...g, boards: { [path]: sampleMemory() }, dailyLogs: { ...g.dailyLogs, [dateKey()]: { date: dateKey(), trees: [], totalMinutes: 75, completedPomodoros: 3, cardsCompleted: 3 } } })
     settings.update((s) => ({ ...s, boardStaleDays: 5 }))
 

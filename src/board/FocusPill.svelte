@@ -8,6 +8,8 @@ export let tracker: TaskTracker
 /** The board's note: its focused card can be scrolled to. */
 export let path: string
 export let onShowCard: (blockId: string) => void
+/** On a narrow board: the pill stretches across it and keeps its words short. */
+export let compact = false
 
 const R = 9
 const C = 2 * Math.PI * R
@@ -26,9 +28,9 @@ function showCard() {
 }
 </script>
 
-<div class="pf-focus" class:idle class:break={!working} class:running={t.running} class:done={t.taskDone}>
+<div class="pf-focus" class:idle class:break={!working} class:running={t.running} class:done={t.taskDone} class:compact>
     {#if idle && !task}
-        <span class="hint"><Icon name="target" size={13} />Press <Icon name="play" size={9} filled /> on a card to focus on it</span>
+        <span class="hint"><Icon name="target" size={13} />{compact ? 'Tap' : 'Press'} <Icon name="play" size={9} filled /> on a card to focus{compact ? '' : ' on it'}</span>
         <button class="go" title="Start a focus session without a card" aria-label="Start a focus session" on:click={() => timer.start()}>
             <Icon name="play" size={11} filled />
         </button>
@@ -164,5 +166,30 @@ function showCard() {
 }
 .harvest:hover {
     background: color-mix(in srgb, var(--color-green) 22%, transparent);
+}
+
+.pf-focus.compact {
+    width: 100%;
+    max-width: none;
+    height: 40px;
+}
+.compact .body {
+    flex: 1;
+}
+.compact .hint {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.compact .label {
+    max-width: none;
+    width: 100%;
+}
+:global(body.is-mobile) .go,
+:global(body.is-mobile) .harvest {
+    height: 32px;
+}
+:global(body.is-mobile) .go {
+    width: 32px;
 }
 </style>

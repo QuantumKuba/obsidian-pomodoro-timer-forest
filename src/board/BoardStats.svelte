@@ -8,6 +8,8 @@ export let memory: BoardMemory | undefined
 export let counts: { backlog: number; active: number; done: number }
 /** Lanes over their card limit. */
 export let overLimit: string[] = []
+/** A narrow board: one column. */
+export let narrow = false
 
 $: history = memory?.history ?? []
 $: shipped = memory?.shipped ?? 0
@@ -35,7 +37,7 @@ const weekday = (d: string) => parseDateKey(d).toLocaleDateString(undefined, { w
 const long = (d: string) => parseDateKey(d).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
 </script>
 
-<section class="pf-stats" aria-label="Board statistics">
+<section class="pf-stats" class:narrow aria-label="Board statistics">
     <div class="tiles">
         <div class="tile">
             <span class="k">Finished this week</span>
@@ -207,13 +209,12 @@ const long = (d: string) => parseDateKey(d).toLocaleDateString(undefined, { week
     border-radius: 4px;
     background: var(--color-yellow);
 }
-@media (max-width: 720px) {
-    .pf-stats {
-        grid-template-columns: 1fr;
-    }
-    .chart {
-        grid-row: auto;
-        min-height: 90px;
-    }
+.pf-stats.narrow {
+    grid-template-columns: 1fr;
+    margin: 0 12px;
+}
+.narrow .chart {
+    grid-row: auto;
+    min-height: 90px;
 }
 </style>

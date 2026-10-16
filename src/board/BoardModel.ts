@@ -661,6 +661,21 @@ export function moveCard(doc: BoardDoc, from: { lane: number; index: number }, t
     return insertIntoLane(without, to.lane, to.index, block)
 }
 
+/**
+ * Puts a lane's cards in a new order; `order` lists the current indexes in the order wanted.
+ * Whatever sits between two cards (blank lines, a note) stays where it is.
+ */
+export function sortLane(doc: BoardDoc, lane: BoardLane, order: number[]): string {
+    const cards = lane.cards
+    if (cards.length < 2 || order.length !== cards.length || order.every((o, i) => o === i)) return join(doc, doc.lines)
+    const gaps = cards.slice(1).map((c, i) => doc.lines.slice(cards[i].end, c.start))
+    const blocks = order.map((o) => cardLines(doc, cards[o]))
+    const span = blocks.flatMap((b, i) => (i < gaps.length ? [...b, ...gaps[i]] : b))
+    const lines = [...doc.lines]
+    lines.splice(cards[0].start, cards[cards.length - 1].end - cards[0].start, ...span)
+    return join(doc, lines)
+}
+
 export function updateCardText(doc: BoardDoc, card: BoardCard, text: string, opts: EditOptions = {}): string {
     if (!text.trim()) return deleteCard(doc, card)
     const lines = [...doc.lines]

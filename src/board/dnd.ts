@@ -104,6 +104,11 @@ export class CardDragger {
 
     private onCancel = () => this.cleanup()
 
+    private onContextMenu = (e: Event) => {
+        e.preventDefault()
+        e.stopPropagation()
+    }
+
     private onKey = (e: KeyboardEvent) => {
         if (e.key === 'Escape' && this.state) {
             e.preventDefault()
@@ -138,6 +143,8 @@ export class CardDragger {
         this.target.set(p.from)
         this.doc.body.classList.add('pf-dragging')
         if (p.touch) navigator.vibrate?.(8)
+        // The long press that started a touch drag must not open a context menu as well
+        this.doc.addEventListener('contextmenu', this.onContextMenu, { capture: true })
         this.moveGhost()
         this.frame = window.requestAnimationFrame(this.autoScroll)
     }
@@ -147,9 +154,20 @@ export class CardDragger {
         this.ghost.style.transform = `translate(${this.pointer.x - this.offset.x}px, ${this.pointer.y - this.offset.y}px) rotate(1.5deg)`
     }
 
-    /** Finds the lane under the pointer and where in it the card would go. */
+    /**
+     * Finds the lane under the pointer and where in it the card would go. On a narrow board,
+     * the pointer can also be over a lane's tab: the card then goes to the top of that lane.
+     */
     private locate() {
         const el = this.doc.elementFromPoint(this.pointer.x, this.pointer.y) as HTMLElement | null
+        const tab = el?.closest<HTMLElement>('[data-lane-tab]')
+        if (tab) {
+            const laneIndex = Number(tab.dataset.laneTab)
+            if (Number.isNaN(laneIndex) || (this.current?.lane === laneIndex && this.current.index === 0)) return
+            this.current = { lane: laneIndex, index: 0 }
+            this.target.set(this.current)
+            return
+        }
         const lane = el?.closest<HTMLElement>('[data-lane]')
         if (!lane) return
         const laneIndex = Number(lane.dataset.lane)
@@ -165,24 +183,25 @@ export class CardDragger {
         this.target.set(this.current)
     }
 
+    /** Near the edges of whatever scrolls under the pointer (the lanes, the lane tabs, a lane's cards), it scrolls. */
     private autoScroll = () => {
         this.frame = null
         if (!this.state) return
-        const board = this.board()?.querySelector<HTMLElement>('.pf-lanes')
         const edge = 56
         const speed = (d: number) => Math.ceil(((edge - d) / edge) * 14)
         let moved = false
-        if (board) {
-            const r = board.getBoundingClientRect()
-            if (this.pointer.x < r.left + edge && board.scrollLeft > 0) {
-                board.scrollLeft -= speed(this.pointer.x - r.left)
+        const el = this.doc.elementFromPoint(this.pointer.x, this.pointer.y) as HTMLElement | null
+        const row = el?.closest<HTMLElement>('.pf-lanes, .lane-tabs')
+        if (row) {
+            const r = row.getBoundingClientRect()
+            if (this.pointer.x < r.left + edge && row.scrollLeft > 0) {
+                row.scrollLeft -= speed(this.pointer.x - r.left)
                 moved = true
-            } else if (this.pointer.x > r.right - edge && board.scrollLeft < board.scrollWidth - board.clientWidth) {
-                board.scrollLeft += speed(r.right - this.pointer.x)
+            } else if (this.pointer.x > r.right - edge && row.scrollLeft < row.scrollWidth - row.clientWidth) {
+                row.scrollLeft += speed(r.right - this.pointer.x)
                 moved = true
             }
         }
-        const el = this.doc.elementFromPoint(this.pointer.x, this.pointer.y) as HTMLElement | null
         const body = el?.closest<HTMLElement>('.pf-lane-body')
         if (body) {
             const r = body.getBoundingClientRect()
@@ -206,6 +225,8 @@ export class CardDragger {
         win.removeEventListener('pointercancel', this.onCancel)
         win.removeEventListener('keydown', this.onKey)
         win.removeEventListener('touchmove', this.onTouchMove)
+        // Removed a moment later: Android fires the long press's contextmenu after pointerup
+        window.setTimeout(() => this.doc.removeEventListener('contextmenu', this.onContextMenu, { capture: true }), 120)
         if (this.frame !== null) window.cancelAnimationFrame(this.frame)
         this.frame = null
         this.ghost?.remove()

@@ -140,6 +140,9 @@ const coinSvg = ICONS.coin
                 <Icon name="play" size={11} filled />
             </button>
         {/if}
+        <button class="more" title="Card options" aria-label="Card options" on:click|stopPropagation={(e) => ctx.cardMenu(card, e)}>
+            <Icon name="more" size={13} />
+        </button>
     </div>
 
     {#if hasMeta}
@@ -190,6 +193,8 @@ const coinSvg = ICONS.coin
     touch-action: manipulation;
     user-select: none;
     -webkit-user-select: none;
+    /* A long press starts a drag, not the text or image callout */
+    -webkit-touch-callout: none;
     outline: none;
     transition: box-shadow 0.16s ease, border-color 0.16s ease, transform 0.16s ease, opacity 0.2s ease;
 }
@@ -347,6 +352,7 @@ const coinSvg = ICONS.coin
 }
 
 .play,
+.more,
 .timer {
     flex: none;
     display: inline-flex;
@@ -364,7 +370,9 @@ const coinSvg = ICONS.coin
     font-weight: 650;
     font-variant-numeric: tabular-nums;
 }
-.play {
+/* The card's buttons show when the pointer is over it; on touch screens they are always there */
+.play,
+.more {
     width: 22px;
     padding: 0;
     background: transparent;
@@ -372,19 +380,24 @@ const coinSvg = ICONS.coin
     opacity: 0;
     transition: opacity 0.14s, background-color 0.14s, color 0.14s;
 }
-.pf-card:hover .play,
-.pf-card:focus-within .play,
-.play:focus-visible {
-    opacity: 1;
+.more {
+    margin-left: -4px;
 }
-@media (hover: none) {
-    .play {
-        opacity: 0.6;
-    }
+.pf-card:hover .play,
+.pf-card:hover .more,
+.pf-card:focus-within .play,
+.pf-card:focus-within .more,
+.play:focus-visible,
+.more:focus-visible {
+    opacity: 1;
 }
 .play:hover {
     background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
     color: var(--interactive-accent);
+}
+.more:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
 }
 .timer {
     color: var(--text-on-accent, #fff);
@@ -546,5 +559,42 @@ const coinSvg = ICONS.coin
         animation-duration: 2.4s;
         animation-timing-function: steps(1, end);
     }
+}
+
+/* Touch screens: targets a finger can hit, and the buttons always visible */
+:global(body.is-mobile) .pf-card {
+    gap: 7px;
+    padding: 10px 10px 10px 9px;
+}
+:global(body.is-mobile) .pf-card .text {
+    font-size: calc(var(--pf-card-font) + 0.04rem);
+    padding-top: 2px;
+}
+:global(body.is-mobile) .pf-card .check {
+    width: 26px;
+    height: 26px;
+}
+:global(body.is-mobile) .pf-card .check svg {
+    width: 21px;
+    height: 21px;
+}
+:global(body.is-mobile) .pf-card .play,
+:global(body.is-mobile) .pf-card .more {
+    width: 28px;
+    height: 28px;
+    margin-top: -2px;
+    opacity: 1;
+    color: var(--text-muted);
+}
+:global(body.is-mobile) .pf-card .timer {
+    height: 28px;
+    margin-top: -2px;
+}
+:global(body.is-mobile) .pf-card .meta {
+    padding-left: 33px;
+}
+:global(body.is-mobile) .pf-card .text :global(.task-list-item-checkbox) {
+    width: 16px;
+    height: 16px;
 }
 </style>

@@ -61,6 +61,7 @@ ui('board', 'scene=board&burst=1', 1480, 680, boardPage)
 ui('board-light', 'scene=board&theme=light', 1480, 680, boardPage)
 ui('board-stats', 'scene=board&press=.tool&nth=0', 1480, 860, boardPage)
 ui('board-edit', 'scene=board&focus=0&press=.pf-card&nth=1', 1480, 680, boardPage)
+ui('board-phone', 'scene=board&mobile=1', 390, 760, boardPage)
 
 const only = process.argv[2]
 for (const s of shots) {

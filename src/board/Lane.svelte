@@ -91,6 +91,10 @@ function showMenu(e: MouseEvent) {
             .onClick(() => view.askLaneLimit(lane.index)),
     )
     menu.addItem((i) => i.setTitle('Collapse').setIcon('chevrons-left').setSection('lane').onClick(() => view.toggleCollapsed(lane.index)))
+    if (lane.cards.length > 1) {
+        menu.addItem((i) => i.setTitle('Sort by due date').setIcon('calendar').setSection('sort').onClick(() => view.sortLane(lane.index, 'due')))
+        menu.addItem((i) => i.setTitle('Sort by priority').setIcon('flag').setSection('sort').onClick(() => view.sortLane(lane.index, 'priority')))
+    }
     if (lane.index > 0) menu.addItem((i) => i.setTitle('Move left').setIcon('arrow-left').setSection('move').onClick(() => view.moveLane(lane.index, lane.index - 1)))
     if (lane.index < laneCount - 1)
         menu.addItem((i) => i.setTitle('Move right').setIcon('arrow-right').setSection('move').onClick(() => view.moveLane(lane.index, lane.index + 1)))
@@ -430,5 +434,25 @@ function onTitleKey(e: KeyboardEvent) {
     font-size: 0.7rem;
     font-weight: 700;
     color: var(--text-faint);
+}
+
+/* Touch screens */
+:global(body.is-mobile) .lane-head {
+    padding: 11px 8px 9px 12px;
+}
+:global(body.is-mobile) .lane-btn {
+    width: 32px;
+    height: 32px;
+}
+:global(body.is-mobile) .add,
+:global(body.is-mobile) .archive {
+    height: 36px;
+    font-size: 0.84rem;
+}
+:global(body.is-mobile) .pf-lane-body {
+    gap: 8px;
+}
+:global(body.is-mobile) .slot {
+    gap: 8px;
 }
 </style>

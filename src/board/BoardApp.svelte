@@ -1,6 +1,6 @@
 <script lang="ts">
-import { onDestroy, tick } from 'svelte'
-import { Menu, Notice } from 'obsidian'
+import { onDestroy, onMount, tick } from 'svelte'
+import { Menu, Notice, Platform } from 'obsidian'
 import type { BoardView } from './BoardView'
 import type { BoardCard } from './BoardModel'
 import { cardDone, laneRole, setCardBlockId } from './BoardModel'
@@ -26,6 +26,8 @@ const tracker = view.plugin.tracker!
 const engine = view.plugin.forestEngine
 
 let root: HTMLDivElement
+let lanesEl: HTMLDivElement
+let tabsEl: HTMLElement
 let query = ''
 let searchEl: HTMLInputElement
 let showStats = false
@@ -34,6 +36,14 @@ let addingLane = false
 let laneDraft = ''
 let laneInput: HTMLInputElement
 
+/** A narrow pane (a phone, or a thin split) shows one lane at a time, with tabs to switch. */
+const NARROW = 620
+let narrow = Platform.isPhone
+let activeLane = 0
+let scrollFrame: number | null = null
+
+const ROLE_ICON = { backlog: 'circle-dashed', active: 'circle-half', done: 'check-circle' } as const
+
 const dragger = new CardDragger(
     () => root,
     (from, to) => view.moveCard(from, to),
@@ -41,6 +51,16 @@ const dragger = new CardDragger(
 const drag = dragger.drag
 const target = dragger.target
 onDestroy(() => dragger.destroy())
+
+onMount(() => {
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+        const width = entries[0]?.contentRect.width ?? 0
+        if (width > 0) narrow = width < NARROW
+    })
+    observer.observe(root)
+    return () => observer.disconnect()
+})
 
 $: path = $note.path
 $: memory = $gamificationStore.boards?.[path]
@@ -185,13 +205,23 @@ function boardMenu(e: MouseEvent) {
 async function startLane() {
     addingLane = true
     laneDraft = ''
+    showStats = showStats && !narrow
     await tick()
     laneInput?.focus()
-    laneInput?.scrollIntoView({ inline: 'end', block: 'nearest', behavior: 'smooth' })
+    if (narrow) scrollLanesTo(laneInput?.closest<HTMLElement>('.new-lane') ?? null)
+    else laneInput?.scrollIntoView({ inline: 'end', block: 'nearest', behavior: 'smooth' })
+}
+
+/** Adds the lane and, on a narrow board, shows it. */
+async function addLane(title: string) {
+    view.addLane(title)
+    if (!narrow) return
+    await tick()
+    goToLane(lanes.length - 1)
 }
 
 function saveLane() {
-    if (laneDraft.trim()) view.addLane(laneDraft)
+    if (laneDraft.trim()) void addLane(laneDraft)
     laneDraft = ''
     addingLane = false
 }
@@ -200,7 +230,7 @@ function onLaneKey(e: KeyboardEvent) {
     if (e.key === 'Enter') {
         e.preventDefault()
         if (laneDraft.trim()) {
-            view.addLane(laneDraft)
+            void addLane(laneDraft)
             laneDraft = ''
         } else addingLane = false
     } else if (e.key === 'Escape') {
@@ -211,6 +241,7 @@ function onLaneKey(e: KeyboardEvent) {
 function showCard(blockId: string) {
     const card = lanes.flatMap((l) => l.cards).find((c) => c.blockId === blockId)
     if (!card) return
+    if (narrow) goToLane(card.lane)
     const el = root?.querySelector(`[data-card="${CSS.escape(card.key)}"]`)
     el?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
 }
@@ -229,9 +260,58 @@ function setUpLanes() {
     view.addLane('Done')
     view.setLaneRole(2, 'done')
 }
+
+// ---------------------------------------------------------------------------
+// Narrow boards: one lane in view, tabs to switch
+// ---------------------------------------------------------------------------
+
+/** Scrolls the lanes so this element starts at the left edge. */
+function scrollLanesTo(el: HTMLElement | null) {
+    if (!el || !lanesEl) return
+    const pad = parseFloat(getComputedStyle(lanesEl).paddingLeft) || 0
+    lanesEl.scrollTo({ left: lanesEl.scrollLeft + el.getBoundingClientRect().left - lanesEl.getBoundingClientRect().left - pad, behavior: 'smooth' })
+}
+
+function goToLane(index: number) {
+    scrollLanesTo(lanesEl?.querySelector<HTMLElement>(`[data-lane="${index}"]`) ?? null)
+    activeLane = index
+}
+
+/** The lane whose left edge is closest to the left of the view is the one being looked at. */
+function syncActiveLane() {
+    scrollFrame = null
+    if (!lanesEl) return
+    const left = lanesEl.getBoundingClientRect().left + (parseFloat(getComputedStyle(lanesEl).paddingLeft) || 0)
+    let best = activeLane
+    let distance = Infinity
+    for (const el of Array.from(lanesEl.querySelectorAll<HTMLElement>('[data-lane]'))) {
+        const d = Math.abs(el.getBoundingClientRect().left - left)
+        if (d < distance) {
+            distance = d
+            best = Number(el.dataset.lane)
+        }
+    }
+    activeLane = best
+}
+
+function onLanesScroll() {
+    if (!narrow || scrollFrame !== null) return
+    scrollFrame = window.requestAnimationFrame(syncActiveLane)
+}
+
+// The active tab stays in view as the lanes scroll
+$: if (narrow && tabsEl) {
+    const tab = tabsEl.querySelector<HTMLElement>(`[data-lane-tab="${activeLane}"]`)
+    if (tab) {
+        const strip = tabsEl.getBoundingClientRect()
+        const r = tab.getBoundingClientRect()
+        if (r.left < strip.left + 12) tabsEl.scrollTo({ left: tabsEl.scrollLeft + r.left - strip.left - 12, behavior: 'smooth' })
+        else if (r.right > strip.right - 12) tabsEl.scrollTo({ left: tabsEl.scrollLeft + r.right - strip.right + 12, behavior: 'smooth' })
+    }
+}
 </script>
 
-<div class="pf-board" bind:this={root} style="--pf-lane-w:{laneWidth}px">
+<div class="pf-board" class:narrow bind:this={root} style="--pf-lane-w:{laneWidth}px">
     <RewardToasts hide={ownEvent} />
 
     {#if !$doc.isBoard}
@@ -243,66 +323,89 @@ function setUpLanes() {
         </div>
     {:else}
         <header class="board-head">
-            <div class="head-top">
-                <div class="title-block">
-                    <h1 title={path}>{$note.name}</h1>
-                    <div class="summary">
-                        <span><b>{counts.backlog}</b> to do</span>
-                        <span class="sep">·</span>
-                        <span class:hot={counts.active > 0}><b>{counts.active}</b> in progress</span>
-                        <span class="sep">·</span>
-                        <span><b>{counts.done}</b> finished</span>
-                        {#if total > 0}
-                            <div class="progress" title="{pct}% of the cards on the board are finished" aria-hidden="true">
-                                <span class="seg done" style="flex-grow:{counts.done}"></span>
-                                <span class="seg active" style="flex-grow:{counts.active}"></span>
-                                <span class="seg backlog" style="flex-grow:{counts.backlog}"></span>
-                            </div>
-                            <span class="pct">{pct}%</span>
-                        {/if}
+            <h1 title={path}>{$note.name}</h1>
+            <div class="summary">
+                <span class="counts">
+                    <span><b>{counts.backlog}</b> to do</span>
+                    <span class="sep">·</span>
+                    <span class:hot={counts.active > 0}><b>{counts.active}</b> in progress</span>
+                    <span class="sep">·</span>
+                    <span><b>{counts.done}</b> finished</span>
+                </span>
+                {#if total > 0}
+                    <div class="progress" title="{pct}% of the cards on the board are finished" aria-hidden="true">
+                        <span class="seg done" style="flex-grow:{counts.done}"></span>
+                        <span class="seg active" style="flex-grow:{counts.active}"></span>
+                        <span class="seg backlog" style="flex-grow:{counts.backlog}"></span>
                     </div>
-                </div>
-                <FocusPill {timer} {tracker} {path} onShowCard={showCard} />
+                    <span class="pct">{pct}%</span>
+                {/if}
+            </div>
+            <div class="focus-slot">
+                <FocusPill {timer} {tracker} {path} onShowCard={showCard} compact={narrow} />
             </div>
 
-            <div class="head-bar">
-                <div class="today" title="Today, across all your boards and notes">
-                    <span class="kpi"><Icon name="check-circle" size={13} /><b>{$todayLog.cardsCompleted ?? 0}</b> cards today</span>
-                    <span class="kpi"><Icon name="clock" size={13} /><b>{$todayLog.totalMinutes}</b> min focus</span>
-                    {#if nextMilestone}
-                        <span class="kpi milestone" title="Cards finished on this board, and the next milestone">
-                            <Icon name="trophy" size={13} /><span><b>{shipped}</b>/{nextMilestone}</span>
-                        </span>
-                    {/if}
-                </div>
-                <div class="ledger">
-                    <span class="lvl" title="{$levelInfo.title} · {$levelInfo.into}/{$levelInfo.needed} XP to level {$levelInfo.level + 1}">
-                        <span class="lvl-num">{$levelInfo.level}</span>
-                        <span class="xp"><span class="xp-fill" style="width:{Math.round($levelInfo.ratio * 100)}%"></span></span>
+            <div class="today" title="Today, across all your boards and notes">
+                <span class="kpi"><Icon name="check-circle" size={13} /><b>{$todayLog.cardsCompleted ?? 0}</b> cards today</span>
+                <span class="kpi"><Icon name="clock" size={13} /><b>{$todayLog.totalMinutes}</b> min focus</span>
+                {#if nextMilestone}
+                    <span class="kpi milestone" title="Cards finished on this board, and the next milestone">
+                        <Icon name="trophy" size={13} /><span><b>{shipped}</b>/{nextMilestone}</span>
                     </span>
-                    <span class="res" title="Coins">{@html ICONS.coin}<b>{$coins}</b></span>
-                    <span class="res streak" class:lit={$streak.current > 0} title="Focus streak · longest {$streak.longest} days">{@html ICONS.flame}<b>{$streak.current}</b></span>
-                </div>
-                <div class="tools">
-                    <label class="search" class:on={!!query}>
-                        <Icon name="search" size={13} />
-                        <input bind:this={searchEl} bind:value={query} type="text" placeholder="Filter cards" aria-label="Filter cards" on:keydown={onSearchKey} />
-                        {#if query}
-                            <button class="clear" aria-label="Clear the filter" on:click={() => (query = '')}><Icon name="x" size={12} /></button>
-                        {/if}
-                    </label>
-                    <button class="tool" class:on={showStats} aria-pressed={showStats} title="Board statistics" aria-label="Board statistics" on:click={() => (showStats = !showStats)}>
-                        <Icon name="chart" size={15} />
-                    </button>
-                    <button class="tool" title="Board options" aria-label="Board options" on:click={boardMenu}>
-                        <Icon name="more" size={15} />
-                    </button>
-                </div>
+                {/if}
+            </div>
+            <div class="ledger">
+                <span class="lvl" title="{$levelInfo.title} · {$levelInfo.into}/{$levelInfo.needed} XP to level {$levelInfo.level + 1}">
+                    <span class="lvl-num">{$levelInfo.level}</span>
+                    <span class="xp"><span class="xp-fill" style="width:{Math.round($levelInfo.ratio * 100)}%"></span></span>
+                </span>
+                <span class="res" title="Coins">{@html ICONS.coin}<b>{$coins}</b></span>
+                <span class="res streak" class:lit={$streak.current > 0} title="Focus streak · longest {$streak.longest} days">{@html ICONS.flame}<b>{$streak.current}</b></span>
+            </div>
+            <div class="tools">
+                <label class="search" class:on={!!query}>
+                    <Icon name="search" size={13} />
+                    <input bind:this={searchEl} bind:value={query} type="text" placeholder="Filter cards" aria-label="Filter cards" on:keydown={onSearchKey} />
+                    {#if query}
+                        <button class="clear" aria-label="Clear the filter" on:click={() => (query = '')}><Icon name="x" size={12} /></button>
+                    {/if}
+                </label>
+                <button class="tool" class:on={showStats} aria-pressed={showStats} title="Board statistics" aria-label="Board statistics" on:click={() => (showStats = !showStats)}>
+                    <Icon name="chart" size={15} />
+                </button>
+                <button class="tool" title="Board options" aria-label="Board options" on:click={boardMenu}>
+                    <Icon name="more" size={15} />
+                </button>
             </div>
         </header>
 
+        {#if narrow && lanes.length > 0 && !showStats}
+            <nav class="lane-tabs" class:dragging={!!$drag} bind:this={tabsEl} aria-label="Lanes">
+                {#each lanes as lane, i}
+                    <button
+                        class="tab {roles[i]}"
+                        class:on={i === activeLane}
+                        class:drop={!!$drag && $target?.lane === i}
+                        class:over={lane.maxItems > 0 && lane.cards.length > lane.maxItems}
+                        data-lane-tab={i}
+                        aria-label="{lane.title}, {lane.cards.length} cards"
+                        aria-current={i === activeLane ? 'true' : undefined}
+                        on:click={() => goToLane(i)}
+                    >
+                        <Icon name={ROLE_ICON[roles[i]]} size={12} />
+                        <span class="tab-title">{lane.title}</span>
+                        <span class="n">{lane.cards.length}</span>
+                    </button>
+                {/each}
+                <button class="tab add" aria-label="Add a lane" title="Add a lane" on:click={startLane}><Icon name="plus" size={13} /></button>
+            </nav>
+        {/if}
+
         {#if showStats}
-            <BoardStats {memory} {counts} {overLimit} />
+            <!-- On a narrow board the statistics take the lanes' place until they are closed again -->
+            <div class="stats-slot">
+                <BoardStats {memory} {counts} {overLimit} {narrow} />
+            </div>
         {/if}
 
         {#if lanes.length === 0}
@@ -316,7 +419,7 @@ function setUpLanes() {
             </div>
         {/if}
 
-        <div class="pf-lanes" class:filtering={!!matches} class:empty={lanes.length === 0}>
+        <div class="pf-lanes" class:filtering={!!matches} class:empty={lanes.length === 0} class:hidden={narrow && showStats} bind:this={lanesEl} on:scroll={onLanesScroll}>
             {#each lanes as lane, i}
                 <Lane
                     {lane}
@@ -349,7 +452,7 @@ function setUpLanes() {
                         on:keydown={onLaneKey}
                         on:blur={saveLane}
                     />
-                    <span class="hint">Enter to add · Esc to cancel</span>
+                    <span class="hint">{Platform.isMobile ? 'Enter to add' : 'Enter to add · Esc to cancel'}</span>
                 </div>
             {:else if lanes.length > 0}
                 <button class="add-lane" on:click={startLane}><Icon name="plus" size={14} />Add a lane</button>
@@ -387,26 +490,20 @@ function setUpLanes() {
     --pf-card-shadow-hover: 0 8px 20px -8px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
+/* The header is a grid, so a narrow board can lay the same pieces out differently */
 .board-head {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 16px 16px 12px;
-}
-.head-top {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+        'title   title  focus'
+        'summary summary focus'
+        'today   ledger tools';
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-.title-block {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+    column-gap: 14px;
+    padding: 14px 16px 12px;
 }
 h1 {
+    grid-area: title;
     margin: 0;
     font-size: 1.32rem;
     font-weight: 720;
@@ -417,12 +514,19 @@ h1 {
     text-overflow: ellipsis;
 }
 .summary {
+    grid-area: summary;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 2px 6px;
+    margin-top: 3px;
     font-size: 0.76rem;
     color: var(--text-muted);
+}
+.counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 .summary b {
     font-weight: 700;
@@ -463,18 +567,20 @@ h1 {
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
 }
-
-.head-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px 14px;
-    flex-wrap: wrap;
+.focus-slot {
+    grid-area: focus;
+    justify-self: end;
+    min-width: 0;
+    max-width: 100%;
 }
+
 .today {
+    grid-area: today;
     display: flex;
     align-items: center;
     gap: 14px;
     flex-wrap: wrap;
+    margin-top: 10px;
 }
 .kpi {
     display: inline-flex;
@@ -495,10 +601,12 @@ h1 {
     color: var(--color-yellow);
 }
 .ledger {
+    grid-area: ledger;
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-left: auto;
+    margin-top: 10px;
+    justify-self: end;
 }
 .lvl {
     display: inline-flex;
@@ -551,9 +659,12 @@ h1 {
     opacity: 1;
 }
 .tools {
+    grid-area: tools;
     display: flex;
     align-items: center;
     gap: 4px;
+    margin-top: 10px;
+    justify-self: end;
 }
 .search {
     position: relative;
@@ -711,36 +822,177 @@ h1 {
     cursor: grabbing !important;
 }
 
-@media (max-width: 640px) {
-    .board-head {
-        padding: 12px 12px 10px;
-    }
-    .pf-lanes {
-        padding: 6px 12px 14px;
-        scroll-snap-type: x mandatory;
-    }
-    .pf-lanes > :global(.pf-lane) {
-        scroll-snap-align: start;
-        width: min(var(--pf-lane-w), calc(100vw - 48px));
-    }
-    /* One row under the title: the ledger, then the tools */
-    .today {
-        display: none;
-    }
-    .head-bar {
-        flex-wrap: nowrap;
-    }
-    .ledger {
-        margin-left: 0;
-        gap: 10px;
-    }
-    .tools {
-        margin-left: auto;
-    }
-    .search input,
-    .search input:focus,
-    .search.on input {
-        width: 112px;
-    }
+/* ---- Narrow: one lane fills the view, tabs switch between them ---- */
+.narrow .board-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        'title  tools'
+        'ledger summary'
+        'focus  focus';
+    column-gap: 10px;
+    padding: 10px 12px 8px;
+}
+.narrow h1 {
+    font-size: 1.12rem;
+}
+.narrow .today,
+.narrow .counts {
+    display: none;
+}
+.narrow .summary {
+    justify-self: end;
+    margin-top: 6px;
+    flex-wrap: nowrap;
+}
+.narrow .progress {
+    width: 72px;
+    margin-left: 0;
+}
+.narrow .ledger {
+    justify-self: start;
+    margin-top: 6px;
+    gap: 10px;
+}
+.narrow .tools {
+    margin-top: 0;
+}
+.narrow .focus-slot {
+    justify-self: stretch;
+    margin-top: 8px;
+}
+/* The filter is a button until it is tapped or has something in it */
+.narrow .search input {
+    width: 30px;
+    padding: 0;
+    opacity: 0;
+    background: transparent;
+    border-color: transparent;
+}
+.narrow .search:focus-within input,
+.narrow .search.on input {
+    width: 140px;
+    padding: 0 24px 0 28px;
+    opacity: 1;
+    background: var(--background-modifier-form-field);
+    border-color: var(--background-modifier-border);
+}
+.narrow .search > :global(.pf-icon) {
+    color: var(--text-muted);
+}
+
+.lane-tabs {
+    flex: none;
+    display: flex;
+    gap: 6px;
+    padding: 2px 12px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.lane-tabs::-webkit-scrollbar {
+    display: none;
+}
+.tab {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 11px;
+    border: 1px solid transparent;
+    border-radius: 99px;
+    box-shadow: none;
+    background: var(--background-modifier-hover);
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s, height 0.15s;
+}
+.tab :global(.pf-icon) {
+    color: var(--text-faint);
+}
+.tab.active :global(.pf-icon) {
+    color: var(--interactive-accent);
+}
+.tab.done :global(.pf-icon) {
+    color: var(--color-green);
+}
+.tab.on {
+    color: var(--text-normal);
+    background: var(--pf-card-bg);
+    border-color: var(--pf-lane-border);
+    box-shadow: var(--pf-card-shadow);
+}
+.tab-title {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tab .n {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-faint);
+}
+.tab.over .n {
+    color: var(--color-orange);
+}
+.tab.add {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+}
+/* While a card is being dragged, the tabs are places to drop it */
+.lane-tabs.dragging .tab:not(.add) {
+    height: 38px;
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--interactive-accent) 40%, transparent);
+}
+.lane-tabs.dragging .tab.add {
+    visibility: hidden;
+}
+.tab.drop {
+    color: var(--interactive-accent);
+    border-style: solid;
+    border-color: var(--interactive-accent);
+    background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+.tab.drop :global(.pf-icon),
+.tab.drop .n {
+    color: inherit;
+}
+
+.narrow .pf-lanes {
+    gap: 10px;
+    padding: 2px 12px 12px;
+    scroll-padding: 0 12px;
+    scroll-snap-type: x mandatory;
+}
+.narrow .pf-lanes.hidden {
+    display: none;
+}
+.narrow .stats-slot {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 12px;
+}
+:global(body.pf-dragging) .narrow .pf-lanes {
+    scroll-snap-type: none;
+}
+.narrow .pf-lanes > :global(.pf-lane) {
+    width: calc(100% - 22px);
+    scroll-snap-align: start;
+}
+.narrow .pf-lanes > :global(.pf-lane.collapsed) {
+    width: 42px;
+}
+.narrow .new-lane,
+.narrow .add-lane {
+    width: calc(100% - 22px);
+    scroll-snap-align: start;
+}
+.narrow .filter-note {
+    margin: -6px 12px 8px;
 }
 </style>

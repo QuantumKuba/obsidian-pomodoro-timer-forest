@@ -20,6 +20,7 @@ import {
     setCardBlockId,
     setCardChecked,
     setLaneComplete,
+    sortLane,
     toggleSubtask,
     updateCardText,
 } from '../src/board/BoardModel'
@@ -134,6 +135,18 @@ test('reordering inside a lane counts positions without the moved card', () => {
     assert.deepEqual(down.lanes[0].cards.map((c) => c.text.split('\n')[0]), ['Collect references', 'Write the intro #write @{2025-10-03}'])
     const same = moveCard(doc, { lane: 0, index: 0 }, { lane: 0, index: 0 })
     assert.equal(same, KANBAN)
+})
+
+test('a lane can be put in a new order, keeping what sits between its cards', () => {
+    const text = ['---', 'kanban-plugin: board', '---', '', '## Lane', '', '- [ ] A ⏬', '\tmore of A', '', '- [ ] B ⏫ @{2025-01-02}', '- [ ] C', '', '', '## Other', '', '- [ ] D'].join('\n')
+    const doc = parseBoard(text)
+    const sorted = parseBoard(sortLane(doc, doc.lanes[0], [1, 2, 0]))
+    assert.deepEqual(sorted.lanes[0].cards.map((c) => c.meta.label), ['B', 'C', 'A'])
+    assert.equal(sorted.lanes[0].cards[2].text, 'A ⏬\nmore of A')
+    // The blank line that separated the first two cards is still after the first card
+    assert.deepEqual(sorted.lines.slice(6, 11), ['- [ ] B ⏫ @{2025-01-02}', '', '- [ ] C', '- [ ] A ⏬', '\tmore of A'])
+    assert.deepEqual(sorted.lanes[1].cards.map((c) => c.meta.label), ['D'])
+    assert.equal(sortLane(doc, doc.lanes[0], [0, 1, 2]), text)
 })
 
 test('cards can be dropped into an empty lane', () => {

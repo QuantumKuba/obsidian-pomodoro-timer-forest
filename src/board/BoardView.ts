@@ -6,7 +6,9 @@ import BoardApp from './BoardApp.svelte'
 import * as Board from './BoardModel'
 import type { BoardCard, BoardDoc, BoardLane } from './BoardModel'
 import { VIEW_TYPE_BOARD } from './BoardOpening'
-import { boardUsesKanbanDates, cardIndent, cardToTask, kanbanPluginEnabled, newBlockId, obsidianLanguage, withDue, withEstimate } from './cards'
+import { boardUsesKanbanDates, cardDueDate, cardIndent, cardToTask, kanbanPluginEnabled, newBlockId, obsidianLanguage, withDue, withEstimate } from './cards'
+
+const PRIORITY_RANK: Record<Board.Priority, number> = { highest: 0, high: 1, medium: 2, low: 3, lowest: 4, '': 5 }
 
 /**
  * A Kanban board note, shown as lanes of cards. The note's text is the only state: every
@@ -392,6 +394,21 @@ export class BoardView extends TextFileView {
 
     public moveLane(from: number, to: number): void {
         this.edit((doc) => Board.moveLane(doc, from, to))
+    }
+
+    /** Orders a lane's cards by due date or priority; cards without one keep their order at the end. */
+    public sortLane(index: number, by: 'due' | 'priority'): void {
+        this.edit((doc) => {
+            const lane = doc.lanes[index]
+            if (!lane) return doc.lines.join(doc.eol)
+            const rank = (card: BoardCard) => (by === 'due' ? cardDueDate(card.meta, doc.settings?.data) || '9999-99-99' : PRIORITY_RANK[card.meta.priority])
+            const order = lane.cards.map((_, i) => i).sort((a, b) => {
+                const ra = rank(lane.cards[a])
+                const rb = rank(lane.cards[b])
+                return ra < rb ? -1 : ra > rb ? 1 : a - b
+            })
+            return Board.sortLane(doc, lane, order)
+        })
     }
 
     public askLaneLimit(index: number): void {
