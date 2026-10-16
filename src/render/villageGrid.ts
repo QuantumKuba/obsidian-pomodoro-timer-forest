@@ -30,7 +30,7 @@ function kindOf(item: PlacedHomesteadItem): TileKind {
 }
 
 export function buildGrid(homestead: PlacedHomesteadItem[], size: number): VillageGrid {
-    const kinds: TileKind[] = new Array(size * size).fill('grass')
+    const kinds: TileKind[] = new Array<TileKind>(size * size).fill('grass')
     for (const item of homestead) {
         if (item.gridX < 0 || item.gridY < 0 || item.gridX >= size || item.gridY >= size) continue
         kinds[item.gridY * size + item.gridX] = kindOf(item)
@@ -90,9 +90,9 @@ export function findPath(grid: VillageGrid, from: Tile, to: Tile): Tile[] | null
     if (!isWalkable(grid, from.x, from.y) || !isWalkable(grid, to.x, to.y)) return null
     const n = grid.size * grid.size
     const index = (t: Tile) => t.y * grid.size + t.x
-    const cost: number[] = new Array(n).fill(Infinity)
-    const prev: number[] = new Array(n).fill(-1)
-    const done: boolean[] = new Array(n).fill(false)
+    const cost: number[] = new Array<number>(n).fill(Infinity)
+    const prev: number[] = new Array<number>(n).fill(-1)
+    const done: boolean[] = new Array<boolean>(n).fill(false)
     cost[index(from)] = 0
 
     // The plot has at most 64 tiles, so a plain scan for the cheapest open tile is plenty

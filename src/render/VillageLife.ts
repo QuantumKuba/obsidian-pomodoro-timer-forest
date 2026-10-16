@@ -149,15 +149,10 @@ export default class VillageLife {
         if (!this.layer || !this.frame) return
         const { cx, cy } = this.L.tile(tile.x, tile.y)
         const scale = this.frame.clientWidth / this.L.width
-        // The view may live in a popout window, so elements come from its own document
-        const doc = this.layer.ownerDocument
-        const el = doc.createElement('div')
-        el.className = 'pf-pop'
-        el.textContent = text
-        el.appendChild(Object.assign(doc.createElement('span'), { className: 'pf-pop-coin' }))
+        const el = this.layer.createDiv({ cls: 'pf-pop', text })
+        el.createSpan({ cls: 'pf-pop-coin' })
         el.style.left = `${cx * scale}px`
         el.style.top = `${(cy - 12) * scale}px`
-        this.layer.appendChild(el)
         this.win.setTimeout(() => el.remove(), 1500)
     }
 
@@ -450,10 +445,7 @@ export default class VillageLife {
         if (!this.layer) return
         // One voice at a time keeps the scene calm
         for (const other of this.actors) this.hush(other)
-        const el = this.layer.ownerDocument.createElement('div')
-        el.className = 'pf-bubble'
-        el.textContent = text
-        this.layer.appendChild(el)
+        const el = this.layer.createDiv({ cls: 'pf-bubble', text })
         actor.speech = { el, left: seconds }
         this.placeSpeech()
     }
