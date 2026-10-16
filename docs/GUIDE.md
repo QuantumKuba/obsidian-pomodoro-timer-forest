@@ -6,6 +6,7 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 - [Opening things](#opening-things)
 - [Growing trees](#growing-trees)
   - [Done early? Harvest early](#done-early-harvest-early)
+  - [Hyperfocus mode ("Ride the wave")](#hyperfocus-mode-ride-the-wave)
 - [Kanban boards](#kanban-boards)
   - [Boards and the Kanban plugin](#boards-and-the-kanban-plugin)
   - [Lanes](#lanes)
@@ -44,7 +45,9 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 |---|---|
 | Timer + village panel (right sidebar) | Ribbon icon **Toggle timer panel** (timer), or the command *Open timer panel in the right sidebar* |
 | Full-page village | Ribbon icon **Open homestead village** (trees), or the command *Open homestead village (full view)* |
+| A Kanban board | Ribbon icon **Open a board** (kanban), or the command *Open a board…*: pick one of your boards, or create a new one |
 | Start / pause, reset, switch work/break | Commands *Start / pause timer*, *Reset timer*, *Switch timer mode (work / break)*, or click the timer |
+| Hyperfocus | Commands *Start hyperfocus session*, *Land hyperfocus session*, or click the status bar icon |
 
 Both the sidebar panel and the full page have four tabs: **Village**, **Grove**, **Market** and **Journey**.
 
@@ -71,6 +74,19 @@ Finishing a session is always worth more than harvesting early. An early harvest
 
 Unchecking the task takes the offer back. Switching to another task does the same, and the timer carries on with that task. Turn the feature off with *Early harvest when the task is done* in settings. The command *Harvest focus session early (focused task is done)* does the same as the button.
 
+### Hyperfocus mode ("Ride the wave")
+
+For ADHD brains and deep technical tasks, fixed 25-minute Pomodoro intervals can sometimes be counter-productive—interrupting intense flow states with jarring alarms just when momentum is peaking.
+
+**Hyperfocus mode** turns the timer into an open-ended count-up focus journey with thoughtful scaffolding:
+
+- 🌊 **Ride the wave:** When a regular Pomodoro session finishes, the timer offers to transition smoothly into Hyperfocus without interruption or tree resets. Or, start Hyperfocus directly via the command *Start hyperfocus session* or by cycling the mode chip (`Focus` → `🌊 Hyperfocus` → `Break`).
+- 🛡️ **Zero wither guarantee:** Stopping or resetting a Hyperfocus session is always treated as a successful landing, never a failure. If you focused for at least 10 minutes, you harvest your tree, earn full rewards, and collect your sapling. If you stop before 10 minutes, the session cancels cleanly without withering.
+- 🌱 **Gentle body check-ins:** Every 30 minutes (configurable), a soft chime or gentle banner prompts you to take a sip of water, relax your shoulders, and check the wall clock. Acknowledging check-ins earns bonus coins (up to +6🪙 per session).
+- 🌾 **Landing & breadcrumb note:** When you decide to land, the timer prompts for a quick "Where was I?" note (e.g., `Next: write integration test for auth`). This breadcrumb is saved to your session log and appended right below your active task, eliminating post-hyperfocus re-entry paralysis.
+- ⚖️ **Fair rewards & pacing:** Focus time earns 1.2 Sunlight/min and 1 Coin/10m for the first 90 minutes. Beyond 90 minutes, rewards continue at half-rate (0.6 Sunlight/min) to gently disincentivize marathon sessions. Finished time counts fairly toward your daily goal and task pomodoro totals (`minutes / 25`).
+- ☕ **Recovery breaks:** After landing, the timer recommends a proportional recovery break (up to 30 minutes) to help restore cognitive energy.
+
 ## Kanban boards
 
 A board is a note with lanes of cards: waiting, in progress, finished. Boards are where planning, focus and rewards meet: you pick a card, focus on it, and finishing it pays.
@@ -81,8 +97,8 @@ A board is a note with lanes of cards: waiting, in progress, finished. Boards ar
 
 | What | How |
 |---|---|
-| A new board | The command *Create a new board*, or right-click a folder → *New board* |
-| Open an existing board here | Click it (see the setting below), right-click it → *Open as Forest board*, or the command *Open this note as a Forest board* |
+| A new board | The ribbon icon **Open a board** → *Create a new board*, the command *Create a new board*, or right-click a folder → *New board* |
+| Open an existing board here | The ribbon icon **Open a board** (your boards, the most recently changed first), or click the note (see the setting below), right-click it → *Open as Forest board*, or the command *Open this note as a Forest board* |
 | See or edit the markdown | The page icon in the board's header, the board's ⋯ menu, or the command *Open this board as markdown* |
 | Undo / redo | ⌘/Ctrl + Z, ⌘/Ctrl + Shift + Z while the board has focus |
 
@@ -104,7 +120,7 @@ Switching an open board to another view is always respected. With both plugins i
 
 - **What a lane is for** is read from its title (*To do*, *In progress*, *Review*, *Done*, *Shipped*…, in several languages), shown by the icon next to it. Change it in the lane's ⋯ menu. Making a lane a done lane adds the Kanban plugin's **Complete** marker, so cards moved there are ticked off in both plugins.
 - **Card limits.** *Set a card limit…* writes it the Kanban way, `## Doing (3)`. The count turns orange when a lane holds more, and the thin bar under its title fills up as it gets full. Small limits are how work gets finished instead of just started.
-- Rename a lane by double-clicking its title. Move lanes left and right, collapse them, or delete them from the ⋯ menu. *Archive* in a done lane moves its cards to the board's archive.
+- Rename a lane by double-clicking its title. Move lanes left and right, collapse them, sort their cards by due date or priority, or delete them from the ⋯ menu. *Archive* in a done lane moves its cards to the board's archive.
 
 ### Cards
 
@@ -115,11 +131,24 @@ Switching an open board to another view is always respected. With both plugins i
   <img src="images/board-edit.png" alt="A card open in its editor, with the pomodoro stepper and the due date" width="100%">
 
 - **Finish** a card with the circle on its left. With *Move ticked-off cards to the done lane* on, it also moves to the top of the done lane. The same circle opens a finished card again.
-- **Right-click** a card for everything else: focus, move to another lane, open it in the note, copy a link to it (`[[Board#^id]]`), archive, delete.
+- **Right-click** a card, or press the ⋯ that appears on it, for everything else: focus, move to another lane, open it in the note, copy a link to it (`[[Board#^id]]`), archive, delete.
 - Cards show what is on them: planned and done pomodoros as dots, the due date (red when overdue), a future start date, checklist progress, and a priority edge from the Tasks plugin's priority emoji. Checklist items inside a card can be ticked right on the board, and clicking a tag filters the board by it.
 - **Ageing.** A card in an in-progress lane shows how many days it has been there. After *Mark cards as stale after* days (5 by default) it turns orange: finish it, split it, or move it back.
 
 Dates are read and written the way your board writes them: Kanban dates `@{2025-10-03}`, the Tasks plugin's `📅 2025-10-03`, or Dataview's `[due:: 2025-10-03]`. A new date is written as a Kanban date when the board already uses them or the Kanban plugin is installed, otherwise in your *Task format*.
+
+### On a phone
+
+In a narrow pane (a phone, or a thin split on the desktop) the board shows **one lane at a time**. Swipe sideways to move between lanes, or tap a lane's name in the row of tabs above them; each tab shows how many cards the lane holds.
+
+<p align="center">
+  <img src="images/board-phone.png" alt="A board on a phone: one lane in view, with tabs for the other lanes above it" width="300">
+</p>
+
+- **Press and hold** a card to pick it up, then drag. Drop it on another **lane's tab** to move it to the top of that lane, or drag to the edge to scroll to the next lane.
+- Every card shows ▶ and ⋯; the ⋯ menu has *Move to…* for each lane, so nothing needs a drag.
+- In the editor, Enter starts a new line and the **Save** button saves (there is no Shift+Enter on a phone keyboard).
+- The statistics open in place of the lanes; tap the chart button again to come back.
 
 ### Focusing on a card
 

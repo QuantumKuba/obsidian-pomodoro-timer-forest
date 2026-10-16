@@ -36,9 +36,21 @@ Start a session and a seed is planted inside the timer. As the minutes pass it s
   <img src="docs/images/growth.png" alt="Five species growing through four stages" width="80%">
 </p>
 
+## 🌊 ADHD-friendly Hyperfocus: Ride the wave
+
+Standard 25-minute Pomodoro intervals can be counter-productive when ADHD hyperfocus or deep programming flow hits—jarring countdown alarms break your concentration right when your momentum is peaking.
+
+**Hyperfocus Mode** ("Deep Grove") gives your deep work sessions room to breathe:
+
+- **Ride the wave:** When your standard Pomodoro timer ends, the timer offers to roll directly into open-ended hyperfocus without losing your progress. Or start anytime with the command *Start hyperfocus session* or by clicking the mode chip (`Focus` → `🌊 Hyperfocus`).
+- **Never-wither guarantee:** Stopping or resetting a hyperfocus session is always treated as a landing, never a failure. If you focused for at least 10 minutes, you harvest your tree and sapling with full rewards.
+- **Gentle body check-ins:** Soft audio chimes and notifications prompt you every 30 minutes to drink water, relax your shoulders, and check the real-world time. Acknowledging check-ins earns bonus coins!
+- **Breadcrumb logging:** When landing, jot down a quick "Where was I?" note. It saves to your log and appends beneath your active task to eliminate post-flow re-entry paralysis.
+- **Fair rewards & recovery:** Earns fair Pomodoro equivalents towards your daily goal and task counts, with decreasing marginal rewards after 90 minutes to encourage healthy pacing, followed by recommended recovery breaks.
+
 ## Build a village you're proud of
 
-Every finished tree becomes a sapling you can plant. Spend what you earn on buildings that give **real perks**: a Cozy Cabin for more Sunlight, a Village Well for more Coins, a Watermill that protects your streak while you rest. Lay paths, dig a brook, put a bridge over it, and expand your island from 5×5 up to 8×8.
+Every finished tree becomes a sapling you can plant, or sell for a few coins if you have more than you need (open the inventory and press **Sell**; Shift-click sells the whole stack). Spend what you earn on buildings that give **real perks**: a Cozy Cabin for more Sunlight, a Village Well for more Coins, a Watermill that protects your streak while you rest. Lay paths, dig a brook, put a bridge over it, and expand your island from 5×5 up to 8×8.
 
 Add **garden plots** and your focus grows carrots, tomatoes, wheat and pumpkins too: every focused minute grows them, every ticked task waters them, and a crop never wilts while you're away. A scarecrow speeds them up, and a chicken coop brings hens and fresh eggs for your first tree of the day.
 
@@ -91,19 +103,22 @@ Plan in lanes, focus on one card at a time, and watch the work actually get fini
 - ✅ **Finishing pays, and planning well pays more.** Moving a card into a done lane (or ticking it off) earns Coins and XP, with extra for the pomodoros behind it, for an estimate that was on target, for meeting its due date and for keeping your lanes within their limits.
 - 🌊 **Limits, ageing and momentum.** Card limits on lanes (`## Doing (3)`), a gentle marker on cards that have waited too long in progress, and statistics for each board: cards finished per day, cycle time, estimate accuracy and milestones at 10, 25, 50… cards.
 - 🧩 **Works with what you have.** Kanban dates (`@{2025-10-03}`), Tasks emoji fields, checklists inside cards, links, tags, block IDs, the Complete lane and the archive all carry over. If you keep using the Kanban plugin, cards finished there are rewarded too.
+- 📱 **On your phone too.** A narrow screen shows one lane at a time with tabs to switch between them; press and hold to pick a card up, and drop it on a lane's tab to move it there.
 
 <table>
   <tr>
-    <td align="center" valign="top" width="50%"><img src="docs/images/board-stats.png" alt="Board statistics: cards finished this week, cycle time, estimates on target, on time, focus behind them, and a two-week chart"><br><sub><b>Board statistics</b>: throughput, cycle time and how good your estimates are.</sub></td>
-    <td align="center" valign="top" width="50%"><img src="docs/images/board-light.png" alt="The same board in the light theme"><br><sub><b>Light or dark</b>: boards follow your Obsidian theme.</sub></td>
+    <td align="center" valign="top" width="38%"><img src="docs/images/board-stats.png" alt="Board statistics: cards finished this week, cycle time, estimates on target, on time, focus behind them, and a two-week chart"><br><sub><b>Board statistics</b>: throughput, cycle time and how good your estimates are.</sub></td>
+    <td align="center" valign="top" width="38%"><img src="docs/images/board-light.png" alt="The same board in the light theme"><br><sub><b>Light or dark</b>: boards follow your Obsidian theme.</sub></td>
+    <td align="center" valign="top" width="24%"><img src="docs/images/board-phone.png" alt="The board on a phone: one lane in view, tabs for the others above it"><br><sub><b>On a phone</b>: one lane at a time, tabs to switch.</sub></td>
   </tr>
 </table>
 
 ## Made for how you actually work in Obsidian
 
-- 🗂️ **Kanban boards built in.** Open your existing Kanban boards, or create one with *Create a new board*. See [above](#kanban-boards-that-keep-work-moving).
+- 🗂️ **Kanban boards built in.** Open your existing Kanban boards or create one from the ribbon's **Open a board**. See [above](#kanban-boards-that-keep-work-moving).
 - ✅ **Tick a task, earn a reward.** Check off a `- [ ]` task anywhere in your vault and it earns Coins and XP. Only real ticks count: pasting in already-checked tasks or toggling one back and forth earns nothing, and there's a daily cap.
 - 🌿 **Done early? Harvest early.** Tick off the task you're focusing on and the timer offers to end the session: a young tree and most of the rewards for the minutes you focused, and nothing withers. Finishing the full session still pays the most, so ticking off tiny tasks can't be farmed.
+- 🌊 **ADHD-friendly Hyperfocus ("Deep Grove").** Ride the wave when flow strikes. An open-ended count-up timer with no jarring end-alarms, gentle periodic body check-ins (water, stretch, real time), immunity from withering when stopping, breadcrumb note logging to defeat re-entry paralysis, and proportional recovery break recommendations.
 - 🏷️ **Smart seeds.** `#write` plants a Cherry Blossom, `#code` a Pine, `#study` an Oak. Your notes and tasks choose the tree.
 - 🍅 **Task tracking, built in.** Focus on a task and its pomodoro count updates automatically (enable it in settings). Plan pomodoros and set start and due dates from the panel, and pin several notes to keep their tasks in one list.
 - 📓 **Daily-note logging.** Every tree can add a Dataview-friendly line to your daily note.
