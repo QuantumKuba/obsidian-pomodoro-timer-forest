@@ -40,13 +40,14 @@ onDestroy(() => {
 // Dial geometry
 const R = 88
 const C = 2 * Math.PI * R
-$: progress = $timer.count > 0 ? $timer.elapsed / $timer.count : 0
-$: dashOffset = C * (1 - progress)
 $: isBreak = $timer.mode === 'BREAK'
+$: isHyperfocus = $timer.hyperfocus
+$: progress = isHyperfocus ? (plant?.progressRatio ?? 0) : ($timer.count > 0 ? $timer.elapsed / $timer.count : 0)
+$: dashOffset = C * (1 - progress)
 
 $: plant = $activePlantStore
 $: species = getSpecies(plant?.speciesId || $gamificationStore.selectedSpeciesId) || FLORA_SPECIES[0]
-$: ringColor = isBreak ? '#4fc3f7' : species.color
+$: ringColor = isBreak ? '#4fc3f7' : isHyperfocus ? '#00b4d8' : species.color
 $: stage = isBreak ? 'break' : plant ? plant.currentStage : 'idle'
 
 // Grow smoothly within each of the four stages, then pop into the next
@@ -60,12 +61,22 @@ $: plantSvg =
           ? SPECIES_SVGS[species.id] || SPECIES_SVGS.classic_pine
           : growthSvg(stage as 'seed' | 'sprout' | 'sapling', species.id)
 
+let wallClock = ''
+$: if ($timer) {
+    const now = new Date()
+    wallClock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+
+$: timeDisplay = isHyperfocus ? $timer.elapsedHuman : $timer.remained.human
+
 $: stageLabel =
     stage === 'break'
         ? 'Rest · stretch, sip, breathe'
-        : stage === 'idle'
-          ? `${species.name} · tap to change`
-          : { seed: 'Seed planted', sprout: 'Sprouting', sapling: 'Sapling', mature: 'Almost grown', withered: '' }[stage]
+        : isHyperfocus
+          ? `${species.name} · ${stage} (${wallClock})`
+          : stage === 'idle'
+            ? `${species.name} · tap to change`
+            : { seed: 'Seed planted', sprout: 'Sprouting', sapling: 'Sapling', mature: 'Almost grown', withered: '' }[stage]
 
 // The focused task was checked off mid-session: offer to end it early
 let dismissedAt: number | null = null
@@ -75,6 +86,28 @@ $: focusedMin = Math.floor($timer.elapsed / 60000)
 $: readyIn = clock($timer.earlyHarvestAt - $timer.elapsed)
 $: spare = clock($timer.remained.millis)
 const earlyPct = `${Math.round(EARLY_HARVEST_RATE * 100)}%`
+
+let showLandingPrompt = false
+let breadcrumbInput = ''
+
+function onLanding() {
+    if ($settings.hyperfocusBreadcrumb) {
+        showLandingPrompt = true
+        breadcrumbInput = ''
+    } else {
+        void timer.land()
+    }
+}
+
+function confirmLand() {
+    showLandingPrompt = false
+    void timer.land(breadcrumbInput.trim() || undefined)
+}
+
+function skipLand() {
+    showLandingPrompt = false
+    void timer.land()
+}
 
 function clock(ms: number): string {
     const total = Math.max(0, Math.ceil(ms / 1000))
@@ -119,6 +152,10 @@ function onMainButton() {
 
 function onReset() {
     const s = $timer
+    if (s.hyperfocus && s.inSession) {
+        onLanding()
+        return
+    }
     const wouldWither = s.inSession && s.mode === 'WORK' && s.elapsed >= 60000 && $settings.hardcoreMode && !s.taskDone
     if (wouldWither && !confirmAbandon) {
         confirmAbandon = true
@@ -175,9 +212,9 @@ function onAmbient(e: Event) {
             </svg>
 
             <div class="face">
-                <button class="mode-chip" on:click={() => timer.toggleMode()} title="Switch between focus and break">
+                <button class="mode-chip" on:click={() => timer.toggleMode()} title={isHyperfocus ? 'Hyperfocus active · tap to land' : 'Switch between focus and break'}>
                     {#if $timer.running}<span class="breath"></span>{/if}
-                    {isBreak ? 'Break' : 'Focus'}
+                    {isBreak ? 'Break' : isHyperfocus ? '🌊 Hyperfocus' : 'Focus'}
                 </button>
 
                 <div
@@ -193,7 +230,7 @@ function onAmbient(e: Event) {
                     {/key}
                 </div>
 
-                <button class="time" on:click={onMainButton} title={$timer.running ? 'Pause' : 'Start'}>{$timer.remained.human}</button>
+                <button class="time" on:click={onMainButton} title={$timer.running ? 'Pause' : 'Start'}>{timeDisplay}</button>
                 <span class="stage-label">{stageLabel}</span>
             </div>
 
@@ -226,6 +263,53 @@ function onAmbient(e: Event) {
             </div>
         {/if}
 
+        {#if $timer.extendOffered}
+            <div class="extend-banner" transition:slide={{ duration: 200 }} role="status">
+                <div class="ci-head">
+                    <span class="ci-title">🌊 In the flow?</span>
+                </div>
+                <p>Ride the wave into open-ended hyperfocus, or rest and take your break.</p>
+                <div class="ci-actions">
+                    <button class="ci-main" on:click={() => timer.extendIntoHyperfocus()}>🌊 Keep going</button>
+                    <button on:click={() => timer.finishHeldSession()}>Take break 🥤</button>
+                </div>
+            </div>
+        {/if}
+
+        {#if $timer.checkInPending}
+            <div class="check-in-banner" transition:slide={{ duration: 200 }} role="alert">
+                <div class="ci-head">
+                    <span class="ci-title">🌱 Body check-in ({wallClock})</span>
+                    <button class="x" on:click={() => timer.dismissCheckIn()} aria-label="Dismiss">✕</button>
+                </div>
+                <p>Sip some water, unclench your shoulders, take a deep breath.</p>
+                <div class="ci-actions">
+                    <button class="ci-main" on:click={() => timer.ackCheckIn()}>👍 Took a sip / stretched</button>
+                    <button on:click={() => timer.snoozeCheckIn(10)}>Snooze 10m</button>
+                </div>
+            </div>
+        {/if}
+
+        {#if showLandingPrompt}
+            <div class="landing-banner" transition:slide={{ duration: 200 }} role="dialog">
+                <div class="ci-head">
+                    <span class="ci-title">🌾 Land Hyperfocus</span>
+                    <button class="x" on:click={skipLand} aria-label="Skip">✕</button>
+                </div>
+                <p>Where are you leaving off? Leave a breadcrumb note for your future self.</p>
+                <input
+                    type="text"
+                    class="breadcrumb-input"
+                    bind:value={breadcrumbInput}
+                    placeholder="e.g. Next step: write test for foo..."
+                    on:keydown={(e) => { if (e.key === 'Enter') confirmLand() }} />
+                <div class="ci-actions">
+                    <button class="ci-main" on:click={confirmLand}>Land & harvest</button>
+                    <button on:click={skipLand}>Skip note</button>
+                </div>
+            </div>
+        {/if}
+
         {#if showTaskDone}
             <div class="task-done" transition:slide={{ duration: 200 }} role="status">
                 <div class="td-head">
@@ -252,7 +336,7 @@ function onAmbient(e: Event) {
             <span on:click={() => toggleExtra('tasks')} class="control {extra === 'tasks' ? 'active-icon' : ''}" title="Tasks">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1" /><path d="m3 17 2 2 4-4" /><path d="M13 6h8" /><path d="M13 12h8" /><path d="M13 18h8" /></svg>
             </span>
-            <span on:click={onReset} class="control" title={$timer.inSession && !isBreak ? 'Give up (reset)' : 'Reset'}>
+            <span on:click={onReset} class="control" title={$timer.inSession && isHyperfocus ? 'Land hyperfocus (harvest tree)' : $timer.inSession && !isBreak ? 'Give up (reset)' : 'Reset'}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
             </span>
             <span on:click={onMainButton} class="control main-action-btn" title={$timer.running ? 'Pause' : 'Start'}>
@@ -510,6 +594,89 @@ function onAmbient(e: Event) {
     border: 1px solid rgba(161, 136, 127, 0.5);
 }
 .abandon div { display: flex; gap: 6px; }
+
+.extend-banner,
+.check-in-banner,
+.landing-banner {
+    width: 100%;
+    max-width: 280px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    font-size: 0.74rem;
+}
+.extend-banner {
+    background: color-mix(in srgb, #00b4d8 14%, transparent);
+    border: 1px solid color-mix(in srgb, #00b4d8 50%, transparent);
+}
+.check-in-banner {
+    background: color-mix(in srgb, #26a69a 14%, transparent);
+    border: 1px solid color-mix(in srgb, #26a69a 50%, transparent);
+}
+.landing-banner {
+    background: color-mix(in srgb, #81c784 14%, transparent);
+    border: 1px solid color-mix(in srgb, #81c784 50%, transparent);
+}
+.ci-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.ci-title {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.extend-banner p,
+.check-in-banner p,
+.landing-banner p {
+    margin: 4px 0 8px;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+.ci-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+}
+.ci-actions button {
+    font-size: 0.72rem;
+    padding: 3px 10px;
+}
+.extend-banner .ci-main {
+    background: #00b4d8;
+    color: #fff;
+}
+.extend-banner .ci-main:hover {
+    background: #0096c7;
+}
+.check-in-banner .ci-main {
+    background: #26a69a;
+    color: #fff;
+}
+.check-in-banner .ci-main:hover {
+    background: #00897b;
+}
+.landing-banner .ci-main {
+    background: #43a047;
+    color: #fff;
+}
+.landing-banner .ci-main:hover {
+    background: #388e3c;
+}
+.breadcrumb-input {
+    width: 100%;
+    margin: 4px 0 8px;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    border-radius: 6px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    box-sizing: border-box;
+}
+.breadcrumb-input:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+}
 
 .task-done {
     width: 100%;

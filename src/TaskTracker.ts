@@ -280,7 +280,7 @@ export default class TaskTracker implements TaskTrackerStore {
         }))
     }
 
-    public async updateActual() {
+    public async updateActual(count = 1) {
         // update task item
         const settings = this.plugin.getSettings()
         const task = this.task
@@ -291,10 +291,10 @@ export default class TaskTracker implements TaskTrackerStore {
             this.store.update((state) => ({
                 ...state,
                 task: state.task
-                    ? { ...state.task, actual: Math.max(0, state.task.actual) + 1 }
+                    ? { ...state.task, actual: Math.max(0, state.task.actual) + count }
                     : state.task,
             }))
-            await this.incrTaskActual(task)
+            await this.incrTaskActual(task, count)
         }
     }
 
@@ -304,8 +304,8 @@ export default class TaskTracker implements TaskTrackerStore {
         return file instanceof TFile && !!this.plugin.boardWatcher?.isBoard(file)
     }
 
-    /** Counts one more finished pomodoro on the task's line in its note. */
-    private async incrTaskActual(task: TaskItem) {
+    /** Counts finished pomodoros on the task's line in its note. */
+    private async incrTaskActual(task: TaskItem, count = 1) {
         const file = this.plugin.app.vault.getAbstractFileByPath(task.path)
         if (!(file instanceof TFile) || file.extension !== 'md') {
             return
@@ -318,7 +318,26 @@ export default class TaskTracker implements TaskTrackerStore {
             if (index < 0) return data
             // Count from what the note says, not from what was last read
             const done = readPomodoros(lines[index], format)?.actual ?? 0
-            lines[index] = editTaskLine(lines[index], { actual: done + 1 }, format)
+            lines[index] = editTaskLine(lines[index], { actual: done + count }, format)
+            return lines.join('\n')
+        })
+    }
+
+    /** Adds a breadcrumb sub-bullet under the focused task line in its note: `- ↪ next: ...` */
+    public async appendBreadcrumb(task: TaskItem, breadcrumb: string) {
+        if (!breadcrumb.trim() || !task.path) return
+        const file = this.plugin.app.vault.getAbstractFileByPath(task.path)
+        if (!(file instanceof TFile) || file.extension !== 'md') return
+
+        const format = this.plugin.getSettings().taskFormat
+        await this.plugin.app.vault.process(file, (data) => {
+            const lines = data.split('\n')
+            const index = locateTaskLine(lines, task, format)
+            if (index < 0) return data
+            const match = lines[index].match(/^(\s*)/)
+            const indent = (match ? match[1] : '') + '    '
+            const breadcrumbLine = `${indent}- ↪ next: ${breadcrumb.trim()}`
+            lines.splice(index + 1, 0, breadcrumbLine)
             return lines.join('\n')
         })
     }

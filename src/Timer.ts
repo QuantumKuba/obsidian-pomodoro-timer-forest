@@ -3,12 +3,17 @@ import PomodoroTimerPlugin from 'main'
 import createClockWorker from 'clock.worker'
 import { writable, derived } from 'svelte/store'
 import type { Readable } from 'svelte/store'
-import { Notice, TFile } from 'obsidian'
+import { Notice, TFile, moment } from 'obsidian'
 import Logger, { type LogContext } from 'Logger'
 import DEFAULT_NOTIFICATION from 'Notification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
-import { earlyHarvestMinMinutes } from './services/Progression'
+import {
+    earlyHarvestMinMinutes,
+    pomodoroEquivalents,
+    recoveryBreakMinutes,
+    HYPERFOCUS_MIN_MINUTES,
+} from './services/Progression'
 
 export type Mode = 'WORK' | 'BREAK'
 
@@ -54,10 +59,23 @@ export type TimerState = {
     duration: number
     /** Elapsed millis when the focused task was checked off during this work session. */
     taskDoneAt: number | null
+    /** True during an open-ended hyperfocus session. */
+    hyperfocus: boolean
+    /** Elapsed millis when the last body check-in was triggered. */
+    lastCheckInAt: number
+    /** Optional wall-clock epoch ms for hard stop. */
+    hardStopAt: number | null
+    /** Number of body check-ins acknowledged during this session. */
+    checkInsAcked: number
+    /** Pending body check-in prompt shown to the user. */
+    checkInPending: { time: string; minutes: number } | null
+    /** Session is at timeup and offering "Ride the wave" extension into hyperfocus. */
+    extendOffered: boolean
 }
 
 export type TimerStore = TimerState & {
     remained: TimerRemained
+    elapsedHuman: string
     finished: boolean
     /** The focused task is done and the work session can end early without withering. */
     taskDone: boolean
@@ -101,6 +119,12 @@ export default class Timer implements Readable<TimerStore> {
             duration: plugin.getSettings().workLen,
             count,
             taskDoneAt: null,
+            hyperfocus: false,
+            lastCheckInAt: 0,
+            hardStopAt: null,
+            checkInsAcked: 0,
+            checkInPending: null,
+            extendOffered: false,
         }
 
         let store = writable(this.state)
@@ -110,6 +134,7 @@ export default class Timer implements Readable<TimerStore> {
         this.store = derived(store, ($state) => ({
             ...$state,
             remained: this.remain($state.count, $state.elapsed),
+            elapsedHuman: this.formatElapsed($state.elapsed),
             finished: $state.count == $state.elapsed,
             taskDone: $state.inSession && $state.mode === 'WORK' && $state.taskDoneAt !== null,
             earlyHarvestAt: this.earlyHarvestAt($state),
@@ -139,6 +164,18 @@ export default class Timer implements Readable<TimerStore> {
         }
     }
 
+    private formatElapsed(elapsed: number): string {
+        const sec = Math.floor((elapsed / 1000) % 60)
+        const min = Math.floor((elapsed / 60000) % 60)
+        const hr = Math.floor(elapsed / 3600000)
+        const secStr = sec < 10 ? `0${sec}` : sec.toString()
+        const minStr = min < 10 ? `0${min}` : min.toString()
+        if (hr > 0) {
+            return `${hr}:${minStr}:${secStr}`
+        }
+        return `${minStr} : ${secStr}`
+    }
+
     private toMillis(minutes: number) {
         return minutes * 60 * 1000
     }
@@ -146,6 +183,9 @@ export default class Timer implements Readable<TimerStore> {
     private tick(t: number) {
         let timeup: boolean = false
         let pause: boolean = false
+        let triggerCheckIn: number | null = null
+        let triggerHardStop = false
+
         this.update((s) => {
             if (s.running) {
                 s.elapsed += t
@@ -153,20 +193,78 @@ export default class Timer implements Readable<TimerStore> {
                     s.elapsed = s.count
                 }
                 timeup = s.elapsed >= s.count
+
                 if (s.mode === 'WORK') {
                     this.plugin.forestEngine?.updateProgress(s.elapsed, s.count)
+                }
+
+                if (s.hyperfocus) {
+                    const checkInMin = this.plugin.getSettings().hyperfocusCheckInMin ?? 45
+                    if (checkInMin > 0) {
+                        const intervalMs = this.toMillis(checkInMin)
+                        if (s.elapsed - s.lastCheckInAt >= intervalMs) {
+                            s.lastCheckInAt = s.elapsed
+                            const minutes = Math.round(s.elapsed / 60000)
+                            s.checkInPending = { time: moment().format('HH:mm'), minutes }
+                            triggerCheckIn = minutes
+                        }
+                    }
+
+                    if (s.hardStopAt && Date.now() >= s.hardStopAt) {
+                        triggerHardStop = true
+                    }
                 }
             } else {
                 pause = true
             }
             return s
         })
+
+        if (triggerCheckIn !== null) {
+            this.notifyCheckIn(triggerCheckIn)
+        }
+
+        if (triggerHardStop) {
+            this.notifyHardStop()
+            void this.land()
+            return
+        }
+
         if (!pause && timeup) {
             this.timeup()
         }
     }
 
     private timeup() {
+        const s = this.state
+        if (s.hyperfocus) {
+            new Notice('🛡️ Safety cap reached: landing your hyperfocus session.')
+            void this.land()
+            return
+        }
+
+        const settings = this.plugin.getSettings()
+        if (s.mode === 'WORK' && settings.hyperfocusEnabled && settings.hyperfocusOfferExtend && !s.autostart) {
+            this.update((state) => {
+                state.running = false
+                state.extendOffered = true
+                this.clock.postMessage({
+                    start: false,
+                    lowFps: this.plugin.getSettings().lowFps,
+                })
+                return state
+            })
+            const fragment = new DocumentFragment()
+            fragment.createSpan({
+                text: `🍅 ${s.duration}m focus complete! Take a break, or keep going in Hyperfocus mode.`,
+            })
+            new Notice(fragment, 12000)
+            if (this.plugin.getSettings().notificationSound) {
+                this.playAudio()
+            }
+            return
+        }
+
         let autostart = false
         this.update((state) => {
             const ctx = this.createLogContext(state)
@@ -179,6 +277,35 @@ export default class Timer implements Readable<TimerStore> {
         if (autostart) {
             this.start()
         }
+    }
+
+    private notifyCheckIn(minutes: number) {
+        const text = `💧 ${minutes}m of focus. Time for water, a stretch, or a breath?`
+        const style = this.plugin.getSettings().hyperfocusCheckInStyle || 'quiet'
+
+        if (style === 'chime' || this.plugin.getSettings().forestSounds) {
+            this.plugin.forestEngine?.soundManager?.playCheckIn()
+        }
+
+        if (
+            style === 'system' &&
+            this.plugin.getSettings().useSystemNotification &&
+            typeof window.Notification !== 'undefined' &&
+            window.Notification.permission === 'granted'
+        ) {
+            new window.Notification('Hyperfocus Check-in', { body: text, silent: true })
+        } else {
+            const fragment = new DocumentFragment()
+            const span = fragment.createSpan()
+            span.setText(text)
+            new Notice(fragment, 8000)
+        }
+    }
+
+    private notifyHardStop() {
+        const text = "⏰ Hard stop reached! It's time to transition to your next commitment."
+        new Notice(text, 10000)
+        this.playAudio()
     }
 
     private createLogContext(s: TimerState): LogContext {
@@ -216,19 +343,40 @@ export default class Timer implements Readable<TimerStore> {
             if (!s.inSession) {
                 // new session
                 s.elapsed = 0
-                s.duration = s.mode === 'WORK' ? s.workLen : s.breakLen
-                s.count = s.duration * 60 * 1000
                 s.startTime = now
                 s.taskDoneAt = null
-                if (s.mode === 'WORK') {
+                s.lastCheckInAt = 0
+                s.checkInsAcked = 0
+                s.checkInPending = null
+                s.extendOffered = false
+
+                if (s.mode === 'WORK' && s.hyperfocus) {
+                    const capMin = this.plugin.getSettings().hyperfocusCapMin || 180
+                    s.duration = capMin
+                    s.count = this.toMillis(capMin)
                     const task = this.plugin.tracker?.task
                     const file = this.plugin.tracker?.file
                     this.plugin.forestEngine?.startSession(
-                        s.workLen,
+                        capMin,
                         task?.name || task?.text,
                         task?.path || file?.path,
                         task?.tags,
+                        true,
                     )
+                } else {
+                    s.duration = s.mode === 'WORK' ? s.workLen : s.breakLen
+                    s.count = s.duration * 60 * 1000
+                    if (s.mode === 'WORK') {
+                        const task = this.plugin.tracker?.task
+                        const file = this.plugin.tracker?.file
+                        this.plugin.forestEngine?.startSession(
+                            s.workLen,
+                            task?.name || task?.text,
+                            task?.path || file?.path,
+                            task?.tags,
+                            false,
+                        )
+                    }
                 }
             }
             s.inSession = true
@@ -248,6 +396,7 @@ export default class Timer implements Readable<TimerStore> {
         } else {
             state.mode = state.mode == 'WORK' ? 'BREAK' : 'WORK'
         }
+        state.hyperfocus = false
         state.duration = state.mode == 'WORK' ? state.workLen : state.breakLen
         state.count = state.duration * 60 * 1000
         state.inSession = false
@@ -259,6 +408,11 @@ export default class Timer implements Readable<TimerStore> {
         state.startTime = null
         state.elapsed = 0
         state.taskDoneAt = null
+        state.lastCheckInAt = 0
+        state.checkInsAcked = 0
+        state.checkInPending = null
+        state.extendOffered = false
+        state.hardStopAt = null
         return state
     }
 
@@ -323,14 +477,39 @@ export default class Timer implements Readable<TimerStore> {
 
     public reset() {
         this.update((state) => {
-            if (state.elapsed > 0) {
+            if (state.hyperfocus) {
+                const focusedMin = Math.floor(state.elapsed / 60000)
+                if (focusedMin >= HYPERFOCUS_MIN_MINUTES) {
+                    const workLen = state.workLen || 25
+                    const poms = pomodoroEquivalents(focusedMin, workLen)
+                    const ctx = this.createLogContext(state)
+                    this.plugin.forestEngine?.landHyperfocus(
+                        focusedMin,
+                        {
+                            taskText: ctx.task.name || ctx.task.text,
+                            notePath: ctx.task.path,
+                            tags: ctx.task.tags,
+                        },
+                        {
+                            pomodoros: poms,
+                            checkInsAcked: state.checkInsAcked,
+                        },
+                    )
+                    this.logger
+                        .log(ctx)
+                        .catch((err) => console.error('[Pomodoro Timer Forest] Failed to log the session', err))
+                }
+            } else if (state.elapsed > 0) {
                 this.logger
                     .log(this.createLogContext(state))
                     .catch((err) => console.error('[Pomodoro Timer Forest] Failed to log the session', err))
+                this.abandonGrowingTree(state)
             }
 
-            this.abandonGrowingTree(state)
-
+            state.hyperfocus = false
+            state.extendOffered = false
+            state.checkInPending = null
+            state.hardStopAt = null
             state.duration =
                 state.mode == 'WORK' ? state.workLen : state.breakLen
             state.count = state.duration * 60 * 1000
@@ -353,10 +532,10 @@ export default class Timer implements Readable<TimerStore> {
 
     /**
      * Leaving a work session early withers the tree (after the first minute, if enabled),
-     * unless its task was done: then stopping is finishing, not giving up.
+     * unless its task was done or it was a hyperfocus session (hyperfocus never withers).
      */
     private abandonGrowingTree(state: TimerState) {
-        if (!state.inSession || state.mode !== 'WORK') return
+        if (!state.inSession || state.mode !== 'WORK' || state.hyperfocus) return
         const task = this.plugin.tracker?.task
         const file = this.plugin.tracker?.file
         this.plugin.forestEngine?.abortSession(
@@ -371,6 +550,167 @@ export default class Timer implements Readable<TimerStore> {
 
     private earlyHarvestAt(state: TimerState): number {
         return this.toMillis(earlyHarvestMinMinutes(state.count / 60000))
+    }
+
+    /**
+     * Starts an open-ended hyperfocus session that counts up and never withers.
+     */
+    public startHyperfocus(opts?: { until?: number }) {
+        this.update((s) => {
+            const capMin = this.plugin.getSettings().hyperfocusCapMin || 180
+            s.mode = 'WORK'
+            s.hyperfocus = true
+            s.elapsed = 0
+            s.duration = capMin
+            s.count = this.toMillis(capMin)
+            s.startTime = Date.now()
+            s.taskDoneAt = null
+            s.lastCheckInAt = 0
+            s.checkInsAcked = 0
+            s.checkInPending = null
+            s.extendOffered = false
+            s.hardStopAt = opts?.until ?? null
+            s.inSession = true
+            s.running = true
+
+            const task = this.plugin.tracker?.task
+            const file = this.plugin.tracker?.file
+            this.plugin.forestEngine?.startSession(
+                capMin,
+                task?.name || task?.text,
+                task?.path || file?.path,
+                task?.tags,
+                true,
+            )
+
+            this.clock.postMessage({
+                start: true,
+                lowFps: this.plugin.getSettings().lowFps,
+            })
+            return s
+        })
+    }
+
+    /**
+     * Extends a just-completed work session directly into hyperfocus.
+     */
+    public extendIntoHyperfocus() {
+        this.update((s) => {
+            const capMin = this.plugin.getSettings().hyperfocusCapMin || 180
+            s.hyperfocus = true
+            s.extendOffered = false
+            s.mode = 'WORK'
+            s.duration = capMin
+            s.count = this.toMillis(capMin)
+            s.lastCheckInAt = s.elapsed
+            s.checkInsAcked = 0
+            s.checkInPending = null
+            s.inSession = true
+            s.running = true
+            this.plugin.forestEngine?.extendToHyperfocus(s.elapsed)
+            this.clock.postMessage({
+                start: true,
+                lowFps: this.plugin.getSettings().lowFps,
+            })
+            return s
+        })
+    }
+
+    /**
+     * Closes out a work session that was held at timeup and transitions to break.
+     */
+    public finishHeldSession() {
+        let autostart = false
+        this.update((state) => {
+            state.extendOffered = false
+            const ctx = this.createLogContext(state)
+            this.processLog(ctx).catch((err) =>
+                console.error('[Pomodoro Timer Forest] Failed to log the finished session', err),
+            )
+            autostart = state.autostart
+            return this.endSession(state)
+        })
+        if (autostart) {
+            this.start()
+        }
+    }
+
+    /**
+     * Lands a hyperfocus session: stopping is finishing, never withering.
+     */
+    public async land(breadcrumb?: string) {
+        const s = this.state
+        if (!s.inSession || !s.hyperfocus) return
+        const focusedMin = Math.floor(s.elapsed / 60000)
+        const workLen = s.workLen || 25
+        const poms = pomodoroEquivalents(focusedMin, workLen)
+
+        const ctx = this.createLogContext(s)
+        if (breadcrumb) ctx.breadcrumb = breadcrumb
+
+        if (breadcrumb && this.plugin.tracker?.task) {
+            await this.plugin.tracker.appendBreadcrumb(this.plugin.tracker.task, breadcrumb)
+        }
+
+        if (this.plugin.tracker?.task) {
+            await this.plugin.tracker.updateActual(poms)
+        }
+
+        this.plugin.forestEngine?.landHyperfocus(
+            focusedMin,
+            {
+                taskText: ctx.task.name || ctx.task.text,
+                notePath: ctx.task.path,
+                tags: ctx.task.tags,
+            },
+            {
+                pomodoros: poms,
+                checkInsAcked: s.checkInsAcked,
+            },
+        )
+
+        const logFile = await this.logger.log(ctx)
+        this.notify(ctx, logFile)
+
+        const recBreak = this.plugin.getSettings().hyperfocusRecoveryBreak
+            ? recoveryBreakMinutes(focusedMin, s.breakLen)
+            : s.breakLen
+
+        this.update((state) => {
+            state.hyperfocus = false
+            state.extendOffered = false
+            state.checkInPending = null
+            state.breakLen = recBreak
+            return this.endSession(state)
+        })
+    }
+
+    public ackCheckIn() {
+        this.update((s) => {
+            s.checkInsAcked = (s.checkInsAcked || 0) + 1
+            s.checkInPending = null
+            return s
+        })
+        new Notice('💧 Hydrated and checked in! +5 Sunlight, +2 XP')
+        if (this.plugin.getSettings().forestSounds) {
+            this.plugin.forestEngine?.soundManager?.playCoin()
+        }
+    }
+
+    public snoozeCheckIn(minutes = 10) {
+        this.update((s) => {
+            s.checkInPending = null
+            const intervalMs = this.toMillis(this.plugin.getSettings().hyperfocusCheckInMin || 45)
+            s.lastCheckInAt = s.elapsed - intervalMs + this.toMillis(minutes)
+            return s
+        })
+    }
+
+    public dismissCheckIn() {
+        this.update((s) => {
+            s.checkInPending = null
+            return s
+        })
     }
 
     /**
@@ -458,6 +798,39 @@ export default class Timer implements Readable<TimerStore> {
 
     public toggleMode(callback?: (state: TimerState) => void) {
         this.update((s) => {
+            const settings = this.plugin.getSettings()
+            if (!s.inSession) {
+                // Idle mode cycle: Focus -> (Hyperfocus if enabled) -> Break -> Focus
+                if (s.mode === 'WORK' && !s.hyperfocus) {
+                    if (settings.hyperfocusEnabled) {
+                        s.hyperfocus = true
+                        s.duration = settings.hyperfocusCapMin || 180
+                        s.count = this.toMillis(s.duration)
+                    } else {
+                        s.mode = 'BREAK'
+                        s.duration = s.breakLen
+                        s.count = this.toMillis(s.duration)
+                    }
+                } else if (s.mode === 'WORK' && s.hyperfocus) {
+                    s.hyperfocus = false
+                    s.mode = 'BREAK'
+                    s.duration = s.breakLen
+                    s.count = this.toMillis(s.duration)
+                } else {
+                    s.mode = 'WORK'
+                    s.hyperfocus = false
+                    s.duration = s.workLen
+                    s.count = this.toMillis(s.duration)
+                }
+                if (callback) callback(s)
+                return s
+            }
+
+            if (s.hyperfocus) {
+                void this.land()
+                return s
+            }
+
             this.abandonGrowingTree(s)
             let updated = this.endSession(s)
             if (callback) {
@@ -468,6 +841,10 @@ export default class Timer implements Readable<TimerStore> {
     }
 
     public toggleTimer() {
+        if (this.state.extendOffered) {
+            this.extendIntoHyperfocus()
+            return
+        }
         this.state.running ? this.pause() : this.start()
     }
 
@@ -489,13 +866,16 @@ export default class Timer implements Readable<TimerStore> {
 
     public setupTimer() {
         this.update((state) => {
-            const { workLen, breakLen, autostart } = this.plugin.getSettings()
+            const { workLen, breakLen, autostart, hyperfocusCapMin } = this.plugin.getSettings()
             state.workLen = workLen
             state.breakLen = breakLen
             state.autostart = autostart
             if (!state.running && !state.inSession) {
-                state.duration =
-                    state.mode == 'WORK' ? state.workLen : state.breakLen
+                if (state.hyperfocus) {
+                    state.duration = hyperfocusCapMin || 180
+                } else {
+                    state.duration = state.mode == 'WORK' ? state.workLen : state.breakLen
+                }
                 state.count = state.duration * 60 * 1000
             }
 

@@ -7,6 +7,7 @@ import type {
     DailyQuest,
     DailyQuestBoard,
     GamificationData,
+    GrowthStage,
     HomesteadBuilding,
     PerkKind,
     PlacedHomesteadItem,
@@ -137,6 +138,16 @@ export function upgradeCost(building: HomesteadBuilding, currentLevel: number): 
     }
 }
 
+/**
+ * Coins one spare sapling sells for. Every finished session hands out a sapling for free,
+ * so the price stays a small top-up (rarer species fetch more, but never less than 1).
+ */
+export function saplingSellValue(speciesId: string): number {
+    const species = getSpecies(speciesId)
+    if (!species) return 0
+    return Math.max(1, Math.round(species.sunlightCost / 200 + species.coinsCost / 40))
+}
+
 // ---------------------------------------------------------------------------
 // Session rewards
 // ---------------------------------------------------------------------------
@@ -172,6 +183,74 @@ export function earlyHarvestBaseReward(focusedMinutes: number): BaseReward {
         coins: Math.floor((m / 10) * EARLY_HARVEST_RATE),
         xp: Math.round(m * EARLY_HARVEST_RATE),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Hyperfocus: open-ended sessions that never wither
+// ---------------------------------------------------------------------------
+
+/** Below this many minutes a hyperfocus session grows nothing (and nothing withers). */
+export const HYPERFOCUS_MIN_MINUTES = 10
+
+/** Minutes paid at the full rate; every minute beyond pays HYPERFOCUS_LONG_RATE. */
+export const HYPERFOCUS_FULL_RATE_MINUTES = 90
+export const HYPERFOCUS_LONG_RATE = 0.5
+
+/** Acknowledged body check-ins that earn a bonus in one session, and what each pays. */
+export const CHECK_IN_ACK_CAP = 6
+export const CHECK_IN_ACK_REWARD = { sunlight: 5, xp: 2 }
+
+/** A tree grows through its stages by absolute minutes: nothing to count down to. */
+export function hyperfocusStage(minutes: number): GrowthStage {
+    if (minutes >= 60) return 'mature'
+    if (minutes >= 30) return 'sapling'
+    if (minutes >= 15) return 'sprout'
+    return 'seed'
+}
+
+/**
+ * 0..1 growth for the dial, in step with hyperfocusStage: each stage fills a quarter, and a
+ * tree is fully grown at 90 minutes (the end of the full reward rate).
+ */
+export function hyperfocusGrowthRatio(minutes: number): number {
+    const m = Math.max(0, minutes)
+    const knots: [number, number][] = [
+        [0, 0],
+        [15, 0.25],
+        [30, 0.5],
+        [60, 0.75],
+        [HYPERFOCUS_FULL_RATE_MINUTES, 1],
+    ]
+    for (let i = 1; i < knots.length; i++) {
+        const [m0, r0] = knots[i - 1]
+        const [m1, r1] = knots[i]
+        if (m <= m1) return r0 + ((m - m0) / (m1 - m0)) * (r1 - r0)
+    }
+    return 1
+}
+
+/** What a hyperfocus session pays: full rate up to 90 minutes, half beyond. Never less for longer. */
+export function hyperfocusReward(minutes: number): BaseReward {
+    const m = Math.max(0, minutes)
+    const effective = Math.min(m, HYPERFOCUS_FULL_RATE_MINUTES) + Math.max(0, m - HYPERFOCUS_FULL_RATE_MINUTES) * HYPERFOCUS_LONG_RATE
+    return sessionBaseReward(Math.round(effective))
+}
+
+/** Pomodoros a hyperfocus session counts as on the daily goal and on the task: never less than one. */
+export function pomodoroEquivalents(minutes: number, workLen: number): number {
+    return Math.max(1, Math.floor(minutes / Math.max(1, workLen)))
+}
+
+/** A longer dive earns a longer rest: a fifth of the focus, at least the usual break, at most 20. */
+export function recoveryBreakMinutes(focusedMinutes: number, breakLen: number): number {
+    return Math.max(breakLen, Math.min(20, Math.round(focusedMinutes / 5)))
+}
+
+/** "1h 52m", "45m". */
+export function formatMinutes(minutes: number): string {
+    const m = Math.max(0, Math.floor(minutes))
+    const h = Math.floor(m / 60)
+    return h > 0 ? `${h}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`
 }
 
 /** Every checked-off task waters the garden: its crops grow as if this many minutes were focused. */
@@ -432,6 +511,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     {
         id: 'breaks_10', icon: '🍵', title: 'Mindful Rest', description: 'Finish 10 breaks — rest is part of the work.',
         reward: { sunlight: 40, coins: 4, xp: 25 }, check: (g) => s(g).breaksCompleted >= 10, progress: (g) => [s(g).breaksCompleted, 10],
+    },
+    {
+        id: 'hyperfocus_1', icon: '🌊', title: 'Into the Deep', description: 'Land your first hyperfocus session.',
+        reward: { sunlight: 30, coins: 3, xp: 20 }, check: (g) => (s(g).hyperfocusSessions || 0) >= 1, progress: (g) => [s(g).hyperfocusSessions || 0, 1],
+    },
+    {
+        id: 'checkins_25', icon: '💧', title: 'Looking After Yourself', description: 'Answer 25 hyperfocus check-ins: water, stretch, breathe.',
+        reward: { sunlight: 60, coins: 6, xp: 40 }, check: (g) => (s(g).checkInsAcked || 0) >= 25, progress: (g) => [s(g).checkInsAcked || 0, 25],
     },
     {
         id: 'first_building', icon: '🏡', title: 'Homesteader', description: 'Build your first structure.',

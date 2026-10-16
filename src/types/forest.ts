@@ -84,6 +84,8 @@ export interface PlantedTree {
     notePath?: string
     taskText?: string
     tags?: string[]
+    /** Grown in an open-ended hyperfocus session. */
+    hyperfocus?: boolean
 }
 
 export interface PlacedHomesteadItem {
@@ -228,6 +230,10 @@ export interface GamificationData {
         /** Cards finished within their pomodoro estimate. */
         cardsOnEstimate: number
         boardsCleared: number
+        /** Hyperfocus sessions landed, and the body check-ins answered during them. */
+        hyperfocusSessions: number
+        hyperfocusMinutes: number
+        checkInsAcked: number
     }
     preferences: {
         hardcoreMode: boolean // withers tree if aborted
@@ -273,6 +279,8 @@ export interface ActiveSessionPlant {
     notePath?: string
     /** Species was chosen by a #tag on the note or task */
     autoTagged?: boolean
+    /** Open-ended hyperfocus session: growth follows minutes focused, not a countdown. */
+    hyperfocus?: boolean
 }
 
 export interface RewardLine {

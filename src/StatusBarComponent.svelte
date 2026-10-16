@@ -12,9 +12,13 @@ const toggleTimer = () => {
 }
 
 $: {
-    if (statusbar && mode !== $store.mode) {
+    if (statusbar) {
         mode = $store.mode
-        const tooltip = mode === 'WORK' ? 'Work' : 'Break'
+        const tooltip = $store.hyperfocus
+            ? `Hyperfocus (${$store.elapsedHuman})`
+            : mode === 'WORK'
+              ? 'Work'
+              : 'Break'
         setTooltip(statusbar, tooltip, { delay: 300, placement: 'top' })
     }
 }
@@ -32,15 +36,23 @@ const ctxMenu = (e: MouseEvent) => {
         })
     })
 
-    menu.addItem((item) => {
-        item.setTitle('Reset').onClick(() => {
-            store.reset()
+    if ($store.hyperfocus && $store.inSession) {
+        menu.addItem((item) => {
+            item.setTitle('Land Hyperfocus (harvest tree)').onClick(() => {
+                void store.land()
+            })
         })
-    })
+    } else {
+        menu.addItem((item) => {
+            item.setTitle('Reset').onClick(() => {
+                store.reset()
+            })
+        })
+    }
 
     menu.addItem((item) => {
-        const mode = `Switch ${$store.mode === 'WORK' ? 'Break' : 'Work'} `
-        item.setTitle(mode)
+        const modeTitle = `Switch ${$store.mode === 'WORK' ? 'Break' : 'Work'}`
+        item.setTitle(modeTitle)
         item.onClick(() => {
             store.toggleMode()
         })
@@ -125,7 +137,7 @@ setTooltip
                 >
             {/if}
         </span>
-        {$store.remained.human}
+        {$store.hyperfocus ? `🌊 ${$store.elapsedHuman}` : $store.remained.human}
     </span>
 {/if}
 

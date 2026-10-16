@@ -14,6 +14,10 @@ export type TimerLog = {
     finished: boolean
     /** Ended before the timer because its task was done, and harvested as a young tree. */
     early: boolean
+    /** Open-ended hyperfocus session. */
+    hyperfocus?: boolean
+    /** Breadcrumb note about where the user stopped. */
+    breadcrumb?: string
 }
 
 export type TaskLog = Pick<
@@ -39,7 +43,7 @@ export type TaskLog = Pick<
     | 'tags'
 >
 
-export type LogContext = TimerState & { task: TaskItem; early?: boolean }
+export type LogContext = TimerState & { task: TaskItem; early?: boolean; breadcrumb?: string }
 
 export default class Logger {
     private plugin: PomodoroTimerPlugin
@@ -125,8 +129,10 @@ export default class Logger {
             end: new Date().getTime(),
             session: ctx.duration,
             task: ctx.task,
-            finished: ctx.count == ctx.elapsed,
+            finished: ctx.hyperfocus ? true : ctx.count == ctx.elapsed,
             early: !!ctx.early,
+            hyperfocus: !!ctx.hyperfocus,
+            breadcrumb: ctx.breadcrumb,
         }
     }
 
@@ -150,26 +156,30 @@ export default class Logger {
                 return ''
             }
         } else {
-            // Built-in log: ignore unfinished session, unless it ended because its task was done
-            if (!log.finished && !log.early) {
+            // Built-in log: ignore unfinished session, unless it ended because its task was done or was hyperfocus
+            if (!log.finished && !log.early && !log.hyperfocus) {
                 return ''
             }
 
             let begin = moment(log.begin)
             let end = moment(log.end)
             if (settings.logFormat === 'SIMPLE') {
-                return `**${log.mode}(${log.duration}m)**: ${begin.format(
+                const tag = log.hyperfocus ? 'HYPERFOCUS' : log.mode
+                const note = log.breadcrumb ? ` · next: ${log.breadcrumb}` : ''
+                return `**${tag}(${log.duration}m)**: ${begin.format(
                     'HH:mm',
-                )} - ${end.format('HH:mm')}`
+                )} - ${end.format('HH:mm')}${note}`
             }
 
             if (settings.logFormat === 'VERBOSE') {
-                const emoji = log.mode == 'WORK' ? '🍅' : '🥤'
-                return `- ${emoji} (pomodoro::${log.mode}) (duration:: ${
+                const emoji = log.hyperfocus ? '🌊' : log.mode == 'WORK' ? '🍅' : '🥤'
+                const hyperField = log.hyperfocus ? ' (hyperfocus:: true)' : ''
+                const breadField = log.breadcrumb ? ` (next:: ${log.breadcrumb})` : ''
+                return `- ${emoji} (pomodoro::${log.mode})${hyperField} (duration:: ${
                     log.duration
                 }m) (begin:: ${begin.format(
                     'YYYY-MM-DD HH:mm',
-                )}) - (end:: ${end.format('YYYY-MM-DD HH:mm')})`
+                )}) - (end:: ${end.format('YYYY-MM-DD HH:mm')})${breadField}`
             }
 
             return ''

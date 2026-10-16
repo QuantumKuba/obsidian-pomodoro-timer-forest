@@ -36,8 +36,11 @@ import {
     BOARD_CLEAR_REWARD,
     BOARD_HISTORY_LIMIT,
     BOARD_MILESTONES,
+    CHECK_IN_ACK_CAP,
+    CHECK_IN_ACK_REWARD,
     CHEST_REWARD,
     EARLY_HARVEST_RATE,
+    HYPERFOCUS_MIN_MINUTES,
     TASK_WATERING_MINUTES,
     VITALITY_DAILY_FADE,
     VITALITY_FLOOR,
@@ -49,9 +52,14 @@ import {
     earlyHarvestBaseReward,
     estimateOnTarget,
     earlyHarvestMinMinutes,
+    formatMinutes,
     generateQuestBoard,
+    hyperfocusGrowthRatio,
+    hyperfocusReward,
+    hyperfocusStage,
     levelFromXp,
     perkValue,
+    saplingSellValue,
     sessionBaseReward,
     upgradeCost,
     type BaseReward,
@@ -67,6 +75,11 @@ import { activePlantStore } from '../stores'
 
 /** Max checked-off tasks rewarded per day, so rewards stay meaningful. */
 const DAILY_TASK_REWARD_CAP = 30
+
+export interface HyperfocusOutcome {
+    pomodoros: number
+    checkInsAcked: number
+}
 
 export interface SessionCompletionResult {
     tree: PlantedTree
@@ -301,7 +314,13 @@ export default class ForestEngine {
         return null
     }
 
-    public startSession(durationMinutes: number, taskText?: string, notePath?: string, tags?: string[]): void {
+    public startSession(
+        durationMinutes: number,
+        taskText?: string,
+        notePath?: string,
+        tags?: string[],
+        hyperfocus = false,
+    ): void {
         this.ensureToday()
         const gamification = this.state
         const detected = this.detectFloraFromContext(notePath, taskText, tags)
@@ -316,6 +335,7 @@ export default class ForestEngine {
             taskText,
             notePath,
             autoTagged: !!detected,
+            hyperfocus,
         })
 
         if (this.settings().forestSounds) this.soundManager.playPlantSeed()
@@ -324,9 +344,20 @@ export default class ForestEngine {
         }
     }
 
+    /** A finished focus session turns into a hyperfocus one: the same tree keeps growing. */
+    public extendToHyperfocus(elapsedMillis: number): void {
+        this.activePlantStore.update((plant) => (plant ? { ...plant, hyperfocus: true } : plant))
+        this.updateProgress(elapsedMillis, elapsedMillis)
+    }
+
     public updateProgress(elapsedMillis: number, totalMillis: number): void {
         this.activePlantStore.update((plant) => {
             if (!plant) return null
+            if (plant.hyperfocus) {
+                // No countdown to measure against: the tree grows by minutes focused
+                const minutes = elapsedMillis / 60000
+                return { ...plant, progressRatio: hyperfocusGrowthRatio(minutes), currentStage: hyperfocusStage(minutes) }
+            }
             const ratio = Math.max(0, Math.min(1, elapsedMillis / Math.max(1, totalMillis)))
             let stage: GrowthStage = 'seed'
             if (ratio >= 0.75) stage = 'mature'
@@ -336,9 +367,28 @@ export default class ForestEngine {
         })
     }
 
+    /**
+     * Lands a hyperfocus session. Stopping is always finishing: a dive of at least
+     * HYPERFOCUS_MIN_MINUTES grows a full tree (see completeSession), a shorter one simply ends
+     * without growing anything. Nothing ever withers.
+     */
+    public landHyperfocus(
+        minutes: number,
+        taskContext?: { taskText?: string; notePath?: string; tags?: string[] },
+        outcome: HyperfocusOutcome = { pomodoros: 1, checkInsAcked: 0 },
+    ): SessionCompletionResult | null {
+        if (minutes < HYPERFOCUS_MIN_MINUTES) {
+            this.soundManager.stopAmbient()
+            this.activePlantStore.set(null)
+            return null
+        }
+        return this.completeSession(minutes, taskContext, outcome)
+    }
+
     public completeSession(
         durationMinutes: number,
         taskContext?: { taskText?: string; notePath?: string; tags?: string[] },
+        hyperfocus?: HyperfocusOutcome,
     ): SessionCompletionResult | null {
         this.soundManager.stopAmbient()
         this.ensureToday()
@@ -348,6 +398,7 @@ export default class ForestEngine {
         const species = getSpecies(speciesId) || FLORA_SPECIES[0]
         const today = dateKey()
         const settings = this.settings()
+        const isHyper = !!hyperfocus || !!currentPlant?.hyperfocus
 
         const newTree: PlantedTree = {
             id: `tree_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -358,13 +409,16 @@ export default class ForestEngine {
             notePath: taskContext?.notePath || currentPlant?.notePath,
             taskText: taskContext?.taskText || currentPlant?.taskText,
             tags: taskContext?.tags,
+            hyperfocus: isHyper,
         }
 
         let result: SessionCompletionResult | null = null
 
         this.mutate((g) => {
-            const base = sessionBaseReward(durationMinutes)
-            const lines: RewardLine[] = [{ label: `${durationMinutes}m of focus`, ...base }]
+            const base = isHyper ? hyperfocusReward(durationMinutes) : sessionBaseReward(durationMinutes)
+            const lines: RewardLine[] = isHyper
+                ? [{ label: `🌊 ${formatMinutes(durationMinutes)} hyperfocus dive`, ...base }]
+                : [{ label: `${durationMinutes}m of focus`, ...base }]
 
             // Streak first, so today's session counts toward its own bonus
             this.checkInStreak(g, today)
@@ -384,8 +438,25 @@ export default class ForestEngine {
                     lines.push({ label: '🥚 Fresh eggs from the coop', coins: eggs })
                 }
             }
+
+            if (isHyper && hyperfocus && hyperfocus.checkInsAcked > 0) {
+                const ackCount = Math.min(hyperfocus.checkInsAcked, CHECK_IN_ACK_CAP)
+                const checkSun = ackCount * CHECK_IN_ACK_REWARD.sunlight
+                const checkXp = ackCount * CHECK_IN_ACK_REWARD.xp
+                bonusSun += checkSun
+                bonusXp += checkXp
+                lines.push({
+                    label: `💧 Looked after yourself ×${ackCount}`,
+                    sunlight: checkSun,
+                    xp: checkXp,
+                })
+            }
+
             const goal = settings.dailyGoal || 4
-            if (log.completedPomodoros + 1 === goal) {
+            const pomodorosEarned = isHyper && hyperfocus ? Math.max(1, hyperfocus.pomodoros) : 1
+            const oldPoms = log.completedPomodoros
+            const newPoms = oldPoms + pomodorosEarned
+            if (oldPoms < goal && newPoms >= goal) {
                 bonusSun += 40
                 bonusCoins += 5
                 bonusXp += 20
@@ -406,22 +477,29 @@ export default class ForestEngine {
 
             log.trees.push(newTree)
             log.totalMinutes += durationMinutes
-            log.completedPomodoros += 1
+            log.completedPomodoros += pomodorosEarned
             g.lifetimeStats.totalFocusMinutes += durationMinutes
-            g.lifetimeStats.totalPomodoros += 1
+            g.lifetimeStats.totalPomodoros += pomodorosEarned
             g.lifetimeStats.treesGrown += 1
+            if (isHyper) {
+                g.lifetimeStats.hyperfocusSessions = (g.lifetimeStats.hyperfocusSessions || 0) + 1
+                g.lifetimeStats.hyperfocusMinutes = (g.lifetimeStats.hyperfocusMinutes || 0) + durationMinutes
+                if (hyperfocus && hyperfocus.checkInsAcked > 0) {
+                    g.lifetimeStats.checkInsAcked = (g.lifetimeStats.checkInsAcked || 0) + hyperfocus.checkInsAcked
+                }
+            }
             g.vitality = Math.min(100, g.vitality + 12)
 
             this.emit({
                 kind: 'harvest',
-                title: `${species.name} fully grown!`,
+                title: isHyper ? `🌊 ${species.name} fully grown!` : `${species.name} fully grown!`,
                 subtitle: newTree.taskText || (newTree.notePath ? newTree.notePath.split('/').pop()?.replace(/\.md$/, '') : undefined),
                 speciesId,
                 ...earned,
                 lines,
             })
 
-            this.progressQuests(g, 'sessions', 1)
+            this.progressQuests(g, 'sessions', pomodorosEarned)
             this.progressQuests(g, 'minutes', durationMinutes)
             if (newTree.taskText) this.progressQuests(g, 'linked_task', 1)
             if (currentPlant?.autoTagged || (taskContext?.tags?.length ?? 0) > 0) this.progressQuests(g, 'tagged_session', 1)
@@ -603,7 +681,7 @@ export default class ForestEngine {
 
         const currentPlant = get(this.activePlantStore)
         this.activePlantStore.set(null)
-        if (!currentPlant || forgive) return null
+        if (!currentPlant || forgive || currentPlant.hyperfocus) return null
         if (!this.settings().hardcoreMode || elapsedMinutes < 1) return null
 
         if (this.settings().forestSounds) this.soundManager.playWitherSound()
@@ -1033,6 +1111,28 @@ export default class ForestEngine {
             const key = `${item.itemType}:${item.itemId}`
             g.inventory[key] = (g.inventory[key] || 0) + 1
         })
+    }
+
+    /**
+     * Sell spare saplings from the inventory for coins (only unplaced ones, so a tree in
+     * the village is never lost by accident). Returns the coins earned, 0 if nothing sold.
+     */
+    public sellSapling(speciesId: string, count = 1): number {
+        const key = `tree:${speciesId}`
+        const owned = this.state.inventory[key] || 0
+        const sold = Math.min(Math.max(0, Math.floor(count)), owned)
+        const species = getSpecies(speciesId)
+        if (!species || sold <= 0) return 0
+
+        const price = saplingSellValue(speciesId) * sold
+        this.mutate((g) => {
+            g.inventory[key] -= sold
+            if (g.inventory[key] <= 0) delete g.inventory[key]
+            this.grant(g, { coins: price })
+        })
+        if (this.settings().forestSounds) this.soundManager.playCoin()
+        new Notice(`🪙 Sold ${sold > 1 ? `${sold} ` : 'a '}${species.name} sapling${sold > 1 ? 's' : ''} for ${price} coin${price === 1 ? '' : 's'}.`)
+        return price
     }
 
     // -----------------------------------------------------------------------

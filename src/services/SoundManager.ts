@@ -49,6 +49,11 @@ export default class SoundManager {
         this.playNotes([1318.51, 1975.53], 0.07, 0.08, 0.35, 'triangle')
     }
 
+    /** Quiet, low two-note nudge for hyperfocus check-ins; soft enough not to break the flow. */
+    public playCheckIn(): void {
+        this.playNotes([523.25, 659.25], 0.18, 0.05, 1.1)
+    }
+
     /** Rising fanfare for level-ups, chests and achievements. */
     public playLevelUp(): void {
         this.playNotes([392.0, 523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98], 0.08, 0.14, 1.6)

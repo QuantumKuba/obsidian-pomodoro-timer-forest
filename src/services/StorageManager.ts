@@ -73,6 +73,9 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
         cardsCompleted: 0,
         cardsOnEstimate: 0,
         boardsCleared: 0,
+        hyperfocusSessions: 0,
+        hyperfocusMinutes: 0,
+        checkInsAcked: 0,
     },
     preferences: {
         hardcoreMode: true,

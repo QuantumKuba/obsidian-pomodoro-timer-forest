@@ -12,6 +12,7 @@ import TaskRewardWatcher from './services/TaskRewardWatcher'
 import BoardWatcher from './board/BoardWatcher'
 import BoardOpening, { VIEW_TYPE_BOARD } from './board/BoardOpening'
 import { BoardView } from './board/BoardView'
+import { BoardPicker } from './board/BoardPicker'
 import { newBoardText } from './board/BoardModel'
 import { obsidianLanguage } from './board/cards'
 import { setPlugin, resetStoresForDebug } from './stores'
@@ -55,6 +56,9 @@ export default class PomodoroTimerPlugin extends Plugin {
         })
         this.addRibbonIcon('timer', 'Toggle timer panel', () => {
             this.toggleTimerPanel()
+        })
+        this.addRibbonIcon('kanban', 'Open a board', () => {
+            this.pickBoard()
         })
 
         // The status bar item is created now; its timer component is mounted once the timer exists
@@ -135,8 +139,28 @@ export default class PomodoroTimerPlugin extends Plugin {
             name: 'Switch timer mode (work / break)',
             callback: () => {
                 this.timer?.toggleMode((t) => {
-                    new Notice(`Timer mode: ${t.mode}`)
+                    new Notice(`Timer mode: ${t.hyperfocus ? 'Hyperfocus' : t.mode}`)
                 })
+            },
+        })
+
+        this.addCommand({
+            id: 'start-hyperfocus',
+            name: 'Start hyperfocus session (open-ended)',
+            callback: () => {
+                this.timer?.startHyperfocus()
+                new Notice('🌊 Hyperfocus started. Take your time, stopping never withers.')
+            },
+        })
+
+        this.addCommand({
+            id: 'land-hyperfocus',
+            name: 'Land hyperfocus session (harvest tree)',
+            checkCallback: (checking) => {
+                const t = this.timer ? get(this.timer) : null
+                if (!t?.inSession || !t?.hyperfocus) return false
+                if (!checking) void this.timer?.land()
+                return true
             },
         })
     }
@@ -147,6 +171,12 @@ export default class PomodoroTimerPlugin extends Plugin {
             const file = this.app.workspace.getActiveFile()
             return file && this.boardOpening?.isBoardPath(file.path) ? file : null
         }
+
+        this.addCommand({
+            id: 'open-board',
+            name: 'Open a board…',
+            callback: () => this.pickBoard(),
+        })
 
         this.addCommand({
             id: 'create-board',
@@ -227,6 +257,34 @@ export default class PomodoroTimerPlugin extends Plugin {
                 )
             }),
         )
+    }
+
+    /** Every board note in the vault, the most recently changed first. */
+    public boards(): TFile[] {
+        return this.app.vault
+            .getMarkdownFiles()
+            .filter((f) => this.boardOpening?.isBoardPath(f.path))
+            .sort((a, b) => b.stat.mtime - a.stat.mtime)
+    }
+
+    /** Asks which board to open, or makes a new one. */
+    public pickBoard(): void {
+        new BoardPicker(this.app, this.boards(), (choice) => {
+            if ('create' in choice) void this.createBoard()
+            else void this.openBoard(choice.file)
+        }).open()
+    }
+
+    /** Shows a board as a Forest board: the tab it is already open in, or a new one. */
+    public async openBoard(file: TFile): Promise<void> {
+        const { workspace } = this.app
+        const open = workspace.getLeavesOfType(VIEW_TYPE_BOARD).find((leaf) => (leaf.view as BoardView).file?.path === file.path)
+        if (open) {
+            await workspace.revealLeaf(open)
+            workspace.setActiveLeaf(open, { focus: true })
+            return
+        }
+        await this.boardOpening?.openAsBoard(workspace.getLeaf('tab'), file)
     }
 
     /** Creates "Untitled board.md" (numbered when taken) and opens it as a board. */

@@ -53,6 +53,20 @@ export interface Settings {
     boardMoveChecked: boolean
     /** Cards waiting this many days in an in-progress lane are marked; 0 turns it off. */
     boardStaleDays: number
+    /** Hyperfocus (open-ended ADHD-friendly focus sessions) */
+    hyperfocusEnabled: boolean
+    /** Show "Keep going →" prompt when a work session ends to ride the hyperfocus wave */
+    hyperfocusOfferExtend: boolean
+    /** Safety cap in minutes before auto-landing hyperfocus */
+    hyperfocusCapMin: number
+    /** Interval in minutes for gentle body check-ins (water, stretch, time); 0 = off */
+    hyperfocusCheckInMin: number
+    /** Check-in style: 'quiet' (notice) | 'chime' (soft sound) | 'system' (system notification) */
+    hyperfocusCheckInStyle: 'quiet' | 'chime' | 'system'
+    /** Ask for a quick breadcrumb note ("Where was I?") on landing */
+    hyperfocusBreadcrumb: boolean
+    /** Suggest a longer recovery break after a deep hyperfocus session */
+    hyperfocusRecoveryBreak: boolean
 }
 
 export default class PomodoroSettings extends PluginSettingTab {
@@ -85,6 +99,13 @@ export default class PomodoroSettings extends PluginSettingTab {
         boardTaskTracking: true,
         boardMoveChecked: true,
         boardStaleDays: 5,
+        hyperfocusEnabled: true,
+        hyperfocusOfferExtend: true,
+        hyperfocusCapMin: 180,
+        hyperfocusCheckInMin: 45,
+        hyperfocusCheckInStyle: 'quiet',
+        hyperfocusBreadcrumb: true,
+        hyperfocusRecoveryBreak: true,
     }
 
     static settings: Writable<Settings> = writable(
@@ -230,6 +251,90 @@ export default class PomodoroSettings extends PluginSettingTab {
                     this.updateSettings({ logForestToDailyNote: value })
                 })
             })
+
+        new Setting(containerEl).setHeading().setName('Hyperfocus (open-ended focus)')
+
+        new Setting(containerEl)
+            .setName('Enable hyperfocus mode')
+            .setDesc('Allows open-ended, count-up focus sessions specifically designed for ADHD hyperfocus. Hyperfocus sessions never wither when stopped.')
+            .addToggle((toggle) => {
+                toggle.setValue(this._settings.hyperfocusEnabled ?? true)
+                toggle.onChange((value) => {
+                    this.updateSettings({ hyperfocusEnabled: value }, true)
+                })
+            })
+
+        if (this._settings.hyperfocusEnabled) {
+            new Setting(containerEl)
+                .setName('Ride the wave (extend into hyperfocus)')
+                .setDesc('When a normal work session finishes, offer to keep going directly into hyperfocus without resetting or breaking flow.')
+                .addToggle((toggle) => {
+                    toggle.setValue(this._settings.hyperfocusOfferExtend ?? true)
+                    toggle.onChange((value) => {
+                        this.updateSettings({ hyperfocusOfferExtend: value })
+                    })
+                })
+
+            new Setting(containerEl)
+                .setName('Safety cap (maximum minutes)')
+                .setDesc('Automatically lands and harvests the tree when this duration is reached, to prevent accidental overnight sessions.')
+                .addSlider((slider) => {
+                    slider.setLimits(60, 300, 15)
+                    slider.setValue(this._settings.hyperfocusCapMin ?? 180)
+                    slider.setDynamicTooltip()
+                    slider.onChange((value) => {
+                        this.updateSettings({ hyperfocusCapMin: value })
+                    })
+                })
+
+            new Setting(containerEl)
+                .setName('Gentle body check-in interval')
+                .setDesc('Minutes between non-blocking prompts to stretch, drink water, and check the current time. 0 turns check-ins off.')
+                .addSlider((slider) => {
+                    slider.setLimits(0, 120, 15)
+                    slider.setValue(this._settings.hyperfocusCheckInMin ?? 45)
+                    slider.setDynamicTooltip()
+                    slider.onChange((value) => {
+                        this.updateSettings({ hyperfocusCheckInMin: value })
+                    })
+                })
+
+            new Setting(containerEl)
+                .setName('Check-in nudge style')
+                .setDesc('How body check-ins alert you without interrupting your concentration.')
+                .addDropdown((dropdown) => {
+                    dropdown.selectEl.addClass('pomodoro-select-compact')
+                    dropdown.addOptions({
+                        quiet: 'Quiet in-app notice',
+                        chime: 'Soft chime + notice',
+                        system: 'System notification',
+                    })
+                    dropdown.setValue(this._settings.hyperfocusCheckInStyle ?? 'quiet')
+                    dropdown.onChange((value: string) => {
+                        this.updateSettings({ hyperfocusCheckInStyle: value as 'quiet' | 'chime' | 'system' })
+                    })
+                })
+
+            new Setting(containerEl)
+                .setName('Prompt for breadcrumb ("Where was I?")')
+                .setDesc('When landing a session, offer a 1-line prompt to record where you stopped so re-entry is easy next time.')
+                .addToggle((toggle) => {
+                    toggle.setValue(this._settings.hyperfocusBreadcrumb ?? true)
+                    toggle.onChange((value) => {
+                        this.updateSettings({ hyperfocusBreadcrumb: value })
+                    })
+                })
+
+            new Setting(containerEl)
+                .setName('Suggest recovery break')
+                .setDesc('Scale the subsequent break length to the depth of the hyperfocus session (e.g. up to 20 minutes) to ease task switching.')
+                .addToggle((toggle) => {
+                    toggle.setValue(this._settings.hyperfocusRecoveryBreak ?? true)
+                    toggle.onChange((value) => {
+                        this.updateSettings({ hyperfocusRecoveryBreak: value })
+                    })
+                })
+        }
 
         new Setting(containerEl).setHeading().setName('Notification')
 
