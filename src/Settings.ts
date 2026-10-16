@@ -149,7 +149,7 @@ export default class PomodoroSettings extends PluginSettingTab {
         PomodoroSettings.settings.update((settings) => {
             this._settings = { ...settings, ...newSettings }
             if (refreshUI) {
-                this.display()
+                this.renderSettings()
             }
             return this._settings
         })
@@ -159,7 +159,11 @@ export default class PomodoroSettings extends PluginSettingTab {
         this.unsubscribe()
     }
 
-    public display() {
+    public display(): void {
+        this.renderSettings()
+    }
+
+    private renderSettings(): void {
         const { containerEl } = this
         containerEl.empty()
 
@@ -190,7 +194,6 @@ export default class PomodoroSettings extends PluginSettingTab {
             .addSlider((slider) => {
                 slider.setLimits(1, 12, 1)
                 slider.setValue(this._settings.dailyGoal ?? 4)
-                slider.setDynamicTooltip()
                 slider.onChange((value) => {
                     this.updateSettings({ dailyGoal: value })
                 })
@@ -285,7 +288,6 @@ export default class PomodoroSettings extends PluginSettingTab {
                 .addSlider((slider) => {
                     slider.setLimits(60, 300, 15)
                     slider.setValue(this._settings.hyperfocusCapMin ?? 180)
-                    slider.setDynamicTooltip()
                     slider.onChange((value) => {
                         this.updateSettings({ hyperfocusCapMin: value })
                     })
@@ -297,7 +299,6 @@ export default class PomodoroSettings extends PluginSettingTab {
                 .addSlider((slider) => {
                     slider.setLimits(0, 120, 15)
                     slider.setValue(this._settings.hyperfocusCheckInMin ?? 45)
-                    slider.setDynamicTooltip()
                     slider.onChange((value) => {
                         this.updateSettings({ hyperfocusCheckInMin: value })
                     })
@@ -466,7 +467,6 @@ export default class PomodoroSettings extends PluginSettingTab {
             .addSlider((slider) => {
                 slider.setLimits(0, 21, 1)
                 slider.setValue(this._settings.boardStaleDays ?? 5)
-                slider.setDynamicTooltip()
                 slider.onChange((value) => {
                     this.updateSettings({ boardStaleDays: value })
                 })
@@ -588,7 +588,7 @@ export default class PomodoroSettings extends PluginSettingTab {
                         .addButton((button) => {
                             button.setIcon('refresh-ccw')
                             button.onClick(() => {
-                                this.display()
+                                this.renderSettings()
                             })
                         })
                 }
