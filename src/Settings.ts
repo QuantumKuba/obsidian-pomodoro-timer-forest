@@ -1,5 +1,5 @@
 import type PomodoroTimerPlugin from 'main'
-import { PluginSettingTab, Setting, moment } from 'obsidian'
+import { PluginSettingTab, Setting, moment, type SettingDefinitionItem } from 'obsidian'
 import type { Unsubscriber } from 'svelte/motion'
 import { writable, type Writable } from 'svelte/store'
 import {
@@ -138,9 +138,13 @@ export default class PomodoroSettings extends PluginSettingTab {
         return this._settings
     }
 
+    public getSettingDefinitions(): SettingDefinitionItem[] {
+        return []
+    }
+
     public updateSettings = (
         newSettings: Partial<Settings>,
-        refreshUI: boolean = false,
+        refreshUI = false,
     ) => {
         PomodoroSettings.settings.update((settings) => {
             this._settings = { ...settings, ...newSettings }

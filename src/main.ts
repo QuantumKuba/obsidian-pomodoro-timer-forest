@@ -280,7 +280,7 @@ export default class PomodoroTimerPlugin extends Plugin {
         const { workspace } = this.app
         const open = workspace.getLeavesOfType(VIEW_TYPE_BOARD).find((leaf) => (leaf.view as BoardView).file?.path === file.path)
         if (open) {
-            await workspace.revealLeaf(open)
+            workspace.revealLeaf(open)
             workspace.setActiveLeaf(open, { focus: true })
             return
         }
