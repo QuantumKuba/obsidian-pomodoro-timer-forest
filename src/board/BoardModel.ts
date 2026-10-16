@@ -448,8 +448,8 @@ export function parseBoard(text: string): BoardDoc {
     const settings = findSettings(lines, bodyStart)
     const bodyEnd = settings ? settings.start : lines.length
     const triggers: [string, string] = [
-        typeof settings?.data['date-trigger'] === 'string' ? (settings.data['date-trigger'] as string) : '@',
-        typeof settings?.data['time-trigger'] === 'string' ? (settings.data['time-trigger'] as string) : '@@',
+        typeof settings?.data['date-trigger'] === 'string' ? settings.data['date-trigger'] : '@',
+        typeof settings?.data['time-trigger'] === 'string' ? settings.data['time-trigger'] : '@@',
     ]
 
     // Headings outside code blocks, and where the archive starts
@@ -540,9 +540,9 @@ export function parseBoard(text: string): BoardDoc {
 // ---------------------------------------------------------------------------
 
 const DONE_WORDS =
-    /(^|[\s(\[:\-–—])(done|complete[d]?|finished|shipped|closed|resolved|released|archived?|zrobione|gotowe|ukończone|zakończone|fertig|erledigt|abgeschlossen|hecho|terminad[oa]s?|completad[oa]s?|termin[ée]e?s?|fait|conclu[íi]d[oa]s?|feito|completato|fatto|klaar|gedaan|готово|сделано|выполнено|完了|完成|완료)($|[\s)\]:!.\-–—])/iu
+    /(^|[\s([:\-–—])(done|complete[d]?|finished|shipped|closed|resolved|released|archived?|zrobione|gotowe|ukończone|zakończone|fertig|erledigt|abgeschlossen|hecho|terminad[oa]s?|completad[oa]s?|termin[ée]e?s?|fait|conclu[íi]d[oa]s?|feito|completato|fatto|klaar|gedaan|готово|сделано|выполнено|完了|完成|완료)($|[\s)\]:!.\-–—])/iu
 const ACTIVE_WORDS =
-    /(^|[\s(\[:\-–—])(doing|in[ -]?progress|progress|wip|active|working|today|current|ongoing|started|focus|review|testing|in review|blocked|w trakcie|w toku|robię|w realizacji|in arbeit|läuft|en curso|haciendo|en cours|em andamento|fazendo|in corso|bezig|в работе|делаю|進行中|进行中|진행 ?중)($|[\s)\]:!.\-–—])/iu
+    /(^|[\s([:\-–—])(doing|in[ -]?progress|progress|wip|active|working|today|current|ongoing|started|focus|review|testing|in review|blocked|w trakcie|w toku|robię|w realizacji|in arbeit|läuft|en curso|haciendo|en cours|em andamento|fazendo|in corso|bezig|в работе|делаю|進行中|进行中|진행 ?중)($|[\s)\]:!.\-–—])/iu
 
 /**
  * A lane's role from its marker and title; `overrides` (by lane title) wins over the title.
@@ -552,7 +552,7 @@ export function laneRole(lane: Pick<BoardLane, 'title' | 'complete'>, overrides?
     if (lane.complete) return 'done'
     const o = overrides?.[lane.title]
     if (o) return o
-    const title = lane.title.replace(/[✅✔☑️🏁]/gu, ' done ')
+    const title = lane.title.replace(/[✅✔🏁]|☑️?/gu, ' done ')
     if (DONE_WORDS.test(` ${title} `)) return 'done'
     if (ACTIVE_WORDS.test(` ${title} `)) return 'active'
     return 'backlog'

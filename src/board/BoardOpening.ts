@@ -1,4 +1,4 @@
-import { TFile, WorkspaceLeaf, type OpenViewState, type ViewState } from 'obsidian'
+import { TFile, WorkspaceLeaf, type ViewState } from 'obsidian'
 import type PomodoroTimerPlugin from '../main'
 import { BOARD_FRONTMATTER_KEY } from './BoardModel'
 import { KANBAN_PLUGIN_ID, kanbanPluginEnabled } from './cards'
@@ -53,7 +53,7 @@ export default class BoardOpening {
     }
 
     private redirect(leaf: WorkspaceLeaf, state: ViewState): ViewState {
-        const file = state.state?.file
+        const file: unknown = (state.state as { file?: unknown } | undefined)?.file
         if (typeof file !== 'string') return state
         const id = (leaf as LeafWithId).id ?? ''
         if (id && this.bypass.delete(id)) return state
@@ -76,7 +76,7 @@ export default class BoardOpening {
     }
 
     /** Shows a note as markdown, whatever would normally open it. */
-    public async openAsMarkdown(leaf: WorkspaceLeaf, file: TFile, eState?: OpenViewState['eState']): Promise<void> {
+    public async openAsMarkdown(leaf: WorkspaceLeaf, file: TFile, eState?: Record<string, unknown>): Promise<void> {
         const id = (leaf as LeafWithId).id
         if (id) this.bypass.add(id)
         this.keepKanbanAway(leaf, file.path)
@@ -88,10 +88,10 @@ export default class BoardOpening {
     }
 
     public async openAsBoard(leaf: WorkspaceLeaf, file: TFile): Promise<void> {
-        await leaf.setViewState({ type: VIEW_TYPE_BOARD, state: { file: file.path }, active: true } as ViewState)
+        await leaf.setViewState({ type: VIEW_TYPE_BOARD, state: { file: file.path }, active: true })
     }
 
     public async openInKanban(leaf: WorkspaceLeaf, file: TFile): Promise<void> {
-        await leaf.setViewState({ type: KANBAN_VIEW_TYPE, state: { file: file.path }, active: true } as ViewState)
+        await leaf.setViewState({ type: KANBAN_VIEW_TYPE, state: { file: file.path }, active: true })
     }
 }

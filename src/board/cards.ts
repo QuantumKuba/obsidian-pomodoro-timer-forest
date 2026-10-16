@@ -1,4 +1,4 @@
-import { moment, type App, type TFile } from 'obsidian'
+import { getLanguage, moment, type App, type TFile } from 'obsidian'
 import type { TaskFormat } from 'Settings'
 import type { TaskItem } from 'Tasks'
 import { DESERIALIZERS } from 'serializer'
@@ -17,7 +17,7 @@ export function kanbanPluginEnabled(app: App): boolean {
 /** The language Obsidian runs in; the Kanban plugin writes its markers in it. */
 export function obsidianLanguage(): string {
     try {
-        return window.localStorage.getItem('language') || 'en'
+        return getLanguage() || 'en'
     } catch {
         return 'en'
     }
@@ -29,8 +29,10 @@ export function cardIndent(app: App): string {
     return config?.call(app.vault, 'useTab') === false ? '    ' : '\t'
 }
 
-const settingString = (settings: Record<string, unknown> | undefined, key: string, fallback: string) =>
-    typeof settings?.[key] === 'string' && settings[key] ? (settings[key] as string) : fallback
+const settingString = (settings: Record<string, unknown> | undefined, key: string, fallback: string): string => {
+    const val = settings?.[key]
+    return typeof val === 'string' && val ? val : fallback
+}
 
 /** A card's due date as `YYYY-MM-DD`, reading Kanban dates in the board's own date format. */
 export function cardDueDate(meta: CardMeta, settings?: Record<string, unknown>): string {

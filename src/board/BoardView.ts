@@ -1,4 +1,4 @@
-import { Component, Keymap, MarkdownRenderer, Menu, Modal, Notice, Scope, Setting, TextFileView, TFile, WorkspaceLeaf } from 'obsidian'
+import { Component, Keymap, MarkdownRenderer, Menu, Modal, Notice, Platform, Scope, Setting, TextFileView, TFile, WorkspaceLeaf } from 'obsidian'
 import { get, writable } from 'svelte/store'
 import type PomodoroTimerPlugin from '../main'
 import type { BoardLaneRole } from '../types/forest'
@@ -386,7 +386,7 @@ export class BoardView extends TextFileView {
         new ConfirmModal(
             this.app,
             `Delete “${lane.title}”?`,
-            `Its ${lane.cards.length} card${lane.cards.length === 1 ? '' : 's'} will be deleted with it. You can undo this with ${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Z while the board is open.`,
+            `Its ${lane.cards.length} card${lane.cards.length === 1 ? '' : 's'} will be deleted with it. You can undo this with ${Platform.isMacOS ? '⌘' : 'Ctrl'}+Z while the board is open.`,
             'Delete lane',
             go,
         ).open()
@@ -425,7 +425,8 @@ export class BoardView extends TextFileView {
 
     public toggleCollapsed(index: number): void {
         this.edit((doc) => {
-            const current = Array.isArray(doc.settings?.data['list-collapse']) ? (doc.settings!.data['list-collapse'] as boolean[]) : []
+            const collapse = doc.settings?.data['list-collapse']
+            const current = Array.isArray(collapse) ? collapse : []
             const next = doc.lanes.map((_, i) => !!current[i])
             next[index] = !next[index]
             return Board.setBoardSetting(doc, 'list-collapse', next)
