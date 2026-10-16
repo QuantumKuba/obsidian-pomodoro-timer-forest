@@ -8,7 +8,7 @@ import {
     getBuilding, getSpecies, getCrop, cropProgress, isRipePlot,
     CROPS, GARDEN_PLOT_ID, LAND_EXPANSIONS, BIOME_UNLOCK_LEVELS, TREE_MAX_LEVEL,
 } from '../assets/floraCatalog'
-import { perkText, TASK_WATERING_MINUTES } from '../services/Progression'
+import { perkText, saplingSellValue, TASK_WATERING_MINUTES } from '../services/Progression'
 import type { BiomeType, PlacedHomesteadItem, RewardEvent } from '../types/forest'
 
 export let full = false
@@ -61,7 +61,7 @@ $: inventory = Object.entries(g.inventory)
         const [type, id] = key.split(':')
         const name = type === 'tree' ? getSpecies(id)?.name : getBuilding(id)?.name
         const svg = type === 'tree' ? SPECIES_SVGS[id] : BUILDING_SVGS[id]
-        return { key, type, id, count, name: name || id, svg: svg || '' }
+        return { key, type, id, count, name: name || id, svg: svg || '', price: type === 'tree' ? saplingSellValue(id) : 0 }
     })
     .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'building' ? -1 : 1))
 
@@ -71,6 +71,12 @@ $: placingName = placingKey ? inventory.find((i) => i.key === placingKey)?.name 
 
 function itemName(item: PlacedHomesteadItem): string {
     return item.customName || (item.itemType === 'tree' ? getSpecies(item.itemId)?.name : getBuilding(item.itemId)?.name) || item.itemId
+}
+
+/** Sell one spare sapling (the whole stack with Shift) and let go of it if it was being placed. */
+function sell(inv: { key: string; id: string; count: number }, e: MouseEvent) {
+    const earned = engine?.sellSapling(inv.id, e.shiftKey ? inv.count : 1) ?? 0
+    if (earned && placingKey === inv.key && !(($gamificationStore.inventory[inv.key] ?? 0) > 0)) placingKey = null
 }
 
 /** Pick ripe crops (all of them when no ids are given) and show what each plot gave. */
@@ -305,11 +311,21 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
                 {:else}
                     <div class="inv-grid">
                         {#each inventory as inv (inv.key)}
-                            <button class="inv-item {placingKey === inv.key ? 'active' : ''}" title="Place {inv.name}" on:click={() => startPlacing(inv.key)}>
-                                <span class="inv-art">{@html inv.svg}</span>
-                                <span class="inv-count">×{inv.count}</span>
-                                <span class="inv-name">{inv.name}</span>
-                            </button>
+                            <div class="inv-cell">
+                                <button class="inv-item {placingKey === inv.key ? 'active' : ''}" title="Place {inv.name}" on:click={() => startPlacing(inv.key)}>
+                                    <span class="inv-art">{@html inv.svg}</span>
+                                    <span class="inv-count">×{inv.count}</span>
+                                    <span class="inv-name">{inv.name}</span>
+                                </button>
+                                {#if inv.type === 'tree'}
+                                    <button
+                                        class="inv-sell"
+                                        title="Sell a spare {inv.name} sapling for {inv.price} coin{inv.price === 1 ? '' : 's'} (Shift-click sells all {inv.count})"
+                                        on:click={(e) => sell(inv, e)}>
+                                        Sell {@html ICONS.coin}{inv.price}
+                                    </button>
+                                {/if}
+                            </div>
                         {/each}
                     </div>
                 {/if}
@@ -593,6 +609,20 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
     grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
     gap: 6px;
 }
+.inv-cell { display: flex; flex-direction: column; gap: 3px; }
+.inv-sell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    height: auto;
+    padding: 2px 4px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.inv-sell :global(svg) { width: 11px; height: 11px; }
 .inv-item {
     position: relative;
     display: flex;
