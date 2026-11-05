@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import { strict as assert } from 'node:assert'
 import { placed } from './helpers'
-import { renderVillage, sceneLayout } from '../src/render/VillageScene'
+import { renderVillage, sceneLayout, tileAtPoint } from '../src/render/VillageScene'
 import { buildGrid, findPath, isWalkable, mainArea } from '../src/render/villageGrid'
 import { freshGamificationData } from '../src/services/StorageManager'
 import type { GamificationData, PlacedHomesteadItem } from '../src/types/forest'
@@ -138,4 +138,22 @@ test('ripe plots are marked, growing ones are not', () => {
     const growing = renderVillage(village([placed('building', 'garden_plot', 1, 1, { cropId: 'carrot', cropGrowth: 20 })]), { idPrefix: 'g' })
     assert.ok(ripe.includes('pf-ripe'))
     assert.ok(!growing.includes('pf-ripe'))
+})
+
+test('tileAtPoint projects screen points back to the correct tile', () => {
+    const L = sceneLayout(5)
+    for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 5; x++) {
+            const { cx, cy } = L.tile(x, y)
+            const at = tileAtPoint(L, cx, cy)
+            assert.deepEqual(at, { x, y }, `tile (${x}, ${y}) center matches`)
+
+            // A small jitter within tile diamond stays on the same tile
+            assert.deepEqual(tileAtPoint(L, cx + 8, cy + 4), { x, y })
+            assert.deepEqual(tileAtPoint(L, cx - 8, cy - 4), { x, y })
+        }
+    }
+    // Far off the island returns null
+    assert.equal(tileAtPoint(L, -100, -100), null)
+    assert.equal(tileAtPoint(L, L.width + 100, L.height + 100), null)
 })

@@ -167,6 +167,18 @@ export function sceneLayout(size: number): Layout {
     }
 }
 
+/** Tile coordinate at an (x, y) point in the scene viewBox, or null if off the island. */
+export function tileAtPoint(L: Layout, cx: number, cy: number): { x: number; y: number } | null {
+    const dx = cx - L.width / 2
+    const dy = cy - (L.top + TH / 2)
+    const fx = dx / TW + dy / TH
+    const fy = dy / TH - dx / TW
+    const x = Math.floor(fx + 0.5)
+    const y = Math.floor(fy + 0.5)
+    if (x < 0 || y < 0 || x >= L.size || y >= L.size) return null
+    return { x, y }
+}
+
 // ---------------------------------------------------------------------------
 // Layers
 // ---------------------------------------------------------------------------

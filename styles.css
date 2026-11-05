@@ -172,8 +172,27 @@ If your plugin does not need CSS, delete this file.
     stroke-width: 2;
 }
 
+.pf-scene .pf-hit.pf-drop-target {
+    fill: rgba(144, 238, 144, 0.4);
+    stroke: #5ec443;
+    stroke-width: 2.5;
+    stroke-dasharray: 4 3;
+}
+
+.pf-scene .pf-hit.pf-drop-invalid {
+    fill: rgba(244, 67, 54, 0.28);
+    stroke: #e53935;
+    stroke-width: 2;
+    stroke-dasharray: 3 3;
+}
+
 .pf-scene .pf-item[data-item] {
-    cursor: pointer;
+    cursor: grab;
+}
+
+.pf-scene .pf-item.pf-dragging-source {
+    opacity: 0.32;
+    filter: grayscale(40%) contrast(90%);
 }
 
 .pf-scene .pf-item[data-item]:hover > svg {
@@ -248,7 +267,8 @@ If your plugin does not need CSS, delete this file.
     .pf-scene:not(.pf-still) .pf-mist {
         animation: pf-mist 12s ease-in-out infinite alternate;
     }
-    .pf-scene:not(.pf-still) .pf-hit.pf-target {
+    .pf-scene:not(.pf-still) .pf-hit.pf-target,
+    .pf-scene:not(.pf-still) .pf-hit.pf-drop-target {
         animation: pf-pulse 1.4s ease-in-out infinite;
     }
     .pf-scene:not(.pf-still) .pf-ripe {

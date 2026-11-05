@@ -1,9 +1,9 @@
 <script lang="ts">
 import { afterUpdate, createEventDispatcher, onDestroy, onMount } from 'svelte'
 import { gamificationStore, pluginInstance, clockMinute, settings, charm, vitality, levelInfo, charter } from '../stores'
-import { renderVillage, homesteadItemSprite } from '../render/VillageScene'
+import { renderVillage, homesteadItemSprite, sceneLayout, tileAtPoint } from '../render/VillageScene'
 import VillageLife from '../render/VillageLife'
-import { SPECIES_SVGS, BUILDING_SVGS, BIOME_CONFIGS, ICONS } from '../assets/floraAssets'
+import { SPECIES_SVGS, BUILDING_SVGS, BIOME_CONFIGS, ICONS, cropSvg } from '../assets/floraAssets'
 import {
     getBuilding, getSpecies, getCrop, cropProgress, isRipePlot,
     CROPS, GARDEN_PLOT_ID, LAND_EXPANSIONS, BIOME_UNLOCK_LEVELS, TREE_MAX_LEVEL,
@@ -46,6 +46,87 @@ $: sceneHtml = renderVillage(g, {
 const life = new VillageLife()
 let frame: HTMLElement
 let lifeLayer: HTMLElement
+let stashEl: HTMLElement | null = null
+
+interface DragState {
+    item: PlacedHomesteadItem
+    originX: number
+    originY: number
+    pointerId: number
+    startX: number
+    startY: number
+    frameX: number
+    frameY: number
+    isDragging: boolean
+    isLifting: boolean
+    overStash: boolean
+    targetTile: { x: number; y: number } | null
+    isValidTarget: boolean
+    landing: boolean
+    stashing: boolean
+}
+
+let drag: DragState | null = null
+let suppressNextClick = false
+
+function getItemSprite(item: PlacedHomesteadItem): string {
+    if (item.itemType === 'building' && item.itemId === GARDEN_PLOT_ID) {
+        return cropSvg(getCrop(item.cropId).id, cropProgress(item))
+    }
+    return homesteadItemSprite(item)
+}
+
+function playSound(type: 'pickup' | 'plant') {
+    if (!$settings.forestSounds || !engine?.soundManager) return
+    if (type === 'pickup') engine.soundManager.playPickup()
+    else if (type === 'plant') engine.soundManager.playPlantSeed()
+}
+
+function getTileAtPoint(clientX: number, clientY: number): { x: number; y: number } | null {
+    const under = document.elementFromPoint(clientX, clientY)
+    const hitEl = under?.closest<SVGElement>('.pf-hit')
+    if (hitEl && hitEl.dataset.x !== undefined && hitEl.dataset.y !== undefined) {
+        return { x: Number(hitEl.dataset.x), y: Number(hitEl.dataset.y) }
+    }
+    if (!frame) return null
+    const svg = frame.querySelector<SVGSVGElement>('svg.pf-scene')
+    if (!svg) return null
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = clientY
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return null
+    const svgPt = pt.matrixTransform(ctm.inverse())
+    const L = sceneLayout(g.landSize)
+    return tileAtPoint(L, svgPt.x, svgPt.y)
+}
+
+function updateDragTileHighlights() {
+    if (!frame) return
+    frame.querySelectorAll<SVGElement>('.pf-item').forEach((itemEl) => {
+        const isSource = !!drag?.isDragging && itemEl.getAttribute('data-item') === drag.item.id
+        itemEl.classList.toggle('pf-dragging-source', isSource)
+    })
+    frame.querySelectorAll<SVGElement>('.pf-hit').forEach((tile) => {
+        const x = Number(tile.dataset.x)
+        const y = Number(tile.dataset.y)
+        const isTarget = !!drag?.isDragging && !drag.overStash && drag.targetTile && drag.targetTile.x === x && drag.targetTile.y === y
+        const isValid = drag?.isValidTarget ?? false
+        tile.classList.toggle('pf-drop-target', !!isTarget && isValid)
+        tile.classList.toggle('pf-drop-invalid', !!isTarget && !isValid)
+    })
+}
+
+function clearDragHighlights() {
+    if (!frame) return
+    frame.querySelectorAll<SVGElement>('.pf-item.pf-dragging-source').forEach((el) => {
+        el.classList.remove('pf-dragging-source')
+    })
+    frame.querySelectorAll<SVGElement>('.pf-hit.pf-drop-target, .pf-hit.pf-drop-invalid').forEach((el) => {
+        el.classList.remove('pf-drop-target', 'pf-drop-invalid')
+    })
+}
+
 afterUpdate(() => {
     if (!frame) return
     if (live) life.sync(frame, lifeLayer, g, $settings.dailyGoal || 4)
@@ -58,6 +139,9 @@ afterUpdate(() => {
         tile.classList.toggle('pf-selected', !!selected && selected.gridX === x && selected.gridY === y)
         tile.classList.toggle('pf-target', targeting && !occupied.has(`${x},${y}`))
     })
+    if (drag?.isDragging) {
+        updateDragTileHighlights()
+    }
 })
 
 $: inventory = Object.entries(g.inventory)
@@ -129,6 +213,10 @@ function pickUp(el: Element) {
 }
 
 function onSceneClick(e: MouseEvent) {
+    if (suppressNextClick) {
+        suppressNextClick = false
+        return
+    }
     const find = (e.target as Element).closest('[data-pickup]')
     if (find && !placingKey && !movingId) {
         pickUp(find)
@@ -174,6 +262,177 @@ function onSceneClick(e: MouseEvent) {
     if (occupant && isRipePlot(occupant)) harvest([occupant.id])
 }
 
+function onPointerDown(e: PointerEvent) {
+    if (e.button !== 0) return
+    if (placingKey || movingId) return
+
+    const target = e.target as Element
+    if (target.closest('[data-pickup]') || target.closest('[data-actor]') || target.closest('.pf-stash-target')) return
+
+    let item: PlacedHomesteadItem | null = null
+    const itemEl = target.closest('[data-item]')
+    if (itemEl) {
+        const id = itemEl.getAttribute('data-item')
+        item = g.homestead.find((i) => i.id === id) || null
+    }
+    if (!item) {
+        const tileEl = target.closest('[data-x]')
+        if (tileEl) {
+            const x = Number(tileEl.getAttribute('data-x'))
+            const y = Number(tileEl.getAttribute('data-y'))
+            item = g.homestead.find((i) => i.gridX === x && i.gridY === y) || null
+        }
+    }
+    if (!item) return
+
+    const rect = frame.getBoundingClientRect()
+    drag = {
+        item,
+        originX: item.gridX,
+        originY: item.gridY,
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        frameX: e.clientX - rect.left,
+        frameY: e.clientY - rect.top,
+        isDragging: false,
+        isLifting: false,
+        overStash: false,
+        targetTile: null,
+        isValidTarget: false,
+        landing: false,
+        stashing: false,
+    }
+}
+
+function onPointerMove(e: PointerEvent) {
+    if (!drag || drag.pointerId !== e.pointerId) return
+    if (drag.landing || drag.stashing) return
+
+    const rect = frame.getBoundingClientRect()
+    drag.frameX = e.clientX - rect.left
+    drag.frameY = e.clientY - rect.top
+
+    if (!drag.isDragging) {
+        const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
+        if (dist >= 5) {
+            drag.isDragging = true
+            drag.isLifting = true
+            try {
+                frame.setPointerCapture(e.pointerId)
+            } catch {}
+            playSound('pickup')
+            setTimeout(() => {
+                if (drag) drag.isLifting = false
+            }, 380)
+        } else {
+            return
+        }
+    }
+
+    if (stashEl) {
+        const sRect = stashEl.getBoundingClientRect()
+        drag.overStash =
+            e.clientX >= sRect.left - 16 &&
+            e.clientX <= sRect.right + 16 &&
+            e.clientY >= sRect.top - 16 &&
+            e.clientY <= sRect.bottom + 16
+    } else {
+        drag.overStash = false
+    }
+
+    if (drag.overStash) {
+        drag.targetTile = null
+        drag.isValidTarget = false
+    } else {
+        const tile = getTileAtPoint(e.clientX, e.clientY)
+        drag.targetTile = tile
+        if (tile) {
+            const isOrigin = tile.x === drag.originX && tile.y === drag.originY
+            const isFree = !g.homestead.some((i) => i.id !== drag.item.id && i.gridX === tile.x && i.gridY === tile.y)
+            drag.isValidTarget = isOrigin || isFree
+        } else {
+            drag.isValidTarget = false
+        }
+    }
+
+    updateDragTileHighlights()
+}
+
+function onPointerUp(e: PointerEvent) {
+    if (!drag || drag.pointerId !== e.pointerId) return
+
+    try {
+        frame.releasePointerCapture(e.pointerId)
+    } catch {}
+
+    if (!drag.isDragging) {
+        drag = null
+        return
+    }
+
+    suppressNextClick = true
+    setTimeout(() => {
+        suppressNextClick = false
+    }, 150)
+
+    const currentDrag = drag
+
+    if (currentDrag.overStash) {
+        currentDrag.stashing = true
+        playSound('pickup')
+        life.pop({ x: currentDrag.originX, y: currentDrag.originY }, 'Stowed 📦')
+        setTimeout(() => {
+            if (engine) engine.stowHomesteadItem(currentDrag.item.id)
+            if (selectedId === currentDrag.item.id) selectedId = null
+            drag = null
+            clearDragHighlights()
+        }, 240)
+        return
+    }
+
+    if (currentDrag.targetTile && currentDrag.isValidTarget) {
+        const { x, y } = currentDrag.targetTile
+        if (x === currentDrag.originX && y === currentDrag.originY) {
+            selectedId = currentDrag.item.id
+            drag = null
+            clearDragHighlights()
+            return
+        }
+        if (engine && engine.moveHomesteadItem(currentDrag.item.id, x, y)) {
+            selectedId = currentDrag.item.id
+            playSound('plant')
+            life.sparkle({ x, y }, getItemSprite(currentDrag.item), '✨')
+            clearDragHighlights()
+            drag = null
+            return
+        }
+    }
+
+    currentDrag.landing = true
+    setTimeout(() => {
+        drag = null
+        clearDragHighlights()
+    }, 220)
+}
+
+function onPointerCancel(e: PointerEvent) {
+    if (drag && drag.pointerId === e.pointerId) {
+        try {
+            frame.releasePointerCapture(e.pointerId)
+        } catch {}
+        drag = null
+        clearDragHighlights()
+    }
+}
+
+function onStashClick(e: MouseEvent) {
+    if (drag?.isDragging) return
+    e.stopPropagation()
+    const invEl = frame?.parentElement?.querySelector('.inventory')
+    invEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
 export function startPlacing(key: string) {
     movingId = null
     selectedId = null
@@ -187,6 +446,13 @@ function cancelModes() {
 
 function onKey(e: KeyboardEvent) {
     if (e.key === 'Escape') {
+        if (drag) {
+            try {
+                frame.releasePointerCapture(drag.pointerId)
+            } catch {}
+            drag = null
+            clearDragHighlights()
+        }
         cancelModes()
         selectedId = null
     }
@@ -203,6 +469,7 @@ onDestroy(() => {
     window.removeEventListener('keydown', onKey)
     stopWatching?.()
     life.destroy()
+    clearDragHighlights()
 })
 
 $: upgrade = selected && engine ? engine.getUpgradeInfo(selected) : null
@@ -245,9 +512,84 @@ $: isHeart = !!selected && selected.itemType === 'tree' && g.heartTree?.itemId =
 
     <div class="layout">
         <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-        <div class="scene-frame" bind:this={frame} class:placing={placingKey || movingId} on:click={onSceneClick}>
+        <div
+            class="scene-frame"
+            bind:this={frame}
+            class:placing={placingKey || movingId}
+            class:is-dragging={drag?.isDragging}
+            on:click={onSceneClick}
+            on:pointerdown={onPointerDown}
+            on:pointermove={onPointerMove}
+            on:pointerup={onPointerUp}
+            on:pointercancel={onPointerCancel}
+        >
             {@html sceneHtml}
             <div class="life-layer" bind:this={lifeLayer}></div>
+
+            <!-- Cute Stash Icon in the Corner -->
+            <div
+                class="pf-stash-target"
+                bind:this={stashEl}
+                class:active={drag?.isDragging}
+                class:hover={drag?.overStash}
+                on:click={onStashClick}
+                role="button"
+                tabindex="0"
+                title="Stash: drop a piece here to stow it back to inventory"
+            >
+                <div class="pf-stash-icon-wrap">
+                    <svg class="pf-stash-svg" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g class="pf-stash-chest">
+                            <ellipse cx="18" cy="32" rx="14" ry="3.5" fill="rgba(0,0,0,0.18)"/>
+                            <rect x="5" y="15" width="26" height="15" rx="3.5" fill="#8c5b36" stroke="#5a381e" stroke-width="1.2"/>
+                            <line x1="5" y1="21" x2="31" y2="21" stroke="#5a381e" stroke-width="0.9" opacity="0.6"/>
+                            <rect x="9" y="15" width="3" height="15" fill="#c99738"/>
+                            <rect x="24" y="15" width="3" height="15" fill="#c99738"/>
+                            <g class="pf-stash-lid">
+                                <path d="M4 16C4 10 9 6.5 18 6.5C27 6.5 32 10 32 16H4Z" fill="#a46d42" stroke="#5a381e" stroke-width="1.2"/>
+                                <rect x="9" y="7" width="3" height="9" fill="#c99738"/>
+                                <rect x="24" y="7" width="3" height="9" fill="#c99738"/>
+                                <path class="pf-stash-sprout" d="M18 6.5C18 3 22 2 24 3.5C24.5 5.5 21.5 6.5 18 6.5Z" fill="#78b948" stroke="#48782a" stroke-width="0.8"/>
+                            </g>
+                            <rect x="16" y="14" width="4" height="5.5" rx="1.2" fill="#ffe066" stroke="#b38600" stroke-width="0.8"/>
+                            <circle cx="18" cy="16.5" r="0.9" fill="#664d00"/>
+                        </g>
+                    </svg>
+                    <span class="pf-stash-sparkle">✨</span>
+                </div>
+                <div class="pf-stash-label">
+                    {#if drag?.overStash}
+                        <span class="pf-stash-text highlight">Stow here! ✨</span>
+                    {:else if drag?.isDragging}
+                        <span class="pf-stash-text ready">Drop to Stow 📦</span>
+                    {:else}
+                        <span class="pf-stash-text idle">Stash</span>
+                    {/if}
+                </div>
+            </div>
+
+            <!-- Floating Drag Preview with Bouncy Lift Animation -->
+            {#if drag && drag.isDragging}
+                <div
+                    class="pf-drag-preview"
+                    class:lifting={drag.isLifting}
+                    class:stashing={drag.stashing}
+                    class:landing={drag.landing}
+                    class:over-stash={drag.overStash}
+                    style="left: {drag.frameX}px; top: {drag.frameY}px;"
+                >
+                    <div class="pf-drag-shadow"></div>
+                    <div class="pf-drag-item">
+                        {@html getItemSprite(drag.item)}
+                        {#if isRipePlot(drag.item)}
+                            <span class="pf-drag-badge">🌾</span>
+                        {:else if drag.item.level > 1}
+                            <span class="pf-drag-badge stars">★{drag.item.level}</span>
+                        {/if}
+                    </div>
+                </div>
+            {/if}
+
             {#if placingKey || movingId}
                 <div class="mode-banner">
                     <span>{placingKey ? `Tap an empty tile to place ${placingName}` : 'Tap an empty tile to move it there'}</span>
@@ -487,6 +829,290 @@ $: isHeart = !!selected && selected.itemType === 'tree' && g.heartTree?.itemId =
     overflow: hidden;
     border: 1px solid var(--background-modifier-border);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.12);
+    touch-action: none;
+}
+.scene-frame.placing { box-shadow: 0 0 0 2px var(--interactive-accent); }
+.scene-frame.is-dragging { cursor: grabbing !important; user-select: none; }
+.scene-frame.is-dragging :global(.pf-hit),
+.scene-frame.is-dragging :global(.pf-item) { cursor: grabbing !important; }
+
+/* ---- Corner Stash Target ---- */
+.pf-stash-target {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 15;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px 5px 7px;
+    border-radius: 999px;
+    background: rgba(255, 253, 246, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(198, 156, 88, 0.45);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: center right;
+}
+
+.pf-stash-target:hover {
+    border-color: #c9a25a;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+    transform: translateY(-1px) scale(1.03);
+}
+
+.pf-stash-target.active {
+    background: #fffdf2;
+    border-color: #e5b342;
+    box-shadow: 0 0 0 2px rgba(229, 179, 66, 0.3), 0 8px 20px rgba(212, 160, 48, 0.25);
+    transform: scale(1.06);
+    animation: pf-stash-gentle-pulse 2s ease-in-out infinite;
+}
+
+.pf-stash-target.hover {
+    background: #fff7d6;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.4), 0 10px 25px rgba(245, 158, 11, 0.4);
+    transform: scale(1.18) rotate(-3deg);
+    animation: pf-stash-wobble 0.5s ease-in-out infinite alternate;
+}
+
+.pf-stash-icon-wrap {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.pf-stash-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.2));
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pf-stash-lid {
+    transform-origin: 4px 16px;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pf-stash-target:hover .pf-stash-lid,
+.pf-stash-target.active .pf-stash-lid {
+    transform: rotate(-10deg);
+}
+
+.pf-stash-target.hover .pf-stash-lid {
+    transform: rotate(-28deg);
+}
+
+.pf-stash-sparkle {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    font-size: 0.75rem;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.5);
+    transition: all 0.2s ease;
+}
+
+.pf-stash-target.hover .pf-stash-sparkle {
+    opacity: 1;
+    transform: scale(1.2) translateY(-2px);
+    animation: pf-sparkle-float 0.8s ease-in-out infinite alternate;
+}
+
+.pf-stash-label {
+    display: flex;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.pf-stash-text.idle {
+    color: #6d4c1b;
+}
+
+.pf-stash-text.ready {
+    color: #925805;
+    animation: pf-text-pulse 1.2s ease-in-out infinite alternate;
+}
+
+.pf-stash-text.highlight {
+    color: #b45309;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+@keyframes pf-stash-gentle-pulse {
+    0%, 100% { transform: scale(1.06); }
+    50% { transform: scale(1.09); }
+}
+
+@keyframes pf-stash-wobble {
+    0% { transform: scale(1.18) rotate(-4deg); }
+    100% { transform: scale(1.22) rotate(2deg); }
+}
+
+@keyframes pf-sparkle-float {
+    0% { transform: scale(1.1) translateY(0); }
+    100% { transform: scale(1.3) translateY(-4px); }
+}
+
+@keyframes pf-text-pulse {
+    0% { opacity: 0.8; }
+    100% { opacity: 1; }
+}
+
+/* ---- Drag Preview Floating Piece & Bouncy Lift ---- */
+.pf-drag-preview {
+    position: absolute;
+    pointer-events: none;
+    z-index: 60;
+    transform: translate(-50%, -75%);
+    will-change: left, top, transform;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.pf-drag-shadow {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    width: 48px;
+    height: 16px;
+    margin-left: -24px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0) 70%);
+    opacity: 0.35;
+    transform: scale(0.85);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.pf-drag-item {
+    position: relative;
+    width: 68px;
+    height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: 50% 82%;
+    animation: pf-drag-float 2.4s ease-in-out infinite alternate;
+}
+
+.pf-drag-item :global(svg) {
+    width: 100%;
+    height: 100%;
+    display: block;
+    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.32));
+}
+
+.pf-drag-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    padding: 1px 5px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    border-radius: 99px;
+    background: #ffc107;
+    color: #4a2d00;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.pf-drag-preview.lifting .pf-drag-item {
+    animation: pf-lift-bounce 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.pf-drag-preview.lifting .pf-drag-shadow {
+    animation: pf-shadow-lift 0.42s ease-out forwards;
+}
+
+.pf-drag-preview.over-stash .pf-drag-item {
+    transform: scale(0.88) translateY(-10px) rotate(6deg);
+    filter: brightness(1.15) drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pf-drag-preview.stashing .pf-drag-item {
+    transform: scale(0.12) translateY(24px) rotate(360deg);
+    opacity: 0;
+    transition: all 0.24s cubic-bezier(0.55, 0, 0.8, 0.5);
+}
+
+.pf-drag-preview.landing .pf-drag-item {
+    animation: pf-drop-land 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes pf-lift-bounce {
+    0% {
+        transform: scale(0.92) translateY(6px);
+    }
+    30% {
+        transform: scale(1.22, 0.82) translateY(2px);
+    }
+    65% {
+        transform: scale(0.92, 1.18) translateY(-28px) rotate(-3deg);
+    }
+    85% {
+        transform: scale(1.08, 0.95) translateY(-14px) rotate(2deg);
+    }
+    100% {
+        transform: scale(1.05) translateY(-18px) rotate(0deg);
+    }
+}
+
+@keyframes pf-drag-float {
+    0% {
+        transform: scale(1.05) translateY(-18px) rotate(-1.5deg);
+    }
+    50% {
+        transform: scale(1.08) translateY(-24px) rotate(1.5deg);
+    }
+    100% {
+        transform: scale(1.05) translateY(-18px) rotate(-1.5deg);
+    }
+}
+
+@keyframes pf-shadow-lift {
+    0% { transform: scale(1.1); opacity: 0.6; }
+    30% { transform: scale(1.2); opacity: 0.7; }
+    100% { transform: scale(0.85); opacity: 0.35; }
+}
+
+@keyframes pf-drop-land {
+    0% {
+        transform: scale(1.05) translateY(-18px);
+    }
+    50% {
+        transform: scale(1.18, 0.82) translateY(4px);
+    }
+    80% {
+        transform: scale(0.96, 1.04) translateY(-2px);
+    }
+    100% {
+        transform: scale(1) translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pf-drag-item,
+    .pf-drag-preview.lifting .pf-drag-item,
+    .pf-stash-target.active,
+    .pf-stash-target.hover {
+        animation: none !important;
+        transform: none !important;
+    }
 }
 .scene-frame.placing { box-shadow: 0 0 0 2px var(--interactive-accent); }
 /* While placing or moving, clicks go to the tiles, not to whoever stands on them */
