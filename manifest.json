@@ -3,7 +3,7 @@
 	"name": "Pomodoro Timer Forest",
 	"version": "1.5.0",
 	"minAppVersion": "1.7.2",
-	"description": "Grow a tree with every focus session and turn your focus, tasks and streaks into a living village. A gamified pomodoro timer with daily quests, perks and achievements.",
+	"description": "Gamified, ADHD-friendly Pomodoro focus timer. Grow trees, build a living village, ride hyperfocus waves, and stay motivated without broken streaks or guilt.",
 	"author": "QuantumKuba",
 	"authorUrl": "https://github.com/QuantumKuba",
 	"isDesktopOnly": false

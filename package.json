@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-pomodoro-timer",
 	"version": "1.5.0",
-	"description": "A pomodoro timer that helps manage your daily focus",
+	"description": "ADHD-friendly, gamified Pomodoro focus timer for Obsidian with village building and hyperfocus support",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
@@ -12,7 +12,13 @@
 	"keywords": [
 		"obsidian-plugin",
 		"pomodoro",
-		"timer"
+		"timer",
+		"adhd",
+		"adhd-friendly",
+		"gamification",
+		"focus",
+		"productivity",
+		"village-builder"
 	],
 	"author": "",
 	"license": "MIT",
