@@ -16,6 +16,7 @@ import type {
     RequestKind,
     RewardEvent,
     RewardLine,
+    TreasureSource,
     VillagerRequest,
 } from '../types/forest'
 import {
@@ -70,6 +71,9 @@ import {
 } from './Progression'
 import { CHARTER_CHAPTERS, CHARTER_RANKS, chapterComplete, charterRank, goalStatus, residentJoining } from './Charter'
 import { FRIEND_GIFT, KEEPSAKE_HEARTS, MAX_HEARTS, RESIDENTS, getResident, hearts, keepsakeValue, makeRequest, requestReward, requestSlots } from './Neighbours'
+import { CHARTER_ORNAMENTS, ORNAMENTS, getTreasure, isOrnament } from '../assets/treasureCatalog'
+import { HEART_BLESSING_PCT, HEART_STAGES, NEEDS, careFor, heartNeed, heartPerkPct, heartSlots, heartStage, heartStageIndex, heartTreeItem, newHeartTree } from './HeartTree'
+import { charterOrnamentsDue, chestTreasure, makePickup, questCareItem, residentTreasures } from './Treasures'
 import SoundManager, { type AmbientSoundType } from './SoundManager'
 import ConfettiEngine from './ConfettiEngine'
 import { writable, type Writable, get } from 'svelte/store'
@@ -217,7 +221,7 @@ export default class ForestEngine {
         } else {
             // No view open to celebrate in — fall back to compact notices.
             for (const e of events) {
-                if (e.kind === 'task' || e.kind === 'crop') continue
+                if (e.kind === 'task' || e.kind === 'crop' || e.minor) continue
                 const parts = [e.sunlight && `+${e.sunlight}☀️`, e.coins && `+${e.coins}🪙`, e.xp && `+${e.xp} XP`].filter(Boolean)
                 new Notice(`${e.title}${parts.length ? `\n${parts.join('  ')}` : ''}`)
             }
@@ -250,7 +254,8 @@ export default class ForestEngine {
         const today = dateKey()
         const g0 = this.state
         // A chapter can be complete without a change today, e.g. an old save on its first launch
-        if (g0.lastVisitDate === today && g0.questBoard?.date === today && !chapterComplete(g0)) return
+        // (or chapters signed before their ornaments existed, still to bring them)
+        if (g0.lastVisitDate === today && g0.questBoard?.date === today && !chapterComplete(g0) && !charterOrnamentsDue(g0).length) return
 
         let shieldUsed = false
         this.mutate((g) => {
@@ -695,6 +700,12 @@ export default class ForestEngine {
         }
         pctLine(`🔥 ${g.streak.current}-day streak`, Math.min(20, Math.max(0, g.streak.current - 1) * 2), 'sun')
         pctLine('🏡 Cozy Cabin', perkValue(g.homestead, 'sunlight_pct'), 'sun')
+        pctLine(`🌳 Heart Tree, ${heartStage(g).name.toLowerCase()}`, heartPerkPct(g), 'sun')
+        // A met need's blessing is spent on the next session, however many days later that is
+        if (g.heartTree?.blessing && heartTreeItem(g)) {
+            pctLine('✨ Heart Tree’s blessing', HEART_BLESSING_PCT, 'sun')
+            g.heartTree.blessing = false
+        }
         if (minutes >= 45) {
             pctLine('🌬️ Windmill (long session)', perkValue(g.homestead, 'long_session_sunlight_pct'), 'sun')
             const ash = keepsakeOf(g, 'long_session_sunlight_pct')
@@ -988,6 +999,7 @@ export default class ForestEngine {
         const earned = this.grant(g, { sunlight: q.rewardSunlight * mult, coins: q.rewardCoins * mult, xp: q.rewardXp * mult })
         const lines: RewardLine[] = [{ label: 'Quest reward', sunlight: q.rewardSunlight, coins: q.rewardCoins, xp: q.rewardXp }]
         if (bonusPct) lines.push({ label: `⛩️ Torii Gate +${bonusPct}%` })
+        lines.push(...this.leaveFind(g, questCareItem(g, dateKey()), 'quest', { note: q.title }))
         this.emit({ kind: 'quest', title: `Quest complete: ${q.title}`, ...earned, lines })
     }
 
@@ -1006,6 +1018,11 @@ export default class ForestEngine {
             const pick = pool.length ? pool[Math.floor(Math.random() * pool.length)] : 'classic_pine'
             g.inventory[`tree:${pick}`] = (g.inventory[`tree:${pick}`] || 0) + 1
             lines.push({ label: `🌱 Bonus ${getSpecies(pick)?.name} sapling` })
+
+            // And a find: an ornament now and then (never more than a few chests apart), the salve otherwise
+            const find = chestTreasure(g, dateKey())
+            g.chestPity = find.ornament ? 0 : (g.chestPity || 0) + 1
+            lines.push(...this.leaveFind(g, find.itemId, 'chest', { note: 'The daily chest' }))
 
             this.emit({ kind: 'chest', title: 'Daily chest opened!', subtitle: 'All three quests done — see you tomorrow.', ...earned, lines })
         })
@@ -1052,7 +1069,16 @@ export default class ForestEngine {
             }
             const resident = residentJoining(next)
             if (resident) lines.push({ label: `🏡 ${resident.name}, ${resident.role}, moves in` })
+            const ornament = CHARTER_ORNAMENTS[next - 1]
+            if (ornament && charterOrnamentsDue(g).includes(ornament)) {
+                lines.push(...this.leaveFind(g, ornament, 'charter', { note: chapter.title, id: `pk_charter_${ornament}` }))
+            }
             reached.push(next)
+        }
+        // Chapters signed before ornaments existed still bring theirs, once
+        for (const ornament of charterOrnamentsDue(g)) {
+            const chapter = CHARTER_CHAPTERS[CHARTER_ORNAMENTS.indexOf(ornament)]
+            this.leaveFind(g, ornament, 'charter', { note: chapter?.title, id: `pk_charter_${ornament}` })
         }
         if (!reached.length) return
 
@@ -1110,6 +1136,9 @@ export default class ForestEngine {
             g.inventory[key] = (g.inventory[key] || 0) + FRIEND_GIFT.saplings
             lines.push({ label: `🎁 A gift: ${FRIEND_GIFT.saplings} ${getSpecies(resident.favourite)?.name ?? ''} saplings`, coins: gift })
         }
+        for (const find of residentTreasures(g, r.residentId, after)) {
+            lines.push(...this.leaveFind(g, find, 'request', { residentId: r.residentId, note: r.title }))
+        }
         const earned = this.grant(g, { sunlight: reward.sunlight, coins: reward.coins + gift, xp: reward.xp })
         g.vitality = Math.min(100, g.vitality + 3)
         this.emit({
@@ -1141,6 +1170,180 @@ export default class ForestEngine {
         this.mutate((g) => {
             g.requests = g.requests.filter((r) => r.id !== id)
         })
+    }
+
+    // -----------------------------------------------------------------------
+    // Finds and the Heart Tree
+    // -----------------------------------------------------------------------
+
+    /**
+     * Leaves a mission's find in the village to be picked up, and returns the reward card's line
+     * about it. An ornament already found or already waiting is never left twice.
+     */
+    private leaveFind(g: GamificationData, itemId: string, source: TreasureSource, extra: { residentId?: string; note?: string; id?: string } = {}): RewardLine[] {
+        const t = getTreasure(itemId)
+        g.pickups ??= []
+        if (!t || (isOrnament(itemId) && (g.ornaments?.includes(itemId) || g.pickups.some((p) => p.itemId === itemId)))) return []
+        g.pickups.push(makePickup(itemId, source, dateKey(), extra))
+        const from = extra.residentId ? ` from ${getResident(extra.residentId)?.name ?? 'a neighbour'}` : ''
+        const where = !extra.residentId && heartTreeItem(g) ? 'by your Heart Tree' : 'in the village'
+        return [{ label: `${t.emoji} ${t.kind === 'ornament' ? 'An ornament: ' : ''}${t.name}${from}, waiting ${where}` }]
+    }
+
+    /**
+     * Picks up finds lying in the village (all of them when no ids are given): care items go into
+     * the satchel, ornaments into the collection. Returns what was picked up, for the UI.
+     */
+    public collectPickups(ids?: string[]): { id: string; itemId: string }[] {
+        const waiting = (this.state.pickups ?? []).filter((p) => !ids || ids.includes(p.id))
+        if (!waiting.length) return []
+        const got: { id: string; itemId: string }[] = []
+        this.mutate((g) => {
+            const fresh: string[] = []
+            for (const p of waiting) {
+                g.pickups = g.pickups.filter((q) => q.id !== p.id)
+                if (isOrnament(p.itemId)) {
+                    if (g.ornaments.includes(p.itemId)) continue
+                    g.ornaments.push(p.itemId)
+                    fresh.push(p.itemId)
+                } else {
+                    g.satchel[p.itemId] = (g.satchel[p.itemId] || 0) + 1
+                }
+                got.push({ id: p.id, itemId: p.itemId })
+            }
+            if (!got.length) return
+            const name = (id: string) => getTreasure(id)?.name ?? id
+            const counts = new Map<string, number>()
+            for (const { itemId } of got) if (!isOrnament(itemId)) counts.set(itemId, (counts.get(itemId) || 0) + 1)
+            const care = [...counts].map(([id, n]) => `${name(id)}${n > 1 ? ` ×${n}` : ''}`).join(', ')
+            const lines: RewardLine[] = fresh.length || got.length > 1
+                ? got.map(({ id, itemId }) => {
+                    const note = waiting.find((p) => p.id === id)?.note
+                    return { label: `${getTreasure(itemId)?.emoji ?? ''} ${name(itemId)}${note ? ` · ${note}` : ''}` }
+                })
+                : []
+            if (fresh.length) {
+                const first = getTreasure(fresh[0])
+                this.emit({
+                    kind: 'treasure',
+                    treasureId: fresh[0],
+                    title: fresh.length > 1 ? `${fresh.length} ornaments found` : `Found: ${first?.name}`,
+                    subtitle: `${fresh.length > 1 ? fresh.map(name).join(', ') : first?.description} · ${g.ornaments.length} of ${ORNAMENTS.length} ornaments found`,
+                    sunlight: 0, coins: 0, xp: 0,
+                    lines: got.length > 1 ? lines : [],
+                })
+            } else {
+                this.emit({ kind: 'treasure', minor: true, treasureId: got[0].itemId, title: `${care} into your satchel`, sunlight: 0, coins: 0, xp: 0, lines })
+            }
+        })
+        if (got.length && this.settings().forestSounds) this.soundManager.playPickup()
+        return got
+    }
+
+    /**
+     * Chooses a planted tree as the Heart Tree. Choosing another later is free: the bond, the
+     * stage, the ornaments and today's care all belong to the player and come along.
+     */
+    public chooseHeartTree(itemId: string): boolean {
+        const g0 = this.state
+        const item = g0.homestead.find((i) => i.id === itemId && i.itemType === 'tree')
+        if (!item) return false
+        if (g0.heartTree?.itemId === itemId) return true
+        const name = getSpecies(item.itemId)?.name ?? 'tree'
+        this.mutate((g) => {
+            const before = g.heartTree
+            g.heartTree = before ? { ...before, itemId, speciesId: item.itemId } : newHeartTree(item, dateKey())
+            if (before) {
+                this.emit({
+                    kind: 'heart', minor: true, speciesId: item.itemId, title: `The ${name} is your Heart Tree now`,
+                    subtitle: 'Its bond and ornaments came with it.', sunlight: 0, coins: 0, xp: 0, lines: [],
+                })
+                return
+            }
+            this.emit({
+                kind: 'heart', speciesId: item.itemId, title: `The ${name} is your Heart Tree`,
+                subtitle: 'Look in on it once a day. Daily quests, the chest and your neighbours bring what it needs.',
+                sunlight: 0, coins: 0, xp: 0,
+                lines: [
+                    { label: `🌳 +${HEART_STAGES[0].sunlightPct}% Sunlight on every session, more as it grows` },
+                    { label: `🎐 Room for ${HEART_STAGES[0].slots} ornament, more as it grows` },
+                    { label: '🍃 It never wilts: a day without care is a day it waits' },
+                ],
+            })
+        })
+        return true
+    }
+
+    /**
+     * Meets today's need with a care item from the satchel: +1 bond, and a blessing on the next
+     * session. Once a day; a day missed costs nothing.
+     */
+    public tendHeartTree(): boolean {
+        const g0 = this.state
+        const today = dateKey()
+        const tree = heartTreeItem(g0)
+        if (!g0.heartTree || !tree) return false
+        if (g0.heartTree.tendedOn === today) {
+            new Notice('Already looked after today. It will be glad to see you tomorrow.')
+            return false
+        }
+        const need = heartNeed(today)
+        const use = careFor(g0, need)
+        if (!use) {
+            new Notice(`Today it would like ${NEEDS[need].ask}. Daily quests bring care items.`)
+            return false
+        }
+        const name = getSpecies(tree.itemId)?.name ?? 'Heart Tree'
+        let grew = false
+        this.mutate((g) => {
+            const ht = g.heartTree
+            if (!ht) return
+            g.satchel[use] = (g.satchel[use] || 0) - 1
+            if (g.satchel[use] <= 0) delete g.satchel[use]
+            const before = heartStageIndex(ht.bond)
+            ht.bond += 1
+            ht.tendedOn = today
+            ht.blessing = true
+            const after = heartStageIndex(ht.bond)
+            const item = getTreasure(use)
+            const lines: RewardLine[] = [
+                { label: `${item?.emoji ?? ''} ${item?.name} for ${NEEDS[need].label.toLowerCase()}` },
+                { label: `🌳 Bond ${ht.bond}` },
+                { label: `✨ Blessing: +${HEART_BLESSING_PCT}% Sunlight on your next session` },
+            ]
+            if (after > before) {
+                grew = true
+                const stage = HEART_STAGES[after]
+                lines.push({ label: `☀️ +${stage.sunlightPct}% Sunlight on every session` }, { label: `🎐 Room for ${stage.slots} ornaments` })
+                if (stage.aura && !HEART_STAGES[before].aura) lines.push({ label: '🌟 A soft light about it, day and night' })
+                this.emit({ kind: 'heart', speciesId: tree.itemId, title: `Your ${name} is ${stage.name.toLowerCase()} now`, subtitle: stage.blurb, sunlight: 0, coins: 0, xp: 0, lines })
+            } else {
+                this.emit({ kind: 'heart', minor: true, speciesId: tree.itemId, title: `Your ${name} ${NEEDS[need].done}`, subtitle: `Bond ${ht.bond}`, sunlight: 0, coins: 0, xp: 0, lines })
+            }
+            this.progressQuests(g, 'village_action', 1)
+        })
+        if (this.settings().forestSounds) {
+            if (grew) this.soundManager.playLevelUp()
+            else this.soundManager.playPickup()
+        }
+        return true
+    }
+
+    /** Hangs a found ornament on the Heart Tree, or takes it down again. */
+    public toggleOrnament(id: string): boolean {
+        const g0 = this.state
+        if (!g0.heartTree || !g0.ornaments?.includes(id)) return false
+        const hung = g0.heartTree.hung.includes(id)
+        const slots = heartSlots(g0)
+        if (!hung && g0.heartTree.hung.length >= slots) {
+            new Notice(`All ${slots} places on it are taken. Take one down first; more open up as the bond grows.`)
+            return false
+        }
+        this.mutate((g) => {
+            const ht = g.heartTree
+            if (ht) ht.hung = hung ? ht.hung.filter((o) => o !== id) : [...ht.hung, id]
+        })
+        return true
     }
 
     private checkAchievements(g: GamificationData): void {
@@ -1273,11 +1476,14 @@ export default class ForestEngine {
             return false
         }
         const [itemType, itemId] = key.split(':') as ['tree' | 'building', string]
+        const id = `${itemType[0]}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
         this.mutate((g) => {
             g.inventory[key] -= 1
             if (g.inventory[key] <= 0) delete g.inventory[key]
+            // A stowed Heart Tree planted again is the Heart Tree again
+            if (g.heartTree && !g.heartTree.itemId && itemType === 'tree' && itemId === g.heartTree.speciesId) g.heartTree.itemId = id
             g.homestead.push({
-                id: `${itemType[0]}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                id,
                 itemType,
                 itemId,
                 gridX,
@@ -1312,6 +1518,8 @@ export default class ForestEngine {
             const item = g.homestead.find((i) => i.id === id)
             if (!item) return
             g.homestead = g.homestead.filter((i) => i.id !== id)
+            // Stowing the Heart Tree keeps everything about it; planting it again brings it back
+            if (g.heartTree?.itemId === id) g.heartTree.itemId = null
             const key = `${item.itemType}:${item.itemId}`
             g.inventory[key] = (g.inventory[key] || 0) + 1
         })

@@ -49,6 +49,11 @@ export default class SoundManager {
         this.playNotes([1318.51, 1975.53], 0.07, 0.08, 0.35, 'triangle')
     }
 
+    /** A soft, bright glint for picking something up or tending the Heart Tree. */
+    public playPickup(): void {
+        this.playNotes([1567.98, 2093.0, 2637.02], 0.06, 0.045, 0.5, 'sine')
+    }
+
     /** Quiet, low two-note nudge for hyperfocus check-ins; soft enough not to break the flow. */
     public playCheckIn(): void {
         this.playNotes([523.25, 659.25], 0.18, 0.05, 1.1)

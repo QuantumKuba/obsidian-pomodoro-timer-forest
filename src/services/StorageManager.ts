@@ -1,12 +1,14 @@
 import type PomodoroTimerPlugin from '../main'
 import PomodoroSettings, { type Settings } from '../Settings'
-import type { BiomeType, CharterState, PluginData, GamificationData, VillagerRequest } from '../types/forest'
+import type { BiomeType, CharterState, HeartTreeState, Pickup, PluginData, GamificationData, VillagerRequest } from '../types/forest'
 import { writable, type Writable, get } from 'svelte/store'
 import { Notice } from 'obsidian'
 import { BIOME_UNLOCK_LEVELS } from '../assets/floraCatalog'
 import { levelFromXp } from './Progression'
 import { CHARTER_CHAPTERS } from './Charter'
 import { requestReward } from './Neighbours'
+import { getTreasure, isOrnament } from '../assets/treasureCatalog'
+import { cleanSatchel } from './Treasures'
 
 export const CURRENT_DATA_VERSION = 3
 
@@ -51,6 +53,11 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
     requests: [],
     friendship: {},
     lastRequestDate: '',
+    satchel: {},
+    ornaments: [],
+    pickups: [],
+    heartTree: null,
+    chestPity: 0,
     tagMappings: [
         { tag: '#code', speciesId: 'classic_pine' },
         { tag: '#dev', speciesId: 'classic_pine' },
@@ -115,6 +122,27 @@ function normalizeCharter(raw: unknown): CharterState {
 function isRequest(r: unknown): r is VillagerRequest {
     const q = r as Partial<VillagerRequest> | null
     return !!q && typeof q.id === 'string' && typeof q.residentId === 'string' && typeof q.kind === 'string' && typeof q.target === 'number'
+}
+
+function isPickup(p: unknown): p is Pickup {
+    const q = p as Partial<Pickup> | null
+    return !!q && typeof q.id === 'string' && typeof q.itemId === 'string' && !!getTreasure(q.itemId)
+}
+
+/** A Heart Tree from disk, or none. Its bond is only ever kept; a tree that is gone leaves the record waiting for another. */
+function normalizeHeartTree(raw: unknown, found: string[]): HeartTreeState | null {
+    if (!raw || typeof raw !== 'object') return null
+    const h = raw as Partial<HeartTreeState>
+    const hung = Array.isArray(h.hung) ? h.hung.filter((id): id is string => typeof id === 'string' && found.includes(id)) : []
+    return {
+        itemId: typeof h.itemId === 'string' ? h.itemId : null,
+        speciesId: typeof h.speciesId === 'string' ? h.speciesId : 'classic_pine',
+        bond: Math.max(0, Math.floor(Number(h.bond) || 0)),
+        tendedOn: typeof h.tendedOn === 'string' ? h.tendedOn : '',
+        blessing: !!h.blessing,
+        hung: Array.from(new Set(hung)),
+        chosenOn: typeof h.chosenOn === 'string' ? h.chosenOn : '',
+    }
 }
 
 /** Old plugin versions stored their data in different shapes; nothing in it can be trusted. */
@@ -448,7 +476,15 @@ export default class StorageManager {
                 : [],
             friendship: raw.friendship && typeof raw.friendship === 'object' ? { ...raw.friendship } : {},
             lastRequestDate: typeof raw.lastRequestDate === 'string' ? raw.lastRequestDate : '',
+            satchel: cleanSatchel(raw.satchel),
+            ornaments: Array.isArray(raw.ornaments) ? Array.from(new Set(raw.ornaments.filter((id): id is string => typeof id === 'string' && isOrnament(id)))) : [],
+            pickups: Array.isArray(raw.pickups) ? raw.pickups.filter(isPickup).map((p) => ({ ...p, on: typeof p.on === 'string' ? p.on : '' })) : [],
+            heartTree: null,
+            chestPity: Math.max(0, Math.floor(Number(raw.chestPity) || 0)),
         }
+        // An ornament never arrives twice: one already found is not also waiting to be picked up
+        g.pickups = g.pickups.filter((p, i) => !(isOrnament(p.itemId) && (g.ornaments.includes(p.itemId) || g.pickups.findIndex((q) => q.itemId === p.itemId) < i)))
+        g.heartTree = normalizeHeartTree(raw.heartTree, g.ornaments)
         // The charter's rank is not worked out here: saves from before the charter start at
         // rank 0, and the engine's first update ranks them up through every chapter whose goals
         // their lifetime stats already meet, with one celebration for all of it.
@@ -475,6 +511,8 @@ export default class StorageManager {
             return false
         })
         g.vitality = Math.max(0, Math.min(100, typeof g.vitality === 'number' ? g.vitality : base.vitality))
+        // A Heart Tree that went back to the inventory waits to be chosen again; its bond is kept
+        if (g.heartTree?.itemId && !g.homestead.some((i) => i.id === g.heartTree?.itemId && i.itemType === 'tree')) g.heartTree.itemId = null
 
         // Biomes are earned by level; make sure everything already earned is available
         const level = levelFromXp(g.xp || 0)

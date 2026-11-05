@@ -223,6 +223,43 @@ export interface CharterState {
     reachedOn: Record<string, string>
 }
 
+/** What the Heart Tree asks for on a given day. Met with a care item from the satchel. */
+export type CareNeed = 'water' | 'nourish' | 'tend'
+
+/** The missions a find can come from. Nothing else ever hands one out. */
+export type TreasureSource = 'quest' | 'chest' | 'request' | 'charter'
+
+/** A find from a mission, lying in the village until it is picked up. It never expires. */
+export interface Pickup {
+    id: string
+    /** A care item or ornament id (src/assets/treasureCatalog.ts). */
+    itemId: string
+    source: TreasureSource
+    /** `request`: the resident who left it. */
+    residentId?: string
+    /** What it was for, e.g. the quest's title. */
+    note?: string
+    /** The day it was earned. */
+    on: string
+}
+
+/** The one tree the player has chosen to look after. Its progress belongs to the player, not to the tree. */
+export interface HeartTreeState {
+    /** The placed tree it is; null while it is stowed. */
+    itemId: string | null
+    /** The species of the tree last chosen. */
+    speciesId: string
+    /** One for every day its need was met. Never goes down. */
+    bond: number
+    /** The last day its need was met. */
+    tendedOn: string
+    /** Meeting a need leaves a blessing on the next session; it waits however long that takes. */
+    blessing: boolean
+    /** Ornaments hung on it, in slot order. */
+    hung: string[]
+    chosenOn: string
+}
+
 export interface GamificationData {
     sunlight: number
     coins: number
@@ -258,6 +295,16 @@ export interface GamificationData {
     friendship: Record<string, number>
     /** The last day a neighbour pinned a new request (one a day at most). */
     lastRequestDate: string
+    /** Care items held for the Heart Tree, by item id. */
+    satchel: Record<string, number>
+    /** Ornaments found, in the order they were found. Kept for good. */
+    ornaments: string[]
+    /** Finds waiting in the village to be picked up, oldest first. */
+    pickups: Pickup[]
+    /** Null until the player chooses one. */
+    heartTree: HeartTreeState | null
+    /** Daily chests opened since the last one with an ornament in it. */
+    chestPity: number
     tagMappings: TagFloraMapping[]
     ambientSound: 'none' | 'rain' | 'forest_stream' | 'breeze'
     ambientVolume: number
@@ -343,7 +390,9 @@ export interface RewardLine {
 /** A celebratory event shown in the UI (session harvest, task, quest, level-up…). */
 export interface RewardEvent {
     id: string
-    kind: 'harvest' | 'early' | 'wither' | 'task' | 'break' | 'crop' | 'quest' | 'chest' | 'achievement' | 'levelup' | 'rank' | 'request'
+    kind:
+        | 'harvest' | 'early' | 'wither' | 'task' | 'break' | 'crop' | 'quest' | 'chest' | 'achievement' | 'levelup' | 'rank' | 'request'
+        | 'treasure' | 'heart'
     title: string
     subtitle?: string
     speciesId?: string
@@ -357,6 +406,10 @@ export interface RewardEvent {
     buildingId?: string
     /** `request`: the resident who asked. */
     residentId?: string
+    /** `treasure`: the find to show. */
+    treasureId?: string
+    /** A passing toast rather than a card. */
+    minor?: boolean
     /** `<board path>::<card key>` when the event is about a card on a board. */
     ref?: string
     at: number

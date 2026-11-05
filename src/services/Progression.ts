@@ -15,6 +15,8 @@ import type {
     RewardLine,
 } from '../types/forest'
 import { FLORA_SPECIES, getBuilding, getSpecies } from '../assets/floraCatalog'
+import { ORNAMENTS } from '../assets/treasureCatalog'
+import { HEART_STAGES } from './HeartTree'
 
 // ---------------------------------------------------------------------------
 // Dates (always local time — `new Date('YYYY-MM-DD')` parses as UTC, avoid it)
@@ -561,5 +563,16 @@ export const ACHIEVEMENTS: AchievementDef[] = [
         reward: { sunlight: 300, coins: 30, xp: 150 },
         check: (g) => FLORA_SPECIES.every((sp) => g.unlockedSpecies.includes(sp.id)),
         progress: (g) => [g.unlockedSpecies.length, FLORA_SPECIES.length],
+    },
+    {
+        id: 'heart_rooted', icon: '🌳', title: 'Taking Root', description: `Look after your Heart Tree until it is ${HEART_STAGES[1].name}.`,
+        reward: { sunlight: 60, coins: 6, xp: 40 },
+        check: (g) => (g.heartTree?.bond ?? 0) >= HEART_STAGES[1].bond, progress: (g) => [Math.min(g.heartTree?.bond ?? 0, HEART_STAGES[1].bond), HEART_STAGES[1].bond],
+    },
+    {
+        id: 'ornaments_half', icon: '🎐', title: 'Keeper of Small Things', description: `Find ${Math.ceil(ORNAMENTS.length / 2)} of the ${ORNAMENTS.length} ornaments.`,
+        reward: { sunlight: 120, coins: 12, xp: 60 },
+        check: (g) => (g.ornaments?.length ?? 0) >= Math.ceil(ORNAMENTS.length / 2),
+        progress: (g) => [g.ornaments?.length ?? 0, Math.ceil(ORNAMENTS.length / 2)],
     },
 ]

@@ -1361,3 +1361,182 @@ export function plantedTreeSvg(tree: { status: 'mature' | 'young' | 'withered'; 
     if (tree.status === 'young') return growthSvg('sapling', tree.speciesId)
     return SPECIES_SVGS[tree.speciesId] || SPECIES_SVGS.classic_pine
 }
+
+// ───────────────────────── treasures: care items and ornaments (24x24) ─────────────────────────
+// Found only through missions (src/assets/treasureCatalog.ts). Each reads at 10px: one clear
+// silhouette, an ink outline and a single highlight. Things that hang are tied on at (12, 0.6),
+// which is where the village scene fastens them to a branch.
+const tsvg = (b: string) =>
+    `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g stroke-linecap="round" stroke-linejoin="round">${b}</g></svg>`
+const TOL = ` stroke="${INK}" stroke-opacity=".55" stroke-width=".7"`
+const tP = (d: string, fill: string, extra = '') => `<path d="${d}" fill="${fill}"${TOL}${extra}/>`
+const tF = (d: string, fill: string, extra = '') => `<path d="${d}" fill="${fill}"${extra}/>`
+const cord = (y: number, color = '#6b4a2a') => LN(`M12 .6L12 ${y}`, color, 0.7)
+const spark = (x: number, y: number, s: number, fill = '#ffffff') =>
+    tF(`M${x} ${y - s}Q${x} ${y} ${x + s} ${y}Q${x} ${y} ${x} ${y + s}Q${x} ${y} ${x - s} ${y}Q${x} ${y} ${x} ${y - s}Z`, fill)
+const bloom = (x: number, y: number, r: number, petal: string, mid: string) =>
+    [0, 72, 144, 216, 288].map((a) => {
+        const t = (a * Math.PI) / 180
+        return C(x + Math.sin(t) * r, y - Math.cos(t) * r, r * 0.72, petal, ` stroke="${INK}" stroke-opacity=".35" stroke-width=".4"`)
+    }).join('') + C(x, y, r * 0.6, mid)
+const crane = (cx: number, cy: number, light: string, dark: string) =>
+    tP(`M${cx} ${cy}L${r1(cx - 4.6)} ${r1(cy - 3.4)}L${r1(cx - 0.8)} ${r1(cy + 1.2)}Z`, light) +
+    tP(`M${cx} ${cy}L${r1(cx + 4.4)} ${r1(cy - 3.6)}L${r1(cx + 1)} ${r1(cy + 1.2)}Z`, dark) +
+    tP(`M${r1(cx - 3.8)} ${r1(cy + 0.8)}L${r1(cx + 3.6)} ${r1(cy + 0.8)}L${r1(cx + 5.4)} ${r1(cy - 1.4)}L${r1(cx + 4.4)} ${r1(cy + 2)}L${cx} ${r1(cy + 2.6)}Z`, light)
+const glowDot = (x: number, y: number, r: number, delay: number) =>
+    C(x, y, r, '#fff59d', ` class="pf-twinkle" style="animation-delay:${delay}s;transform-box:fill-box;transform-origin:center"`)
+
+export const TREASURE_SVGS: Record<string, string> = {
+    // ── care items ──
+    spring_water: tsvg(
+        tP('M9.2 8.6V6.4h5.6v2.2Q19 10.4 19 15.2Q19 21.2 12 21.2Q5 21.2 5 15.2Q5 10.4 9.2 8.6Z', '#e4f3f9') +
+        tF('M5.5 14.2Q8.6 13 12 14Q15.4 15 18.5 14Q18.7 20.6 12 20.6Q5.3 20.6 5.5 14.2Z', '#4aa3d8') +
+        tF('M12 14Q15.4 15 18.5 14Q18.7 20.6 12 20.6Z', '#3389bf') +
+        LN('M6.8 15.8Q7.2 18.6 9.8 19.6', '#a6dbf4', 0.9) + LN('M7.4 11.6Q6.5 12.8 6.4 14', '#ffffff', 1, ' opacity=".85"') +
+        LN('M9.1 7.5h5.8', '#a8834a', 1.1) +
+        tP('M9.4 3.2h5.2l-.4 3.3h-4.4Z', '#c8925a') + LN('M10.4 3.9v1.8', '#e3b979', 0.7) +
+        spark(18.6, 5.6, 2, '#bfe8fb')
+    ),
+    leaf_mould: tsvg(
+        tF('M9 8.6Q7.4 4.6 10.8 3Q12.2 6.8 9 8.6Z', '#e58a2e', TOL) + LN('M9.4 7.8Q10 5.6 10.8 3.6', '#b5612a', 0.5) +
+        tF('M13 8.2Q15.4 4.2 18.8 5.2Q17 8.8 13 8.2Z', '#a8521f', TOL) + LN('M13.8 7.8Q16 6.2 18.2 5.4', '#7a3a16', 0.5) +
+        tP('M5.2 11Q6.8 7.6 12 7.4Q17.2 7.6 18.8 11Z', '#4a3120') +
+        C(9, 9.4, 0.6, '#7a5638') + C(13.6, 9, 0.5, '#7a5638') + C(15.8, 10, 0.5, '#7a5638') +
+        tP('M5.6 12.8h12.8l-1.6 7.8H7.2Z', '#c56f3d') + tF('M14.6 12.8h3.8l-1.6 7.8H13.8Z', '#a3562c') +
+        LN('M7.6 14.2l.9 5', '#e6a072', 0.9) +
+        tP('M4.2 10.6h15.6v2.6H4.2Z', '#dc8a52') + LN('M5 11.4h9', '#f2b27c', 0.7)
+    ),
+    pruning_twine: tsvg(
+        LN('M16.8 15.6Q21.2 17 20.4 20.4Q19.8 22.2 17.6 21.4', INK, 2.4, ' stroke-opacity=".35"') +
+        LN('M16.8 15.6Q21.2 17 20.4 20.4Q19.8 22.2 17.6 21.4', '#d9b77a', 1.1) +
+        C(11.4, 12.8, 7.4, '#d9b77a', TOL) +
+        tF('M17.6 9.4Q20.6 15.6 15.6 19Q11 21.4 6.8 18.6Q12.6 19.4 15.6 15.6Q18 12.6 17.6 9.4Z', '#b8935a') +
+        LN('M5.2 10.4Q11 13.8 17.4 9.6M4.4 13.8Q11.2 17.2 18.6 12.8M6.2 17.8Q11.6 19.6 16.8 16.4M9 6.2Q6.8 12 9.6 19.8M13.6 5.8Q16.2 12.4 13.2 20', '#a8834a', 0.6) +
+        LN('M7.4 8.4Q9.2 6.8 11.4 6.4', '#fbecc8', 0.9, ' opacity=".8"')
+    ),
+    beeswax_salve: tsvg(
+        tP('M4.6 13.4h14.8v4.4Q19.4 20.8 12 20.8Q4.6 20.8 4.6 17.8Z', '#b9bcc0') +
+        tF('M15.4 14.4h4v3.4Q19.4 20 15.4 20.6Z', '#8d9096') + LN('M6.2 15.2v3', '#e8eaec', 0.9) +
+        tP('M4.6 11.6Q4.6 9.2 12 9.2Q19.4 9.2 19.4 11.6V13.6Q19.4 16 12 16Q4.6 16 4.6 13.6Z', '#e0a526') +
+        E(12, 11.6, 7.4, 2.4, '#f6c843', TOL) + E(12, 11.5, 5.4, 1.6, '#ffdc6e') +
+        tF('M10.5 11.5l.75-.95h1.5l.75.95-.75.95h-1.5Z', '#c98f10') +
+        LN('M6.4 13.4Q7 14.6 9 15', '#ffe9a6', 0.8) + spark(18.8, 5.4, 1.8, '#fff3c4')
+    ),
+    // ── ornaments ──
+    wind_chime: tsvg(
+        cord(3.8) +
+        tP('M5.6 3.8h12.8l-1 1.8H6.6Z', '#a06e40') +
+        LN('M7.6 5.6V8.2M10.4 5.6V7.6M13.6 5.6V7.6M16.4 5.6V8.2M12 5.6V18.4', '#6b4a2a', 0.45) +
+        tP('M6.8 8.2h1.6v8.4H6.8Z', '#cfd6dc') + tP('M9.6 7.6h1.6v11.2H9.6Z', '#cfd6dc') +
+        tP('M12.8 7.6h1.6v10H12.8Z', '#cfd6dc') + tP('M15.6 8.2h1.6v7.4H15.6Z', '#cfd6dc') +
+        LN('M7.3 9v6.6M10.1 8.4v9.6M13.3 8.4v8.4M16.1 9v5.8', '#ffffff', 0.5) +
+        E(12, 18.8, 2.4, 0.9, '#a06e40', TOL) + tP('M10.9 19.8h2.2l.7 3.4h-3.6Z', '#e8c27a')
+    ),
+    string_of_lanterns: tsvg(
+        LN('M1 3Q12 10.6 23 3', '#3b3632', 0.7) +
+        [[5, 5.6], [12, 7.4], [19, 5.6]].map(([x, y], i) =>
+            LN(`M${x} ${y}v1.2`, '#3b3632', 0.6) +
+            tP(`M${x - 1.3} ${y + 1.2}h2.6v.8h-2.6Z`, '#3b3632') +
+            E(x, y + 4.6, 2.7, 3.2, ['#e8673a', '#f0a23a', '#d6452f'][i], `${TOL} class="pf-glow"`) +
+            E(x - 0.5, y + 4.2, 1.1, 2, '#ffd27a', ' opacity=".8"') +
+            LN(`M${x - 2.4} ${y + 4.6}h4.8`, '#a8321f', 0.4, ' opacity=".6"') +
+            tP(`M${x - 1.1} ${y + 7.6}h2.2v.9h-2.2Z`, '#3b3632') + LN(`M${x} ${y + 8.5}v1.4`, '#e8b84a', 0.6)
+        ).join('')
+    ),
+    birdhouse: tsvg(
+        cord(4.4) +
+        tP('M6.6 10.4L12 5.8L17.4 10.4V19.6H6.6Z', '#c8925a') + tF('M14.6 8L17.4 10.4V19.6H14.6Z', '#a06e40') +
+        LN('M7.4 13.8h1.8M15.2 15.6h1.6M7.4 17.4h1.6', '#a06e40', 0.5) +
+        C(12, 12.6, 2.1, '#3a2614', TOL) + LN('M12 16.2v1.8', '#6b4226', 1.1) +
+        tP('M4.2 10.6L12 3.8L19.8 10.6L18.2 11.6L12 6.4L5.8 11.6Z', '#b5523b') + LN('M6 10.2L12 5', '#d9785a', 0.7) +
+        tP('M5.6 19.4h12.8v1.8H5.6Z', '#7a5234')
+    ),
+    rope_swing: tsvg(
+        LN('M6.8 .6L7.6 16.4M17.2 .6L16.4 16.4', INK, 2.2, ' stroke-opacity=".3"') +
+        LN('M6.8 .6L7.6 16.4M17.2 .6L16.4 16.4', '#cfab6c', 1) +
+        LN('M6.9 3.4l.6.4M7.1 7.4l.6.4M7.3 11.4l.6.4M17.1 3.4l-.6.4M16.9 7.4l-.6.4M16.7 11.4l-.6.4', '#9c7a40', 0.5) +
+        tP('M4.8 16.6h14.4l-1 2.8H5.8Z', '#a06e40') + LN('M5.8 17.2h12.4', '#c8925a', 0.7) +
+        C(7.6, 16.4, 0.9, '#b08a4e', TOL) + C(16.4, 16.4, 0.9, '#b08a4e', TOL)
+    ),
+    wishing_ribbons: tsvg(
+        cord(3.4) +
+        tF('M11.2 5.2Q6.6 7 6.6 11.4Q6.6 14.6 4.4 17L5.8 17.8Q8.4 14.8 8.1 11.4Q7.9 7.8 11.8 5.8Z', '#3aa39a', TOL) +
+        tF('M12.8 5.2Q17.6 6.6 18 10.6Q18.4 13.6 20.2 15.6L18.8 16.4Q16.8 14 16.5 10.8Q16.2 7.6 12.4 5.8Z', '#f4ede0', TOL) +
+        tF('M11 5Q8.6 8.6 10 12Q11.4 15.4 8.6 19.8L10.6 20.4Q13.6 15.4 12.1 12Q10.8 8.8 12.6 5.6Z', '#d6452f', TOL) +
+        tF('M12.6 5.4Q15.6 8.4 14.4 12.4Q13.6 15.6 16.2 19.2L14.4 20Q11.8 15.8 12.8 12.2Q13.8 8.6 11.6 5.8Z', '#e8b84a', TOL) +
+        C(12, 4.4, 1.6, '#a8321f', TOL)
+    ),
+    owl: tsvg(
+        tP('M1.6 19.6Q12 18.2 22.4 19.8L22.2 21.4Q12 19.9 1.8 21.2Z', '#7a5234') +
+        tP('M7 18.8Q5.4 13.2 7.4 9.6L6.8 5.2L9.6 7.6Q12 6.8 14.4 7.6L17.2 5.2L16.6 9.6Q18.6 13.2 17 18.8Z', '#8a6440') +
+        tF('M7 18.8Q5.8 14.2 7.6 11Q8.8 15 8.8 18.8Z', '#6b4a2a') + tF('M17 18.8Q18.2 14.2 16.4 11Q15.2 15 15.2 18.8Z', '#6b4a2a') +
+        tF('M9 18.6Q8.4 14.6 12 13.4Q15.6 14.6 15 18.6Z', '#dcc49e') +
+        LN('M10.4 15.6l.6.6.6-.6M12.4 15.6l.6.6.6-.6M11.4 17.2l.6.6.6-.6', '#a88a64', 0.45) +
+        C(9.8, 10.6, 2.2, '#f6ecca', TOL) + C(14.2, 10.6, 2.2, '#f6ecca', TOL) +
+        C(9.9, 10.8, 1.1, '#2b2118') + C(14.1, 10.8, 1.1, '#2b2118') + C(9.5, 10.3, 0.35, '#ffffff') + C(13.7, 10.3, 0.35, '#ffffff') +
+        tF('M11.3 12.1L12.7 12.1L12 13.7Z', '#e0a526') + LN('M10.2 19.2v.8M13.8 19.2v.8', '#e0a526', 0.8)
+    ),
+    firefly_jar: tsvg(
+        cord(2.8, '#8d9096') + LN('M8.4 5.6Q12 1.4 15.6 5.6', '#8d9096', 0.7) +
+        tP('M8 6.8h8Q18.2 8 18.2 11v6.4Q18.2 20.8 12 20.8Q5.8 20.8 5.8 17.4V11Q5.8 8 8 6.8Z', '#d6ece6', ' fill-opacity=".7"') +
+        C(12, 14.6, 4.8, '#fff2a8', ' opacity=".55" class="pf-glow"') +
+        glowDot(10, 12.6, 0.9, 0) + glowDot(14.2, 15.2, 0.8, 0.8) + glowDot(11.2, 17.4, 0.7, 1.5) + C(13.8, 11.4, 0.6, '#fffbe0') +
+        LN('M7.6 10.6v5.8', '#ffffff', 0.8, ' opacity=".8"') +
+        tP('M7.6 4.6h8.8v2.4H7.6Z', '#9aa0a6') + LN('M8.4 5.4h7', '#c3c7cb', 0.6)
+    ),
+    paper_cranes: tsvg(
+        LN('M12 .6V23', '#9c8a74', 0.45) +
+        crane(12, 6.4, '#faf6ee', '#d9d2c4') + crane(12, 13, '#f6b5cc', '#d4739a') + crane(12, 19.6, '#a6cdea', '#5f97c4')
+    ),
+    flower_garland: tsvg(
+        LN('M1.6 4Q12 13.6 22.4 4', '#5f8a3a', 0.9) +
+        [[3.6, 5.6, 30], [8, 8.2, 10], [16, 8.2, -10], [20.4, 5.6, -30]].map(([x, y, a]) =>
+            `<g transform="translate(${x} ${y}) rotate(${a})">${tF('M-1.8 0Q0 -1.4 1.8 0Q0 1.4 -1.8 0Z', '#6fae47', TOL)}</g>`).join('') +
+        bloom(5.8, 7.1, 1.5, '#f59ab8', '#ffd24a') + bloom(12, 8.8, 1.7, '#ffffff', '#f2b33d') +
+        bloom(18.2, 7.1, 1.5, '#ffd24a', '#e0832e') + bloom(9.6, 8.5, 0.9, '#c9a6ef', '#fff3c4') + bloom(14.4, 8.5, 0.9, '#f59ab8', '#fff3c4')
+    ),
+    carved_heart: tsvg(
+        tP('M6.4 5.6Q12 3.2 17.6 5.6Q19.8 12 17.6 18.4Q12 20.8 6.4 18.4Q4.2 12 6.4 5.6Z', '#7a5234') +
+        LN('M7.2 7Q6.4 12 7.2 17M16.8 7Q17.6 12 16.8 17M11 4.6v1.2M13.4 19v1', '#5a3a24', 0.6) +
+        tF('M12 17Q6.6 13.6 7.6 9.8Q8.8 7 12 9.2Q15.2 7 16.4 9.8Q17.4 13.6 12 17Z', '#e8c08a', ' stroke="#4a2d18" stroke-width=".7"') +
+        tF('M12 15.4Q8.6 13 9.2 10.6Q10 9 12 10.6Q14 9 14.8 10.6Q15.4 13 12 15.4Z', '#c8925a') +
+        LN('M8.8 10.1Q9.4 8.6 11 9.4', '#fbe2b8', 0.6)
+    ),
+    brass_bell: tsvg(
+        cord(4, '#b5473a') +
+        tP('M12 4.6L8.4 2.8L8.4 6.4Z', '#d6452f') + tP('M12 4.6L15.6 2.8L15.6 6.4Z', '#d6452f') + C(12, 4.6, 1, '#a8321f') +
+        tP('M12 5.6Q7.4 5.6 7.4 11.4V15.4L5.4 18H18.6L16.6 15.4V11.4Q16.6 5.6 12 5.6Z', '#e0a526') +
+        tF('M14.2 6.4Q16.6 8 16.6 11.4V15.4L18.6 18H15.4L14.8 15.4V11Q14.8 8 14.2 6.4Z', '#b98516') +
+        LN('M9.3 9.4Q9 12 9.3 15', '#fff0b0', 1) +
+        tP('M5 17.6h14v1.8H5Z', '#c98f10') + C(12, 20.6, 1.4, '#7a5a20', TOL)
+    ),
+    stone_lantern: tsvg(
+        tP('M6.8 20.2h10.4l-1 2.2H7.8Z', '#8d9096') + E(7.6, 21.8, 1.8, 0.7, '#6fae47') +
+        tP('M10.4 14.6h3.2v5.6h-3.2Z', '#9aa0a6') + LN('M11 15.2v4.4', '#c3c7cb', 0.6) +
+        tP('M7.2 13h9.6v1.8H7.2Z', '#8d9096') +
+        tP('M8.4 8.6h7.2V13H8.4Z', '#a4aab0') + tF('M10 9.4h4v2.8h-4Z', LIT, ' class="pf-glow"') + tF('M10.3 9.7h1.2v2.2h-1.2Z', '#fff4c8') +
+        tP('M4.8 9L12 4.4L19.2 9L17.8 9.6H6.2Z', '#7b8188') + LN('M7 8.2L12 5', '#a4aab0', 0.7) +
+        C(12, 3.6, 1.2, '#7b8188', TOL) + E(16.6, 9.4, 1.6, 0.6, '#6fae47')
+    ),
+}
+
+/** Nest a 24x24 treasure inside a larger drawing. */
+const nest = (art: string, x: number, y: number, size: number) =>
+    art.replace(/^<svg /, `<svg x="${r1(x)}" y="${r1(y)}" width="${r1(size)}" height="${r1(size)}" overflow="visible" `)
+
+/** A find lying in the village, glinting until it is picked up (64x64, ground at 32,56). */
+export function pickupSvg(itemId: string): string {
+    const art = TREASURE_SVGS[itemId] || TREASURE_SVGS.spring_water
+    return svg(
+        auraDef('pf-pickup-1', '#fff1b0') + shadow(8, 2.2, 0.26) + E(32, 49, 16, 10, 'url(#pf-pickup-1)', ' class="pf-glint"') +
+        E(32, 55.5, 9, 3, 'none', ' stroke="#fff3c4" stroke-opacity=".8" stroke-width=".9"') +
+        `<g class="pf-pickup-bob">${nest(art, 22.5, 33, 19)}</g>` +
+        twinkle(43, 36, 2.6, '#fffbe6', 0) + twinkle(21.5, 43, 1.9, '#fff1b0', 1.1) + twinkle(36, 30.5, 1.5, '#ffffff', 1.9)
+    )
+}
+
+/** An ornament drawn `size` units wide with its tie point (12, 0.6) at (x, y), in a sprite's coordinates. */
+export function ornamentAt(itemId: string, x: number, y: number, size: number): string {
+    const art = TREASURE_SVGS[itemId]
+    return art ? nest(art, x - size / 2, y - (0.6 / 24) * size, size) : ''
+}

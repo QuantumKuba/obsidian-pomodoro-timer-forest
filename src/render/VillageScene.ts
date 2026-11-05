@@ -6,7 +6,7 @@
  * (`{@html}`) and in exported files. Interactive scenes carry `data-x`/`data-y`
  * (tiles) and `data-item` (placed objects) attributes for event delegation.
  */
-import type { BiomeType, GamificationData, PlacedHomesteadItem, PlantedTree } from '../types/forest'
+import type { BiomeType, CareNeed, GamificationData, PlacedHomesteadItem, PlantedTree } from '../types/forest'
 import {
     BUILDING_SVGS,
     DECOR_SVGS,
@@ -14,9 +14,16 @@ import {
     LIGHT_SOURCES,
     SPECIES_SVGS,
     VILLAGER_SVGS,
+    TREASURE_SVGS,
     cropSvg,
+    ornamentAt,
+    pickupSvg,
     plantedTreeSvg,
 } from '../assets/floraAssets'
+import { CARE_FOR, getTreasure, type OrnamentMount } from '../assets/treasureCatalog'
+import { dateKey } from '../services/Progression'
+import { heartNeed, heartStage, heartTreeItem, tendedToday } from '../services/HeartTree'
+import { pickupSpots } from '../services/Treasures'
 import { GARDEN_PLOT_ID, cropProgress, getBuilding, getCrop, getSpecies } from '../assets/floraCatalog'
 import { SCENE_CSS } from './sceneCss'
 import { buildGrid, mainArea, type Tile, type VillageGrid } from './villageGrid'
@@ -287,6 +294,10 @@ export interface SceneItem {
     light?: { x: number; y: number; r: number; color: string }
     /** Shows a bobbing "ready" marker above the item. */
     ripe?: boolean
+    /** The Heart Tree: what hangs on it, a soft aura at its later stages, and today's need while it waits. */
+    heart?: { speciesId: string; ornaments: string[]; aura: boolean; need?: CareNeed }
+    /** A find waiting to be picked up (its pickup id); clicking it picks it up. */
+    pickup?: string
 }
 
 /** A villager or animal standing in the scene. `x`/`y` are tile coordinates and may be fractional. */
@@ -401,10 +412,19 @@ export function renderIsoScene(opts: SceneOptions): string {
         if (!item) continue
         const { cx, cy } = L.tile(item.x, item.y)
         const delay = f(-hash(item.x, item.y, 'sway') * 5)
-        svg += `<g class="pf-item" data-depth="${depth}" style="--d:${delay}s"${item.key ? ` data-item="${item.key}" data-x="${item.x}" data-y="${item.y}"` : ''}>`
+        const hook = item.pickup
+            ? ` data-pickup="${item.pickup}" data-px="${item.x}" data-py="${item.y}"`
+            : item.key ? ` data-item="${item.key}" data-x="${item.x}" data-y="${item.y}"` : ''
+        svg += `<g class="pf-item${item.pickup ? ' pf-pickup' : ''}${item.heart ? ' pf-heart' : ''}" data-depth="${depth}" style="--d:${delay}s"${hook}>`
+        if (item.heart) svg += heartGround(item, cx, cy, id)
         svg += placeSprite(item.svg, cx, cy + 3, item.scale)
+        if (item.heart) svg += heartOrnaments(item, cx, cy)
         if (item.level && item.level > 1) {
             svg += `<text x="${f(cx)}" y="${f(cy + 13)}" class="pf-stars" text-anchor="middle">${'★'.repeat(Math.min(5, item.level))}</text>`
+        }
+        if (item.heart?.need) {
+            const care = TREASURE_SVGS[CARE_FOR[item.heart.need]]
+            svg += `<g transform="translate(${f(cx)} ${f(cy - 56 * item.scale - 2)})"><g class="pf-ripe pf-need" style="--d:${delay}s"><circle r="6.4" fill="#fffdf6" stroke="#9cbf8a" stroke-width="1"/>${care ? care.replace(/^<svg /, '<svg x="-4.6" y="-4.8" width="9.2" height="9.2" ') : ''}</g></g>`
         }
         if (item.ripe) {
             svg += `<g transform="translate(${f(cx)} ${f(cy - 21)})"><g class="pf-ripe" style="--d:${delay}s"><circle r="5.6" fill="#fff8e1" stroke="#e39b2d" stroke-width="1"/><path d="M0 -3.8Q0 0 3.8 0Q0 0 0 3.8Q0 0 -3.8 0Q0 0 0 -3.8Z" fill="#ffb300"/></g></g>`
@@ -457,6 +477,69 @@ export function renderIsoScene(opts: SceneOptions): string {
     }
     svg += `</svg>`
     return svg
+}
+
+// ---------------------------------------------------------------------------
+// The Heart Tree
+// ---------------------------------------------------------------------------
+
+/** Where a canopy hangs, in sprite coordinates, so ornaments sit on the tree and not in the air. */
+const CANOPY: Record<string, { top: number; bottom: number; half: number }> = {
+    classic_pine: { top: 10, bottom: 36, half: 12 },
+    ancient_oak: { top: 10, bottom: 34, half: 22 },
+    sakura: { top: 10, bottom: 31, half: 20 },
+    willow: { top: 12, bottom: 38, half: 20 },
+    bamboo: { top: 10, bottom: 40, half: 10 },
+    sunflower: { top: 26, bottom: 44, half: 13 },
+    lavender: { top: 30, bottom: 46, half: 14 },
+    mushroom_circle: { top: 40, bottom: 50, half: 18 },
+    bonsai: { top: 22, bottom: 38, half: 18 },
+}
+const CANOPY_DEFAULT = { top: 12, bottom: 35, half: 18 }
+
+/** Ornament sizes (sprite units) and the spots each kind of mount takes, in turn. */
+const MOUNT_SIZE: Record<OrnamentMount, number> = { hang: 13, trunk: 11.5, ground: 15, perch: 13, low: 17 }
+function mountSpots(speciesId: string): Record<OrnamentMount, [number, number][]> {
+    const c = CANOPY[speciesId] ?? CANOPY_DEFAULT
+    const at = (fx: number, fy: number): [number, number] => [32 + fx * c.half, c.top + fy * (c.bottom - c.top)]
+    return {
+        hang: [at(-0.55, 0.95), at(0.55, 0.9), at(-0.2, 0.75), at(0.3, 1.0), at(0.8, 0.7)],
+        trunk: [[30.5, c.bottom + 4], [36, c.bottom - 1]],
+        ground: [[12.5, 44.5], [51.5, 45.5]],
+        perch: [[32 + c.half * 0.25, c.top - 9]],
+        low: [at(0.5, 0.8), at(-0.6, 0.8)],
+    }
+}
+
+/** A soft ring on the ground under the Heart Tree, and its aura at the later stages. */
+function heartGround(item: SceneItem, cx: number, cy: number, id: string): string {
+    let out = `<ellipse cx="${f(cx)}" cy="${f(cy + 3)}" rx="${f(19 * item.scale)}" ry="${f(7.5 * item.scale)}" fill="#fff3c4" fill-opacity=".14" stroke="#ffe7a3" stroke-opacity=".6" stroke-width="1" pointer-events="none"/>`
+    if (item.heart?.aura) {
+        out += `<defs><radialGradient id="${id}-aura"><stop offset="0" stop-color="#fff2b8" stop-opacity=".55"/><stop offset=".6" stop-color="#ffe08a" stop-opacity=".18"/><stop offset="1" stop-color="#ffe08a" stop-opacity="0"/></radialGradient></defs>`
+        out += `<circle class="pf-aura" cx="${f(cx)}" cy="${f(cy + 3 - 30 * item.scale)}" r="${f(34 * item.scale)}" fill="url(#${id}-aura)" pointer-events="none"/>`
+    }
+    return out
+}
+
+/** The ornaments hung on the Heart Tree, placed on its canopy, trunk and roots. */
+function heartOrnaments(item: SceneItem, cx: number, cy: number): string {
+    if (!item.heart?.ornaments.length) return ''
+    const spots = mountSpots(item.heart.speciesId)
+    const taken: Record<OrnamentMount, number> = { hang: 0, trunk: 0, ground: 0, perch: 0, low: 0 }
+    let out = '<g class="pf-ornaments">'
+    item.heart.ornaments.forEach((ornament, i) => {
+        const mount = getTreasure(ornament)?.mount ?? 'hang'
+        const list = spots[mount]
+        const [ax, ay] = list[taken[mount]++ % list.length]
+        const x = cx - 32 * item.scale + ax * item.scale
+        const y = cy + 3 - 56 * item.scale + ay * item.scale
+        const art = ornamentAt(ornament, x, y, MOUNT_SIZE[mount] * item.scale)
+        // Hanging things turn a little in the breeze, each in its own time
+        out += mount === 'hang' || mount === 'low'
+            ? `<g class="pf-swing" style="transform-origin:${f(x)}px ${f(y)}px;--d:-${f(hash(ornament, i) * 4)}s">${art}</g>`
+            : art
+    })
+    return out + '</g>'
 }
 
 function allTiles(size: number): Tile[] {
@@ -561,12 +644,16 @@ export interface VillageRenderOptions {
     embedCss?: boolean
     /** Leave villagers and animals out: VillageLife adds them and walks them around. */
     liveActors?: boolean
+    /** Draw the finds waiting to be picked up (interactive village only). */
+    pickups?: boolean
 }
 
 export function renderVillage(g: GamificationData, opts: VillageRenderOptions = {}): string {
-    const { liveActors, ...sceneOpts } = opts
+    const { liveActors, pickups, ...sceneOpts } = opts
     const ground = new Map<string, GroundKind>()
     const items: SceneItem[] = []
+    const heartId = heartTreeItem(g)?.id
+    const today = dateKey(opts.date || new Date())
     for (const item of g.homestead) {
         if (item.gridX >= g.landSize || item.gridY >= g.landSize) continue
         const key = `${item.gridX},${item.gridY}`
@@ -589,15 +676,32 @@ export function renderVillage(g: GamificationData, opts: VillageRenderOptions = 
             continue
         }
         const isTree = item.itemType === 'tree'
+        const isHeart = isTree && item.id === heartId
+        const stage = isHeart ? heartStage(g) : null
         items.push({
             x: item.gridX,
             y: item.gridY,
             svg: homesteadItemSprite(item),
-            scale: isTree ? (0.95 + 0.12 * (item.level - 1)) * speciesScale(item.itemId) : getBuilding(item.itemId)?.category === 'decoration' ? 0.95 : 1.2,
+            scale: isTree ? (0.95 + 0.12 * (item.level - 1)) * speciesScale(item.itemId) * (stage?.scale ?? 1) : getBuilding(item.itemId)?.category === 'decoration' ? 0.95 : 1.2,
             key: item.id,
             level: isTree ? undefined : item.level,
             light: LIGHT_SOURCES[item.itemId],
+            ...(stage && g.heartTree
+                ? {
+                      heart: {
+                          speciesId: item.itemId,
+                          ornaments: g.heartTree.hung,
+                          aura: stage.aura,
+                          ...(pickups && !tendedToday(g, today) ? { need: heartNeed(today) } : {}),
+                      },
+                  }
+                : {}),
         })
+    }
+    if (pickups) {
+        for (const spot of pickupSpots(g)) {
+            items.push({ x: spot.x, y: spot.y, svg: pickupSvg(spot.pickup.itemId), scale: 1, pickup: spot.pickup.id })
+        }
     }
 
     const grid = buildGrid(g.homestead, g.landSize)
