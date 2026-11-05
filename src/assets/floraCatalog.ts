@@ -382,6 +382,92 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         perk: { kind: 'long_session_sunlight_pct', base: 20, perLevel: 10 },
         iconSvg: BUILDING_SVGS.windmill,
     },
+    // Landmarks of the Village Charter: never sold, each one granted when the village reaches a rank
+    {
+        id: 'hamlet_signpost',
+        name: 'Hamlet Signpost',
+        description: 'Carved with the names of the paths out of the woods. Your settlement is on the map.',
+        category: 'decoration',
+        sunlightCost: 0,
+        coinsCost: 0,
+        unlockLevel: 1,
+        unique: true,
+        maxLevel: 1,
+        charm: 4,
+        iconSvg: BUILDING_SVGS.hamlet_signpost,
+        charterRank: 1,
+    },
+    {
+        id: 'notice_board',
+        name: 'Notice Board',
+        description: 'Where the neighbours pin their requests, with room for one more at a time.',
+        category: 'landmark',
+        sunlightCost: 0,
+        coinsCost: 0,
+        unlockLevel: 1,
+        unique: true,
+        maxLevel: 1,
+        charm: 5,
+        perk: { kind: 'request_slots', base: 1, perLevel: 0 },
+        iconSvg: BUILDING_SVGS.notice_board,
+        charterRank: 2,
+    },
+    {
+        id: 'market_stall',
+        name: 'Market Stall',
+        description: 'A striped awning, fresh produce and the week’s news. The village keeps a market day now.',
+        category: 'building',
+        sunlightCost: 0,
+        coinsCost: 0,
+        unlockLevel: 1,
+        unique: true,
+        maxLevel: 1,
+        charm: 7,
+        iconSvg: BUILDING_SVGS.market_stall,
+        charterRank: 3,
+    },
+    {
+        id: 'clock_tower',
+        name: 'Clock Tower',
+        description: 'It keeps the town’s time, and quietly counts every hour you have focused.',
+        category: 'landmark',
+        sunlightCost: 0,
+        coinsCost: 0,
+        unlockLevel: 1,
+        unique: true,
+        maxLevel: 1,
+        charm: 10,
+        iconSvg: BUILDING_SVGS.clock_tower,
+        charterRank: 4,
+    },
+    {
+        id: 'town_hall',
+        name: 'Town Hall',
+        description: 'Where the charter itself is kept, signed chapter by chapter.',
+        category: 'building',
+        sunlightCost: 0,
+        coinsCost: 0,
+        unlockLevel: 1,
+        unique: true,
+        maxLevel: 1,
+        charm: 12,
+        iconSvg: BUILDING_SVGS.town_hall,
+        charterRank: 5,
+    },
+    {
+        id: 'founders_fountain',
+        name: 'Founders’ Fountain',
+        description: 'Clear water around a golden sapling: the first tree, the one that started it all.',
+        category: 'landmark',
+        sunlightCost: 0,
+        coinsCost: 0,
+        unlockLevel: 1,
+        unique: true,
+        maxLevel: 1,
+        charm: 15,
+        iconSvg: BUILDING_SVGS.founders_fountain,
+        charterRank: 6,
+    },
 ]
 
 export function getSpecies(id: string): FloraSpecies | undefined {
@@ -390,6 +476,11 @@ export function getSpecies(id: string): FloraSpecies | undefined {
 
 export function getBuilding(id: string): HomesteadBuilding | undefined {
     return HOMESTEAD_BUILDINGS.find((b) => b.id === id)
+}
+
+/** The landmark the Village Charter grants on reaching `rank`, if any. */
+export function charterLandmark(rank: number): HomesteadBuilding | undefined {
+    return HOMESTEAD_BUILDINGS.find((b) => b.charterRank === rank)
 }
 
 /** Crops for garden plots. Slower crops pay a little more per minute. */

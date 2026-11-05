@@ -128,6 +128,8 @@ export function perkText(building: HomesteadBuilding, level = 1): string {
             return `Crops grow ${v}% faster`
         case 'first_tree_coins':
             return `+${v} Coins with your first tree of the day`
+        case 'request_slots':
+            return `Neighbours can pin ${v} more request${v > 1 ? 's' : ''} at a time`
     }
 }
 
@@ -355,7 +357,7 @@ export function vitalityState(v: number): { label: string; mood: 'thriving' | 'h
 // Daily quests
 // ---------------------------------------------------------------------------
 
-function seededRandom(seed: string): () => number {
+export function seededRandom(seed: string): () => number {
     let h = 2166136261
     for (let i = 0; i < seed.length; i++) {
         h ^= seed.charCodeAt(i)

@@ -673,6 +673,165 @@ function greenhouse(): string {
 }
 
 /** Square grass tile base used by the ground-tile shop icons. */
+// ───────────────────────── Village Charter landmarks (earned by rank, never sold) ─────────────────────────
+const SLATE: Pal = ['#3d4a63', '#56688a', '#7a8fb3']
+const PLASTER: Pal = ['#c9b994', '#ece0c4', '#fbf4e2']
+const GILT = '#e8b84a'
+
+/** A tuft of grass with a flower, for the foot of small landmarks. */
+const tuft = (x: number, y: number, flower: string) =>
+    LN(`M${x - 1.6} ${y}L${x - 2.2} ${y - 3}M${x} ${y}L${x} ${y - 3.6}M${x + 1.6} ${y}L${x + 2.4} ${y - 2.8}`, '#5f9a45', 0.9) + C(x, y - 3.8, 1, flower)
+
+function hamletSignpost(): string {
+    let s = shadow(15, 3.8)
+    s += E(32, 55.4, 6.4, 2.2, '#8d9096', OL) + E(31, 54.8, 3.4, 1, '#b9bcc0')
+    // post with a little cap
+    s += P('M30 55L30 13L34 13L34 55Z', WOOD[1]) + P('M34 13L35.6 12.2L35.6 54.2L34 55Z', WOOD[0]) + rect(30.4, 13.5, 1, 41, WOOD[2])
+    s += P('M29 13.2L32.8 9L36.6 12.4Z', ROOF[1]) + P('M32.8 9L36.6 12.4L36.6 13.4L32.8 10.4Z', ROOF[0], false)
+    // three boards: two pointing out to the right, one to the left
+    const board = (y: number, x0: number, x1: number, dir: 1 | -1, fill: string) => {
+        const tip = x1 + dir * 4
+        return (
+            P(`M${x0} ${y}L${x1} ${y}L${tip} ${r1(y + 2.6)}L${x1} ${r1(y + 5.2)}L${x0} ${r1(y + 5.2)}Z`, fill) +
+            LN(`M${r1(x0 + dir * 2.4)} ${r1(y + 1.8)}L${r1(x1 - dir * 3)} ${r1(y + 1.8)}M${r1(x0 + dir * 2.4)} ${r1(y + 3.4)}L${r1(x1 - dir * 6)} ${r1(y + 3.4)}`, '#6b4226', 0.6, ' opacity=".7"') +
+            C(x0 + dir, y + 2.6, 0.55, '#4a4a4a')
+        )
+    }
+    s += board(16, 33, 49, 1, WOOD[2]) + board(24.5, 31, 15, -1, '#b8834e') + board(33, 33, 45, 1, '#d4a46a')
+    s += tuft(25.5, 56, '#f5a9c8') + tuft(38.5, 56.4, '#ffd24a')
+    return svg(s)
+}
+
+function noticeBoard(): string {
+    let s = shadow(21, 4.4)
+    // posts
+    s += OLN('M15 55L15 21M49 55L49 21', WOOD[0], 2.6) + LN('M14.4 22L14.4 54', WOOD[2], 0.8)
+    // board: frame, cork, side
+    s += rect(13, 25, 38, 23, WOOD[1], ` rx="1"${OL}`) + rect(15, 27, 34, 19, '#c9a26b') + rect(15, 27, 34, 2, '#b08850')
+    s += P('M51 25L53.4 23.8L53.4 46.8L51 48Z', WOOD[0])
+    // pinned notes, each a little crooked
+    const note = (x: number, y: number, w: number, h: number, fill: string, rot: number, pin: string) =>
+        `<g transform="rotate(${rot} ${r1(x + w / 2)} ${y})">` +
+        rect(x, y, w, h, fill, OL) +
+        LN(`M${r1(x + 1.2)} ${r1(y + 2.6)}L${r1(x + w - 1.2)} ${r1(y + 2.6)}M${r1(x + 1.2)} ${r1(y + 4.4)}L${r1(x + w - 2.4)} ${r1(y + 4.4)}`, '#8a7a60', 0.5) +
+        C(x + w / 2, y + 0.8, 0.9, pin) +
+        '</g>'
+    s += note(17, 29, 8, 9, '#f8f1e2', -5, '#e5432f') + note(27.5, 28.5, 9, 7, '#fff3c4', 3, '#3a8cc4') + note(39, 29.4, 8, 10, '#eef5ff', -2, '#4f9a4a')
+    s += note(21, 39.4, 10, 5.4, '#ffe4e0', 4, '#ffb300') + note(34, 38.6, 7, 6, '#f8f1e2', -6, '#e5432f')
+    // little shingled roof
+    s += P('M9 25L15.5 17L48.5 17L55 25Z', ROOF[1]) + P('M10.6 23.6L16 17.6L19.4 17.6L14.6 23.6Z', ROOF[2], false)
+    s += LN('M12.4 21.2L51.6 21.2', ROOF[0], 0.8) + P('M9 25L55 25L54.4 26.6L9.6 26.6Z', '#6a2c20') + OLN('M15.5 17L48.5 17', '#8e3b2a', 1.6)
+    s += tuft(20, 56, '#f5a9c8') + tuft(44, 56, '#9d7fd6')
+    return svg(s)
+}
+
+function marketStall(): string {
+    let s = shadow(24, 5)
+    // back posts
+    s += OLN('M52 37L52 18M22 37L22 18', WOOD[0], 1.8)
+    // counter: top, front, side
+    s += P('M12 42L42 42L52 37L22 37Z', WOOD[2]) + P('M12 42L42 42L42 56L12 56Z', WOOD[1]) + P('M42 42L52 37L52 51L42 56Z', WOOD[0])
+    s += LN('M12 46.6L42 46.6M12 51.2L42 51.2', '#7a5230', 0.7) + LN('M42 46.6L52 41.6M42 51.2L52 46.2', '#4f2e18', 0.6)
+    // produce in crates on the counter
+    s += P('M15 41L25 41L27.4 38.6L17.4 38.6Z', '#8a5a30') + P('M29 41L39 41L41.4 38.6L31.4 38.6Z', '#8a5a30') + P('M40 38L48 38L50 36.4L42 36.4Z', '#8a5a30')
+    for (const [x, y] of [[18, 39.4], [20.4, 39.6], [22.8, 39.4], [19.4, 38.2], [21.8, 38.2]] as Pt[]) s += C(x, y, 1.3, '#e5432f', OL)
+    for (const [x, y] of [[32, 39.4], [34.4, 39.6], [36.8, 39.4], [33.4, 38.2], [35.8, 38.2]] as Pt[]) s += C(x, y, 1.3, '#f59a2e', OL)
+    s += E(44.6, 36, 2.6, 1.8, '#e8792a', OL) + LN('M44.6 34.4L45 33.4', '#4f8a3a', 0.8) + blobs([[48, 35.4, 1.6]], GREEN, false)
+    // sign on the front
+    s += rect(20, 47.6, 14, 5, '#f4ead6', ` rx=".6"${OL}`) + LN('M22.4 50.1L31.6 50.1', '#a0522d', 0.9)
+    // front posts
+    s += OLN('M13 56L13 24.5M41 56L41 24.5', WOOD[1], 1.9)
+    // striped awning: a sloping top, then a scalloped valance along the front
+    const n = 6
+    const x = (i: number) => r1(8 + (38 * i) / n)
+    for (let i = 0; i < n; i++) s += P(`M${x(i)} 25L${x(i + 1)} 25L${r1(x(i + 1) + 10)} 17L${r1(x(i) + 10)} 17Z`, i % 2 ? '#3f8a6c' : '#f3ece0', i === 0)
+    s += P('M46 25L56 17L56 21L46 29Z', '#2f6b52')
+    let valance = 'M8 25'
+    for (let i = 0; i < n; i++) valance += `L${x(i)} 28Q${r1((x(i) + x(i + 1)) / 2)} 31.6 ${x(i + 1)} 28`
+    s += P(`${valance}L46 25Z`, '#f3ece0')
+    for (let i = 1; i < n; i += 2) s += P(`M${x(i)} 25L${x(i + 1)} 25L${x(i + 1)} 28Q${r1((x(i) + x(i + 1)) / 2)} 31.6 ${x(i)} 28Z`, '#3f8a6c', false)
+    s += LN('M8 25L46 25L56 17', '#2b2118', 0.5, ' opacity=".35"')
+    return svg(s)
+}
+
+function clockTower(): string {
+    let s = shadow(16, 4.4)
+    // plinth
+    s += P('M21 50L41 50L41 56L21 56Z', STONE[0]) + P('M41 50L47 47L47 53L41 56Z', '#636970') + P('M21 50L27 47L47 47L41 50Z', STONE[2])
+    // shaft: lit front, shaded side, coursed stone
+    s += P('M24 50L24 20L38 20L38 50Z', STONE[1]) + P('M38 20L44 17L44 47L38 50Z', STONE[0]) + rect(24, 20, 2.2, 30, STONE[2], ' opacity=".6"')
+    for (const y of [24, 29, 34, 39, 44]) s += LN(`M24 ${y}L38 ${y}`, '#7b8188', 0.5) + LN(`M38 ${y}L44 ${y - 3}`, '#5d6369', 0.5)
+    for (const [x, y] of [[31, 29], [27.5, 34], [34.5, 34], [31, 39], [27.5, 44], [34.5, 44]] as Pt[]) s += LN(`M${x} ${y}L${x} ${y + 5}`, '#7b8188', 0.45)
+    // door and a lit slit window
+    s += P('M27.6 56L27.6 50.6Q31 46.4 34.4 50.6L34.4 56Z', '#6b3f22') + LN('M31 48.6L31 56', '#4f2e18', 0.6) + C(33.2, 52.8, 0.55, '#f2c14e')
+    s += rect(30, 36.4, 2, 4.6, LIT, ' rx="1" class="pf-glow"')
+    // clock
+    s += C(31, 27, 5.6, GILT, OL) + C(31, 27, 4.6, '#fdf6e3')
+    for (let h = 0; h < 12; h++) {
+        const a = (h * Math.PI) / 6
+        const x0 = r1(31 + Math.sin(a) * 3.7), y0 = r1(27 - Math.cos(a) * 3.7), x1 = r1(31 + Math.sin(a) * 4.2), y1 = r1(27 - Math.cos(a) * 4.2)
+        s += LN(`M${x0} ${y0}L${x1} ${y1}`, '#5a4a30', h % 3 ? 0.4 : 0.8)
+    }
+    s += LN('M31 27L31 23.8M31 27L33.4 28.2', '#3b3632', 0.8) + C(31, 27, 0.6, '#3b3632')
+    // cornice, slate spire and finial
+    s += P('M22.6 20L39.4 20L45.4 17L28.6 17Z', STONE[2]) + P('M22.6 20L39.4 20L39.4 21.4L22.6 21.4Z', '#6f757c')
+    s += P('M23.4 17.4L31 3.6L38.6 17.4Z', SLATE[1]) + P('M31 3.6L38.6 17.4L44.6 15Z', SLATE[0]) + P('M24.6 16.6L31 4.8L29.6 16.6Z', SLATE[2], false, ' opacity=".7"')
+    s += LN('M26 13L36 13M27.8 9.6L34.2 9.6', SLATE[0], 0.5)
+    s += OLN('M31 3.8L31 1.4', GILT, 0.9) + C(31, 1.6, 1, GILT)
+    return svg(s)
+}
+
+function townHall(): string {
+    let s = shadow(25, 5.2)
+    // steps
+    s += P('M8 56L42 56L42 58.4L8 58.4Z', STONE[2]) + P('M42 56L54 50L54 52.4L42 58.4Z', STONE[0])
+    // side wall with two lit windows
+    s += P('M41 32L53 26L53 50L41 56Z', PLASTER[0])
+    s += P('M44 37.4L47.6 35.6L47.6 41L44 42.8Z', LIT, true, ' class="pf-glow"') + P('M49 34.9L51.6 33.6L51.6 38.8L49 40.1Z', LIT, true, ' class="pf-glow"')
+    // front wall
+    s += P('M10 56L10 32L41 32L41 56Z', PLASTER[1]) + rect(10, 32, 2.6, 24, PLASTER[2], ' opacity=".7"') + LN('M10 52.6L41 52.6', PLASTER[0], 0.8)
+    s += litWindow(12.6, 39, 4.6, 7) + litWindow(34, 39, 4.6, 7)
+    // door between two columns
+    s += P('M22 56L22 45.4Q25.5 41.2 29 45.4L29 56Z', '#6b3f22') + LN('M25.5 43.2L25.5 56', '#4f2e18', 0.6) + C(27.4, 50.6, 0.6, '#f2c14e')
+    for (const x of [18.4, 30.6]) {
+        s += rect(x, 35, 2.2, 18, '#fbf7ee', OL) + rect(x + 1.5, 35.4, 0.7, 17.2, '#dcd2be')
+        s += rect(x - 0.7, 33.6, 3.6, 1.6, '#e6dcc6', OL) + rect(x - 0.7, 52.4, 3.6, 1.4, '#e6dcc6', OL)
+    }
+    // the roof's side plane, then the pediment with a round window
+    s += P('M25.5 20L37.5 14L55.5 26L43.5 32Z', ROOF[1])
+    for (const t of [0.33, 0.66]) {
+        const a = lerp([25.5, 20], [43.5, 32], t), b = lerp([37.5, 14], [55.5, 26], t)
+        s += LN(`M${a[0]} ${a[1]}L${b[0]} ${b[1]}`, ROOF[0], 0.8)
+    }
+    s += P('M43.5 32L55.5 26L55.5 27.8L43.5 33.8Z', '#6a2c20')
+    s += P('M8 32L25.5 20L43 32Z', PLASTER[1]) + OLN('M7 33L25.5 19.6L44 33', '#d8ccb0', 2.2) + LN('M8 33.4L43 33.4', PLASTER[0], 1)
+    s += C(25.5, 27.4, 2.8, GILT, OL) + C(25.5, 27.4, 2, LIT, ' class="pf-glow"')
+    // flag
+    s += OLN('M25.5 19.6L25.5 8.4', '#5a5a5a', 0.8) + sway(P('M25.9 8.6L33.6 10.4L25.9 12.6Z', '#d6452f'))
+    return svg(s)
+}
+
+function foundersFountain(): string {
+    let s = shadow(23, 5.4)
+    // basin
+    s += P('M11 48.4L11 53Q32 61.4 53 53L53 48.4Z', STONE[1]) + P('M43 56.4Q49 55 53 53L53 48.4L43 51Z', STONE[0], false)
+    s += LN('M11 51Q32 58.6 53 51', '#6f757c', 0.6) + LN('M18 51.6L18 55.2M26 53L26 57.4M38 53L38 57.4M46 51.6L46 55.2', '#6f757c', 0.5)
+    s += E(32, 48.4, 21, 7, STONE[2], OL) + E(32, 48.6, 18.4, 5.4, '#3f8cc4') + E(30, 47.6, 13, 3.4, '#5aa6d6')
+    s += '<g class="pf-water">' + LN('M20 49Q23 48 26 49M37 50Q40 49 43 50M28 51.6Q31 50.6 34 51.6', '#e8f8ff', 0.8) + '</g>'
+    s += C(39, 50.2, 0.9, '#f2c14e') + C(24.4, 50.8, 0.8, '#f2c14e')
+    // pedestal and upper bowl
+    s += P('M29 48L29 34.6L35 34.6L35 48Z', STONE[1]) + rect(29, 34.6, 1.6, 13.4, STONE[2]) + rect(33.6, 34.6, 1.4, 13.4, STONE[0])
+    s += P('M22.6 33.4Q32 41.4 41.4 33.4Z', STONE[0]) + E(32, 33.4, 9.4, 2.9, STONE[2], OL) + E(32, 33.2, 7.6, 2, '#5aa6d6')
+    // water falling from the bowl into the basin
+    s += '<g class="pf-water">' + LN('M23.4 34.4Q20.6 38.6 19.8 46.4M40.6 34.4Q43.4 38.6 44.2 46.4', '#bfe6ff', 0.9) +
+        LN('M26 35.4Q24.6 40 24.4 46.8M38 35.4Q39.4 40 39.6 46.8', '#d9f2ff', 0.6) + '</g>'
+    // the golden sapling on top: the tree that started it all
+    s += OLN('M32 33L32 25.4', '#b5852c', 1)
+    s += P('M32 29.6C29.6 30 27.4 28.6 27 26C29.6 25.6 31.6 27.2 32 29.6Z', GILT) + P('M32 27.4C32.4 24.6 34.8 22.8 37.4 23.2C37 26 34.8 27.6 32 27.4Z', '#f6d475')
+    s += twinkle(26, 21.4, 1.4, '#fff3c4', 0) + twinkle(38.6, 19.4, 1.2, '#fff3c4', 0.9)
+    return svg(s)
+}
+
 const tileBase = () =>
     shadow(22, 4, 0.2) + rect(7, 9, 50, 49, '#4f8a3a', ' rx="9"') + rect(7, 6, 50, 49, '#86bf5a', ` rx="9"${OL}`) +
     rect(9, 8, 46, 20, '#9bd06a', ' rx="7" opacity=".45"')
@@ -787,6 +946,12 @@ export const BUILDING_SVGS: Record<string, string> = {
     greenhouse: greenhouse(),
     cobblestone_path: cobblestonePath(),
     water_stream: waterStream(),
+    hamlet_signpost: hamletSignpost(),
+    notice_board: noticeBoard(),
+    market_stall: marketStall(),
+    clock_tower: clockTower(),
+    town_hall: townHall(),
+    founders_fountain: foundersFountain(),
 }
 
 
@@ -837,6 +1002,14 @@ export const BIOME_CONFIGS: Record<string, { id: string; name: string; backgroun
 const icon = (b: string) => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">${b}</svg>`
 
 export const ICONS = {
+    charter: icon(
+        '<rect x="5" y="4" width="13.5" height="16" rx="1.4" fill="#f6ead0" stroke="#8a6a3a" stroke-width=".9"/>' +
+        '<path d="M8 8.6h7.4M8 11.2h7.4M8 13.8h4.2" stroke="#b59a6a" stroke-width="1" stroke-linecap="round"/>' +
+        '<rect x="3.4" y="2.4" width="16.6" height="3.4" rx="1.7" fill="#e3c98f" stroke="#8a6a3a" stroke-width=".9"/>' +
+        '<rect x="3.4" y="18.2" width="16.6" height="3.4" rx="1.7" fill="#e3c98f" stroke="#8a6a3a" stroke-width=".9"/>' +
+        '<path d="M15.6 17.6l-1.2 4.6 1.9-1 1.1 1.7.5-4.8Z" fill="#a8321f"/>' +
+        '<circle cx="17" cy="16" r="3.1" fill="#d6452f" stroke="#7d1f15" stroke-width=".8"/><circle cx="16.3" cy="15.3" r=".9" fill="#f07a58"/>'
+    ),
     sunlight: icon(
         '<path d="M12 1.6v2.8M12 19.6v2.8M1.6 12h2.8M19.6 12h2.8M4.6 4.6l2 2M17.4 17.4l2 2M4.6 19.4l2-2M17.4 6.6l2-2" stroke="#ff9f1c" stroke-width="2" stroke-linecap="round"/>' +
         '<circle cx="12" cy="12" r="5.8" fill="#ffb627" stroke="#d9730d" stroke-width=".9"/><circle cx="12" cy="12" r="4.2" fill="#ffd54f"/><circle cx="10.3" cy="10.3" r="1.5" fill="#fff3c4"/>'

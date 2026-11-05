@@ -232,6 +232,9 @@ If your plugin does not need CSS, delete this file.
     .pf-scene:not(.pf-still) .pf-ripe {
         animation: pf-bob 1.1s ease-in-out infinite alternate;
     }
+    .pf-scene:not(.pf-still) .pf-request-bob {
+        animation: pf-bob 1.3s ease-in-out infinite alternate;
+    }
     .pf-scene .pf-walking .pf-leg-a {
         animation: pf-step 0.28s ease-in-out infinite alternate;
     }

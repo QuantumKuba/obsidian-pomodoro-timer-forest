@@ -4,6 +4,7 @@ import PomodoroSettings, { type Settings } from './Settings'
 import type { GamificationData, ActiveSessionPlant, PlacedHomesteadItem } from './types/forest'
 import { gamificationStore, freshGamificationData } from './services/StorageManager'
 import { dateKey, levelProgress, levelTitle, villageCharm, vitalityState } from './services/Progression'
+import { charterStatus } from './services/Charter'
 
 // Global reference to the plugin instance (set in onload)
 export let pluginInstance: PomodoroTimerPlugin | null = null
@@ -23,6 +24,9 @@ export const levelInfo = derived(gamificationStore, ($g) => {
     const p = levelProgress($g.xp)
     return { ...p, title: levelTitle(p.level) }
 })
+
+/** The Village Charter: rank, the chapter being worked on and its goals. */
+export const charter = derived(gamificationStore, ($g) => charterStatus($g))
 
 export const charm: Readable<number> = derived(gamificationStore, ($g) => villageCharm($g.homestead))
 export const vitality = derived(gamificationStore, ($g) => ({ value: $g.vitality, ...vitalityState($g.vitality) }))
