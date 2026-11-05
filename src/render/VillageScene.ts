@@ -17,7 +17,7 @@ import {
     cropSvg,
     plantedTreeSvg,
 } from '../assets/floraAssets'
-import { GARDEN_PLOT_ID, cropProgress, getBuilding, getCrop } from '../assets/floraCatalog'
+import { GARDEN_PLOT_ID, cropProgress, getBuilding, getCrop, getSpecies } from '../assets/floraCatalog'
 import { SCENE_CSS } from './sceneCss'
 import { buildGrid, mainArea, type Tile, type VillageGrid } from './villageGrid'
 
@@ -537,6 +537,11 @@ function standingActors(g: GamificationData, grid: VillageGrid, seed: string, da
 // Adapters
 // ---------------------------------------------------------------------------
 
+/** How tall a species stands next to a tree: flowers shouldn't tower over the oaks. */
+export function speciesScale(id: string): number {
+    return getSpecies(id)?.sceneScale ?? 1
+}
+
 function speciesSprite(id: string): string {
     return SPECIES_SVGS[id] || SPECIES_SVGS.classic_pine
 }
@@ -588,7 +593,7 @@ export function renderVillage(g: GamificationData, opts: VillageRenderOptions = 
             x: item.gridX,
             y: item.gridY,
             svg: homesteadItemSprite(item),
-            scale: isTree ? 0.95 + 0.12 * (item.level - 1) : getBuilding(item.itemId)?.category === 'decoration' ? 0.95 : 1.2,
+            scale: isTree ? (0.95 + 0.12 * (item.level - 1)) * speciesScale(item.itemId) : getBuilding(item.itemId)?.category === 'decoration' ? 0.95 : 1.2,
             key: item.id,
             level: isTree ? undefined : item.level,
             light: LIGHT_SOURCES[item.itemId],
@@ -625,7 +630,7 @@ export function renderGrove(
         x: cells[i].x,
         y: cells[i].y,
         svg: plantedTreeSvg(t),
-        scale: t.status === 'withered' ? 0.85 : t.status === 'young' ? 0.7 : 0.8 + Math.min(0.35, t.durationMinutes / 150),
+        scale: (t.status === 'withered' ? 0.85 : t.status === 'young' ? 0.7 : 0.8 + Math.min(0.35, t.durationMinutes / 150)) * speciesScale(t.speciesId),
         key: t.id,
         light: t.status === 'mature' ? LIGHT_SOURCES[t.speciesId] : undefined,
     }))

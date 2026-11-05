@@ -27,6 +27,7 @@ export const FLORA_SPECIES: FloraSpecies[] = [
         iconSvg: SPECIES_SVGS.sunflower,
         color: '#FBC02D',
         charm: 2,
+        sceneScale: 0.62,
     },
     {
         id: 'ancient_oak',
@@ -53,6 +54,7 @@ export const FLORA_SPECIES: FloraSpecies[] = [
         iconSvg: SPECIES_SVGS.lavender,
         color: '#7E57C2',
         charm: 2,
+        sceneScale: 0.62,
     },
     {
         id: 'autumn_maple',

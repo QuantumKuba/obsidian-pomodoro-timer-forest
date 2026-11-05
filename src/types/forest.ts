@@ -21,6 +21,8 @@ export interface FloraSpecies {
     iconSvg: string
     color: string
     charm: number
+    /** Height in the village and the Grove relative to a tree (1); flowers stand lower. */
+    sceneScale?: number
 }
 
 export type PerkKind =
