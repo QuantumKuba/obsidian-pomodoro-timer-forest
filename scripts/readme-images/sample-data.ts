@@ -4,6 +4,7 @@
  */
 import { freshGamificationData } from '../../src/services/StorageManager'
 import { ACHIEVEMENTS, addDays, dateKey, generateQuestBoard, xpForLevel } from '../../src/services/Progression'
+import { requestReward } from '../../src/services/Neighbours'
 import type { GamificationData, PlacedHomesteadItem, PlantedTree } from '../../src/types/forest'
 
 type Row = [type: 'tree' | 'building', id: string, x: number, y: number, level?: number, crop?: [id: string, minutes: number]]
@@ -63,6 +64,10 @@ export const VILLAGE: Row[] = [
     ['tree', 'lavender', 2, 6, 2],
     ['tree', 'sunflower', 4, 7, 1],
     ['tree', 'classic_pine', 6, 7, 2],
+    // landmarks of the Village Charter: one for each rank reached so far
+    ['building', 'hamlet_signpost', 2, 7],
+    ['building', 'notice_board', 4, 6],
+    ['building', 'market_stall', 0, 2],
 ]
 
 export function village(overrides: Partial<GamificationData> = {}): GamificationData {
@@ -87,7 +92,7 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
         totalFocusMinutes: 4380, totalPomodoros: 171, treesGrown: 168, treesWithered: 9, earlyHarvests: 12,
         tasksCompleted: 142, breaksCompleted: 133, questsCompleted: 61, chestsOpened: 24, cropsHarvested: 37,
         cardsCompleted: 58, cardsOnEstimate: 17, boardsCleared: 2,
-        hyperfocusSessions: 14, hyperfocusMinutes: 840, checkInsAcked: 28,
+        hyperfocusSessions: 14, hyperfocusMinutes: 840, checkInsAcked: 28, requestsFulfilled: 4,
     }
 
     // A believable last five weeks of activity for the grove heat-map
@@ -106,6 +111,7 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
             status: 'mature',
             taskText: notes[(i + k) % notes.length],
             notePath: k % 2 ? 'Projects/Thesis.md' : undefined,
+            tags: notes[(i + k) % notes.length].startsWith('Read') ? ['#reading'] : k % 2 ? ['#thesis'] : undefined,
         }))
         g.dailyLogs[date] = {
             date, trees, completedPomodoros: count, tasksCompleted: count + 1, breaksCompleted: count,
@@ -119,5 +125,22 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
     board.quests[1].progress = Math.max(1, board.quests[1].target - 1)
     board.quests[2].progress = 0
     g.questBoard = board
+
+    // Village Charter: a Market Town, one goal short of becoming a Town (a fifth request)
+    g.charter = { rank: 3, met: [], reachedOn: { 1: addDays(today, -31), 2: addDays(today, -22), 3: addDays(today, -9) } }
+    g.friendship = { hollis: 3, maren: 1 }
+    g.lastRequestDate = today
+    g.requests = [
+        {
+            id: `req_${addDays(today, -2)}_maren`, residentId: 'maren', kind: 'species', speciesId: 'willow',
+            title: 'Grow a Weeping Willow', quote: 'Could you grow a Weeping Willow for the square?',
+            target: 1, progress: 0, postedOn: addDays(today, -2), reward: requestReward('species'),
+        },
+        {
+            id: `req_${today}_ida`, residentId: 'ida', kind: 'tag', tag: '#reading',
+            title: 'Focus 50 minutes on #reading', quote: '50 minutes on something #reading, then come and tell me about it.',
+            target: 50, progress: 25, postedOn: today, reward: requestReward('tag'),
+        },
+    ]
     return { ...g, ...overrides }
 }

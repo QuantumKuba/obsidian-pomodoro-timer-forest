@@ -30,7 +30,10 @@ const g = mid
     ? village({
           xp: xpForLevel(6) + 120, sunlight: 520, coins: 58, streak: { current: 6, longest: 9, lastCheckInDate: '', shieldMonth: '', shieldsUsed: 0 },
           unlockedSpecies: ['classic_pine', 'sunflower', 'ancient_oak', 'lavender'],
-          unlockedBuildings: ['campfire', 'stone_well', 'lantern', 'bench', 'gazebo', 'cabin'],
+          unlockedBuildings: ['campfire', 'stone_well', 'lantern', 'bench', 'gazebo', 'cabin', 'hamlet_signpost'],
+          charter: { rank: 1, met: ['stay_trees', 'stay_streak'], reachedOn: {} },
+          friendship: { hollis: 1 },
+          requests: [],
       })
     : village()
 gamificationStore.set(g)
@@ -44,6 +47,7 @@ setPlugin({
         selectSpecies() {},
         harvestCrops() { return [] },
         plantCrop() { return true },
+        declineRequest() {},
         confettiEngine: { attach() {}, detach() {}, destroy() {} },
         getUpgradeInfo(item: PlacedHomesteadItem) {
             if (item.itemType === 'tree') return { sunlight: 40 * item.level, coins: 4 * item.level, maxed: item.level >= 3 }
@@ -63,6 +67,22 @@ const harvest: RewardEvent = {
         { label: '🌅 First tree of the day', xp: 10 },
         { label: '🎯 Daily goal reached (4)', sunlight: 40, coins: 5, xp: 20 },
         { label: '🌱 Cherry Blossom sapling added to your village inventory' },
+    ],
+}
+const rank: RewardEvent = {
+    id: 'r1', kind: 'rank', at: 0, title: 'Chapter 4 complete: Lamps along the lane', subtitle: 'A clock that keeps the hours you have put in.',
+    rank: 'Town', buildingId: 'clock_tower', sunlight: 400, coins: 50, xp: 200,
+    lines: [
+        { label: '📜 Town · Lamps along the lane', sunlight: 400, coins: 50, xp: 200 },
+        { label: '🏛️ Clock Tower is waiting in your inventory' },
+    ],
+}
+const request: RewardEvent = {
+    id: 'q1', kind: 'request', at: 0, title: 'Thank you, from Maren', subtitle: 'Grow a Weeping Willow', residentId: 'maren',
+    sunlight: 40, coins: 6, xp: 25,
+    lines: [
+        { label: 'Grow a Weeping Willow', sunlight: 40, coins: 6, xp: 25 },
+        { label: '♥♥♡♡♡ with Maren' },
     ],
 }
 const levelup: RewardEvent = {
@@ -89,11 +109,12 @@ const cloneTimer = (elapsed: number, running: boolean, inSession: boolean) => {
     return readable({ count, elapsed, running, inSession, mode: 'WORK', remained: { millis: left, human }, finished: false } as any)
 }
 
-if (scene === 'sidebar' || scene === 'sidebar-reward' || scene === 'sidebar-levelup') {
+const SIDEBAR_CARDS: Record<string, RewardEvent> = { 'sidebar-reward': harvest, 'sidebar-levelup': levelup, 'sidebar-rank': rank, 'sidebar-request': request }
+
+if (scene === 'sidebar' || scene in SIDEBAR_CARDS) {
     const ratio = 0.62
     activePlantStore.set({ speciesId: 'sakura', startTime: 0, totalDurationMillis: 25 * 60000, currentStage: 'sapling', progressRatio: ratio, taskText: 'Write chapter 3 draft' })
-    if (scene === 'sidebar-reward') { activePlantStore.set(null); rewardEvents.set([harvest]) }
-    if (scene === 'sidebar-levelup') { activePlantStore.set(null); rewardEvents.set([levelup]) }
+    if (SIDEBAR_CARDS[scene]) { activePlantStore.set(null); rewardEvents.set([SIDEBAR_CARDS[scene]]) }
     const idle = scene !== 'sidebar'
     new TimerViewComponent({
         target: app,
