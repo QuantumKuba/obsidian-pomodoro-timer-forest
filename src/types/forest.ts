@@ -36,6 +36,7 @@ export type PerkKind =
     | 'night_sunlight_pct' // +% sunlight for sessions finished 19:00–05:00
     | 'crop_growth_pct' // crops in garden plots grow % faster
     | 'first_tree_coins' // flat coins with the first tree of the day
+    | 'request_slots' // more neighbours' requests can be open at once
 
 export interface BuildingPerk {
     kind: PerkKind
@@ -59,6 +60,8 @@ export interface HomesteadBuilding {
     charm: number
     perk?: BuildingPerk
     iconSvg: string
+    /** Never sold: granted by the Village Charter when the village reaches this rank. */
+    charterRank?: number
 }
 
 /** Something to grow in a garden plot. Crops grow with focus minutes and never wither. */
@@ -184,6 +187,40 @@ export interface DailyQuestBoard {
     chestClaimed: boolean
 }
 
+/** What a neighbour can ask for. Every kind is met by real focus work, never by the clock. */
+export type RequestKind = 'species' | 'minutes' | 'long' | 'tag' | 'tasks' | 'breaks' | 'harvest' | 'cards' | 'trees'
+
+/** A small personal request pinned by one of the village's residents. It never expires. */
+export interface VillagerRequest {
+    id: string
+    residentId: string
+    kind: RequestKind
+    /** Short, e.g. "Grow a Cherry Blossom". */
+    title: string
+    /** The resident's own words. */
+    quote: string
+    target: number
+    progress: number
+    /** `species`: the tree to grow. */
+    speciesId?: string
+    /** `tag`: the tag (with #) the focus has to be on. */
+    tag?: string
+    /** `long`: the shortest session that counts. */
+    minMinutes?: number
+    postedOn: string
+    reward: { sunlight: number; coins: number; xp: number }
+}
+
+/** The village's long-term arc: ranks reached by completing the charter's chapters. */
+export interface CharterState {
+    /** Chapters completed; the village's rank is CHARTER_RANKS[rank]. */
+    rank: number
+    /** Goals of the current chapter already met. Kept, so a goal never un-ticks. */
+    met: string[]
+    /** The day each rank was reached, by rank. */
+    reachedOn: Record<string, string>
+}
+
 export interface GamificationData {
     sunlight: number
     coins: number
@@ -212,6 +249,13 @@ export interface GamificationData {
     dailyLogs: Record<string, DailyForestLog>
     /** Kanban boards by note path. */
     boards: Record<string, BoardMemory>
+    charter: CharterState
+    /** Open neighbours' requests, oldest first. */
+    requests: VillagerRequest[]
+    /** Requests fulfilled for each resident, by resident id. Hearts follow from it. */
+    friendship: Record<string, number>
+    /** The last day a neighbour pinned a new request (one a day at most). */
+    lastRequestDate: string
     tagMappings: TagFloraMapping[]
     ambientSound: 'none' | 'rain' | 'forest_stream' | 'breeze'
     ambientVolume: number
@@ -234,6 +278,8 @@ export interface GamificationData {
         hyperfocusSessions: number
         hyperfocusMinutes: number
         checkInsAcked: number
+        /** Neighbours' requests fulfilled. */
+        requestsFulfilled: number
     }
     preferences: {
         hardcoreMode: boolean // withers tree if aborted
@@ -281,6 +327,8 @@ export interface ActiveSessionPlant {
     autoTagged?: boolean
     /** Open-ended hyperfocus session: growth follows minutes focused, not a countdown. */
     hyperfocus?: boolean
+    /** Tags on the note and task focused on, lower case with `#`. */
+    tags?: string[]
 }
 
 export interface RewardLine {
@@ -293,7 +341,7 @@ export interface RewardLine {
 /** A celebratory event shown in the UI (session harvest, task, quest, level-up…). */
 export interface RewardEvent {
     id: string
-    kind: 'harvest' | 'early' | 'wither' | 'task' | 'break' | 'crop' | 'quest' | 'chest' | 'achievement' | 'levelup'
+    kind: 'harvest' | 'early' | 'wither' | 'task' | 'break' | 'crop' | 'quest' | 'chest' | 'achievement' | 'levelup' | 'rank' | 'request'
     title: string
     subtitle?: string
     speciesId?: string
@@ -302,6 +350,11 @@ export interface RewardEvent {
     xp: number
     lines: RewardLine[]
     levelUp?: number
+    /** `rank`: the village's new rank, and the landmark that came with it. */
+    rank?: string
+    buildingId?: string
+    /** `request`: the resident who asked. */
+    residentId?: string
     /** `<board path>::<card key>` when the event is about a card on a board. */
     ref?: string
     at: number

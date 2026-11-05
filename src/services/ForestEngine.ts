@@ -13,8 +13,10 @@ import type {
     PlacedHomesteadItem,
     PlantedTree,
     QuestKind,
+    RequestKind,
     RewardEvent,
     RewardLine,
+    VillagerRequest,
 } from '../types/forest'
 import {
     BIOME_UNLOCK_LEVELS,
@@ -24,6 +26,7 @@ import {
     HOMESTEAD_BUILDINGS,
     LAND_EXPANSIONS,
     TREE_MAX_LEVEL,
+    charterLandmark,
     cropProgress,
     getBuilding,
     getCrop,
@@ -65,6 +68,8 @@ import {
     type BaseReward,
     type CardCompletion,
 } from './Progression'
+import { CHARTER_CHAPTERS, CHARTER_RANKS, chapterComplete, charterRank, goalStatus, residentJoining } from './Charter'
+import { FRIEND_GIFT, KEEPSAKE_HEARTS, MAX_HEARTS, RESIDENTS, getResident, hearts, keepsakeValue, makeRequest, requestReward, requestSlots } from './Neighbours'
 import SoundManager, { type AmbientSoundType } from './SoundManager'
 import ConfettiEngine from './ConfettiEngine'
 import { writable, type Writable, get } from 'svelte/store'
@@ -108,6 +113,26 @@ export interface BoardCardState {
     role: BoardLaneRole
 }
 
+/** Tags from the task and from the session's note, without repeats. */
+function mergeTags(...lists: (string[] | undefined)[]): string[] {
+    const out: string[] = []
+    for (const list of lists) {
+        for (const t of list ?? []) {
+            const tag = (t.startsWith('#') ? t : `#${t}`).toLowerCase()
+            if (!out.includes(tag)) out.push(tag)
+        }
+    }
+    return out
+}
+
+/** The keepsake a resident you are close to adds to a perk, if any. */
+function keepsakeOf(g: GamificationData, kind: Parameters<typeof keepsakeValue>[1]): { label: string; value: number } | null {
+    const value = keepsakeValue(g, kind)
+    if (!value) return null
+    const resident = RESIDENTS.find((r) => r.keepsake.kind === kind && hearts(g, r.id) >= KEEPSAKE_HEARTS)
+    return { label: resident?.keepsake.label ?? 'A neighbour’s keepsake', value }
+}
+
 function emptyBoard(title: string): BoardMemory {
     return { title, cards: {}, shipped: 0, history: [], milestones: [] }
 }
@@ -149,10 +174,14 @@ export default class ForestEngine {
     private mutate(fn: (g: GamificationData) => void, options: { persist?: boolean } = {}): void {
         const g: GamificationData = structuredClone(this.state)
         const levelBefore = levelFromXp(g.xp)
+        const rankBefore = charterRank(g)
         fn(g)
         this.checkAchievements(g)
+        this.checkCharter(g)
         this.applyLevelUps(g, levelBefore)
         this.storage.updateGamification(() => g, options)
+        // A rank-up is celebrated once: save it even when the change itself would not be saved
+        if (options.persist === false && charterRank(g) > rankBefore) this.storage.markChanged()
         this.flushEvents()
     }
 
@@ -180,7 +209,7 @@ export default class ForestEngine {
         const events = this.pendingEvents
         this.pendingEvents = []
 
-        const big = events.some((e) => e.kind === 'levelup' || e.kind === 'achievement' || e.kind === 'chest')
+        const big = events.some((e) => e.kind === 'levelup' || e.kind === 'achievement' || e.kind === 'chest' || e.kind === 'rank')
         if (this.settings().forestSounds && big) this.soundManager.playLevelUp()
 
         if (this.plugin.hasVisibleForestView()) {
@@ -220,7 +249,8 @@ export default class ForestEngine {
     public ensureToday(): void {
         const today = dateKey()
         const g0 = this.state
-        if (g0.lastVisitDate === today && g0.questBoard?.date === today) return
+        // A chapter can be complete without a change today, e.g. an old save on its first launch
+        if (g0.lastVisitDate === today && g0.questBoard?.date === today && !chapterComplete(g0)) return
 
         let shieldUsed = false
         this.mutate((g) => {
@@ -286,10 +316,8 @@ export default class ForestEngine {
     // Focus sessions
     // -----------------------------------------------------------------------
 
-    public detectFloraFromContext(notePath?: string, taskText?: string, tags?: string[]): string | null {
-        const state = this.state
-        const mappings = state.tagMappings || []
-
+    /** Tags on the task and the note being focused on, lower case with `#`, task tags first. */
+    public contextTags(notePath?: string, taskText?: string, tags?: string[]): string[] {
         const candidates: string[] = []
         const add = (t: string) => {
             const tag = (t.startsWith('#') ? t : `#${t}`).toLowerCase()
@@ -298,12 +326,19 @@ export default class ForestEngine {
         tags?.forEach(add)
         taskText?.match(/#[\w\-/]+/g)?.forEach(add)
         if (notePath) {
-            const file = this.plugin.app.vault.getAbstractFileByPath(notePath)
+            const file = this.plugin.app.vault?.getAbstractFileByPath(notePath)
             if (file instanceof TFile) {
                 const cache = this.plugin.app.metadataCache.getFileCache(file)
                 if (cache) getAllTags(cache)?.forEach(add)
             }
         }
+        return candidates
+    }
+
+    public detectFloraFromContext(notePath?: string, taskText?: string, tags?: string[]): string | null {
+        const state = this.state
+        const mappings = state.tagMappings || []
+        const candidates = this.contextTags(notePath, taskText, tags)
 
         for (const candidate of candidates) {
             const match = mappings.find((m) => m.tag.toLowerCase() === candidate)
@@ -325,6 +360,7 @@ export default class ForestEngine {
         const gamification = this.state
         const detected = this.detectFloraFromContext(notePath, taskText, tags)
         const speciesId = detected || gamification.selectedSpeciesId || 'classic_pine'
+        const sessionTags = this.contextTags(notePath, taskText, tags)
 
         this.activePlantStore.set({
             speciesId,
@@ -336,6 +372,7 @@ export default class ForestEngine {
             notePath,
             autoTagged: !!detected,
             hyperfocus,
+            ...(sessionTags.length ? { tags: sessionTags } : {}),
         })
 
         if (this.settings().forestSounds) this.soundManager.playPlantSeed()
@@ -399,6 +436,7 @@ export default class ForestEngine {
         const today = dateKey()
         const settings = this.settings()
         const isHyper = !!hyperfocus || !!currentPlant?.hyperfocus
+        const tags = mergeTags(taskContext?.tags, currentPlant?.tags)
 
         const newTree: PlantedTree = {
             id: `tree_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -408,7 +446,7 @@ export default class ForestEngine {
             status: 'mature',
             notePath: taskContext?.notePath || currentPlant?.notePath,
             taskText: taskContext?.taskText || currentPlant?.taskText,
-            tags: taskContext?.tags,
+            tags: tags.length ? tags : undefined,
             hyperfocus: isHyper,
         }
 
@@ -437,6 +475,10 @@ export default class ForestEngine {
                     bonusCoins += eggs
                     lines.push({ label: '🥚 Fresh eggs from the coop', coins: eggs })
                 }
+                this.keepsakeLine(g, 'first_tree_coins', lines, (v) => {
+                    bonusCoins += v
+                    return { coins: v }
+                })
             }
 
             if (isHyper && hyperfocus && hyperfocus.checkInsAcked > 0) {
@@ -504,6 +546,14 @@ export default class ForestEngine {
             if (newTree.taskText) this.progressQuests(g, 'linked_task', 1)
             if (currentPlant?.autoTagged || (taskContext?.tags?.length ?? 0) > 0) this.progressQuests(g, 'tagged_session', 1)
 
+            this.progressRequests(g, 'trees', 1)
+            this.progressRequests(g, 'species', 1, { speciesId })
+            this.progressRequests(g, 'minutes', durationMinutes)
+            this.progressRequests(g, 'long', 1, { minutes: durationMinutes })
+            this.progressRequests(g, 'tag', durationMinutes, { tags })
+            // After the progress, so a new request never starts half done
+            this.postRequest(g, today)
+
             result = {
                 tree: newTree,
                 sunlightEarned: earned.sunlight,
@@ -559,6 +609,7 @@ export default class ForestEngine {
             taskText: taskContext?.taskText || currentPlant?.taskText,
             tags: taskContext?.tags,
         }
+        const tags = mergeTags(taskContext?.tags, currentPlant?.tags)
 
         let result: SessionCompletionResult | null = null
 
@@ -598,6 +649,8 @@ export default class ForestEngine {
 
             this.progressQuests(g, 'minutes', minutes)
             if (youngTree.taskText) this.progressQuests(g, 'linked_task', 1)
+            this.progressRequests(g, 'minutes', minutes)
+            this.progressRequests(g, 'tag', minutes, { tags })
 
             result = {
                 tree: youngTree,
@@ -642,7 +695,11 @@ export default class ForestEngine {
         }
         pctLine(`🔥 ${g.streak.current}-day streak`, Math.min(20, Math.max(0, g.streak.current - 1) * 2), 'sun')
         pctLine('🏡 Cozy Cabin', perkValue(g.homestead, 'sunlight_pct'), 'sun')
-        if (minutes >= 45) pctLine('🌬️ Windmill (long session)', perkValue(g.homestead, 'long_session_sunlight_pct'), 'sun')
+        if (minutes >= 45) {
+            pctLine('🌬️ Windmill (long session)', perkValue(g.homestead, 'long_session_sunlight_pct'), 'sun')
+            const ash = keepsakeOf(g, 'long_session_sunlight_pct')
+            if (ash) pctLine(ash.label, ash.value, 'sun')
+        }
         const hour = new Date().getHours()
         if (hour >= 19 || hour < 5) pctLine('🏮 Lanterns (evening)', perkValue(g.homestead, 'night_sunlight_pct'), 'sun')
         pctLine('🪣 Village Well', perkValue(g.homestead, 'coins_pct'), 'coin')
@@ -652,19 +709,26 @@ export default class ForestEngine {
     public completeBreak(): void {
         this.ensureToday()
         this.mutate((g) => {
-            const bonus = perkValue(g.homestead, 'break_sunlight')
+            const gazebo = perkValue(g.homestead, 'break_sunlight')
+            const lines: RewardLine[] = gazebo ? [{ label: '🍵 Tea Gazebo', sunlight: gazebo }] : []
+            let tea = 0
+            this.keepsakeLine(g, 'break_sunlight', lines, (v) => {
+                tea = v
+                return { sunlight: v }
+            })
             g.lifetimeStats.breaksCompleted += 1
             const log = this.todayLog(g)
             log.breaksCompleted = (log.breaksCompleted || 0) + 1
-            const earned = this.grant(g, { sunlight: bonus, xp: 3 })
+            const earned = this.grant(g, { sunlight: gazebo + tea, xp: 3 })
             this.emit({
                 kind: 'break',
                 title: '🍵 Break well taken',
-                subtitle: bonus ? 'The tea gazebo thanks you for resting.' : 'Rested minds grow taller trees.',
+                subtitle: gazebo ? 'The tea gazebo thanks you for resting.' : 'Rested minds grow taller trees.',
                 ...earned,
-                lines: bonus ? [{ label: '🍵 Tea Gazebo', sunlight: bonus }] : [],
+                lines,
             })
             this.progressQuests(g, 'break', 1)
+            this.progressRequests(g, 'breaks', 1)
         })
     }
 
@@ -746,6 +810,7 @@ export default class ForestEngine {
             this.growCrops(g, TASK_WATERING_MINUTES)
             this.emit({ kind: 'task', title: text.length > 60 ? `${text.slice(0, 57)}…` : text, ...earned, lines })
             this.progressQuests(g, 'tasks', 1)
+            this.progressRequests(g, 'tasks', 1)
         })
         if (this.settings().forestSounds) this.soundManager.playCoin()
     }
@@ -807,6 +872,9 @@ export default class ForestEngine {
                 this.progressQuests(g, 'tasks', 1)
                 this.progressQuests(g, 'cards', 1)
                 if (card.focused || card.actual > 0) this.progressQuests(g, 'card_focus', 1)
+                // Only cards that pay count: the daily cap keeps requests from being farmed too
+                this.progressRequests(g, 'tasks', 1)
+                this.progressRequests(g, 'cards', 1)
             }
 
             for (const m of BOARD_MILESTONES) {
@@ -943,6 +1011,138 @@ export default class ForestEngine {
         })
     }
 
+    // -----------------------------------------------------------------------
+    // Village Charter
+    // -----------------------------------------------------------------------
+
+    /**
+     * Ranks the village up through every chapter whose goals are all met. Goals met in the
+     * current chapter are remembered, so they never un-tick (a stowed well still counts). A save
+     * from before the charter can climb several ranks at once; that gets a single card.
+     */
+    private checkCharter(g: GamificationData): void {
+        g.charter ??= { rank: 0, met: [], reachedOn: {} }
+        const today = dateKey()
+        const reached: number[] = []
+        const lines: RewardLine[] = []
+        const total = { sunlight: 0, coins: 0, xp: 0 }
+        for (;;) {
+            const rank = charterRank(g)
+            const chapter = CHARTER_CHAPTERS[rank]
+            if (!chapter) break
+            for (const goal of chapter.goals) {
+                if (!g.charter.met.includes(goal.id) && goalStatus(g, goal).done) g.charter.met.push(goal.id)
+            }
+            if (!chapter.goals.every((goal) => g.charter.met.includes(goal.id))) break
+
+            const next = rank + 1
+            g.charter.rank = next
+            g.charter.met = []
+            g.charter.reachedOn = { ...g.charter.reachedOn, [next]: today }
+            const earned = this.grant(g, chapter.reward)
+            total.sunlight += earned.sunlight
+            total.coins += earned.coins
+            total.xp += earned.xp
+            lines.push({ label: `📜 ${CHARTER_RANKS[next].name} · ${chapter.title}`, ...earned })
+            const landmark = charterLandmark(next)
+            if (landmark) {
+                if (!g.unlockedBuildings.includes(landmark.id)) g.unlockedBuildings.push(landmark.id)
+                if (this.ownedCount(g, landmark.id) === 0) g.inventory[`building:${landmark.id}`] = 1
+                lines.push({ label: `🏛️ ${landmark.name} is waiting in your inventory` })
+            }
+            const resident = residentJoining(next)
+            if (resident) lines.push({ label: `🏡 ${resident.name}, ${resident.role}, moves in` })
+            reached.push(next)
+        }
+        if (!reached.length) return
+
+        const top = reached[reached.length - 1]
+        this.emit({
+            kind: 'rank',
+            rank: CHARTER_RANKS[top].name,
+            buildingId: charterLandmark(top)?.id,
+            title: reached.length > 1 ? `${reached.length} chapters of the charter, signed at once` : `Chapter ${top} complete: ${CHARTER_CHAPTERS[top - 1].title}`,
+            subtitle: reached.length > 1 ? `Everything you had already built counts. ${CHARTER_RANKS[top].blurb}` : CHARTER_RANKS[top].blurb,
+            ...total,
+            lines,
+        })
+    }
+
+    // -----------------------------------------------------------------------
+    // Neighbours' requests
+    // -----------------------------------------------------------------------
+
+    /** Adds a keepsake's line to `lines` when a resident you are close to boosts `kind`. */
+    private keepsakeLine(g: GamificationData, kind: Parameters<typeof keepsakeValue>[1], lines: RewardLine[], apply: (v: number) => Omit<RewardLine, 'label'>): void {
+        const keepsake = keepsakeOf(g, kind)
+        if (keepsake) lines.push({ label: keepsake.label, ...apply(keepsake.value) })
+    }
+
+    private progressRequests(g: GamificationData, kind: RequestKind, amount: number, ctx: { speciesId?: string; tags?: string[]; minutes?: number } = {}): void {
+        if (!g.requests?.length || !(amount > 0)) return
+        for (const r of [...g.requests]) {
+            if (r.kind !== kind) continue
+            if (kind === 'species' && r.speciesId !== ctx.speciesId) continue
+            if (kind === 'tag' && !(r.tag && ctx.tags?.includes(r.tag.toLowerCase()))) continue
+            if (kind === 'long' && (ctx.minutes ?? 0) < (r.minMinutes ?? 45)) continue
+            r.progress = Math.min(r.target, (r.progress || 0) + amount)
+            if (r.progress >= r.target) this.fulfilRequest(g, r)
+        }
+    }
+
+    private fulfilRequest(g: GamificationData, r: VillagerRequest): void {
+        g.requests = g.requests.filter((q) => q.id !== r.id)
+        const resident = getResident(r.residentId)
+        const name = resident?.name ?? 'A neighbour'
+        const before = hearts(g, r.residentId)
+        g.friendship = { ...(g.friendship || {}), [r.residentId]: (g.friendship?.[r.residentId] || 0) + 1 }
+        const after = hearts(g, r.residentId)
+        g.lifetimeStats.requestsFulfilled = (g.lifetimeStats.requestsFulfilled || 0) + 1
+
+        const reward = r.reward ?? requestReward(r.kind)
+        const lines: RewardLine[] = [{ label: r.title, ...reward }]
+        if (after > before) lines.push({ label: `${'♥'.repeat(after)}${'♡'.repeat(MAX_HEARTS - after)} with ${name}` })
+        let gift = 0
+        if (resident && before < KEEPSAKE_HEARTS && after >= KEEPSAKE_HEARTS) lines.push({ label: `🎁 ${name}’s keepsake: ${resident.keepsake.text}` })
+        if (resident && before < MAX_HEARTS && after >= MAX_HEARTS) {
+            gift = FRIEND_GIFT.coins
+            const key = `tree:${resident.favourite}`
+            g.inventory[key] = (g.inventory[key] || 0) + FRIEND_GIFT.saplings
+            lines.push({ label: `🎁 A gift: ${FRIEND_GIFT.saplings} ${getSpecies(resident.favourite)?.name ?? ''} saplings`, coins: gift })
+        }
+        const earned = this.grant(g, { sunlight: reward.sunlight, coins: reward.coins + gift, xp: reward.xp })
+        g.vitality = Math.min(100, g.vitality + 3)
+        this.emit({
+            kind: 'request',
+            residentId: r.residentId,
+            title: after >= MAX_HEARTS && before < MAX_HEARTS ? `${name} counts you a dear friend` : `Thank you, from ${name}`,
+            subtitle: r.title,
+            ...earned,
+            lines,
+        })
+    }
+
+    /** A resident with nothing open may pin a new request: one a day at most, while a slot is free. */
+    private postRequest(g: GamificationData, today: string): void {
+        g.requests ??= []
+        if (g.lastRequestDate === today || g.requests.length >= requestSlots(g)) return
+        const request = makeRequest(g, today, this.settings().workLen || 25)
+        if (!request) return
+        g.requests.push(request)
+        g.lastRequestDate = today
+        // Mentioned on the card of the session that brought it
+        const card = [...this.pendingEvents].reverse().find((e) => e.kind === 'harvest')
+        card?.lines.push({ label: `✉️ ${getResident(request.residentId)?.name ?? 'A neighbour'} pinned a request: ${request.title}` })
+    }
+
+    /** Lets a request go. Nothing is lost; a new one may come after a session on another day. */
+    public declineRequest(id: string): void {
+        if (!this.state.requests?.some((r) => r.id === id)) return
+        this.mutate((g) => {
+            g.requests = g.requests.filter((r) => r.id !== id)
+        })
+    }
+
     private checkAchievements(g: GamificationData): void {
         for (const a of ACHIEVEMENTS) {
             if (g.achievements.includes(a.id) || !a.check(g)) continue
@@ -1025,6 +1225,10 @@ export default class ForestEngine {
         const building = getBuilding(buildingId)
         if (!building) return false
         const g0 = this.state
+        if (building.charterRank) {
+            new Notice(`The ${building.name} is not for sale: the village earns it by reaching ${CHARTER_RANKS[building.charterRank]?.name} in the charter.`)
+            return false
+        }
         if (building.unique && g0.unlockedBuildings.includes(buildingId)) {
             new Notice(`You already own the ${building.name}.`)
             return false
@@ -1144,7 +1348,7 @@ export default class ForestEngine {
      * line to `lines` when there is something worth telling. Returns how many crops ripened.
      */
     private growCrops(g: GamificationData, minutes: number, lines?: RewardLine[]): number {
-        const boost = 1 + perkValue(g.homestead, 'crop_growth_pct') / 100
+        const boost = 1 + (perkValue(g.homestead, 'crop_growth_pct') + keepsakeValue(g, 'crop_growth_pct')) / 100
         let growing = 0
         let ripened = 0
         for (const item of g.homestead) {
@@ -1211,6 +1415,7 @@ export default class ForestEngine {
             const names = [...counts].map(([cropId, n]) => `${getCrop(cropId).icon} ${getCrop(cropId).name}${n > 1 ? ` ×${n}` : ''}`)
             this.emit({ kind: 'crop', title: `Harvested ${names.join(', ')}`, ...earned, lines: [] })
             this.progressQuests(g, 'village_action', 1)
+            this.progressRequests(g, 'harvest', harvested.length)
         })
         if (this.settings().forestSounds) this.soundManager.playCoin()
         return harvested

@@ -1,6 +1,6 @@
 <script lang="ts">
 import { afterUpdate, createEventDispatcher, onDestroy, onMount } from 'svelte'
-import { gamificationStore, pluginInstance, clockMinute, settings, charm, vitality, levelInfo } from '../stores'
+import { gamificationStore, pluginInstance, clockMinute, settings, charm, vitality, levelInfo, charter } from '../stores'
 import { renderVillage, homesteadItemSprite } from '../render/VillageScene'
 import VillageLife from '../render/VillageLife'
 import { SPECIES_SVGS, BUILDING_SVGS, BIOME_CONFIGS, ICONS } from '../assets/floraAssets'
@@ -9,11 +9,12 @@ import {
     CROPS, GARDEN_PLOT_ID, LAND_EXPANSIONS, BIOME_UNLOCK_LEVELS, TREE_MAX_LEVEL,
 } from '../assets/floraCatalog'
 import { perkText, saplingSellValue, TASK_WATERING_MINUTES } from '../services/Progression'
+import { CHARTER_RANKS } from '../services/Charter'
 import type { BiomeType, PlacedHomesteadItem, RewardEvent } from '../types/forest'
 
 export let full = false
 
-const dispatch = createEventDispatcher<{ market: void }>()
+const dispatch = createEventDispatcher<{ market: void; journey: void }>()
 const engine = pluginInstance?.forestEngine
 const sceneId = `pfv${Math.random().toString(36).slice(2, 7)}`
 
@@ -97,6 +98,8 @@ const CHEERS: Partial<Record<RewardEvent['kind'], string>> = {
     chest: 'Ooh, what was in the chest?',
     quest: 'Quest done!',
     achievement: 'That calls for a celebration!',
+    rank: 'A new chapter for the village!',
+    request: 'Thank you, neighbour!',
 }
 const cheered = new Set<string>()
 let watching = false
@@ -210,6 +213,10 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
             {#if ripeCount}
                 <button class="harvest-all" title="Pick every ripe crop" on:click={() => harvest()}>🧺 Harvest {ripeCount}</button>
             {/if}
+            <button
+                class="charter-chip"
+                title={$charter.chapter ? `Village Charter: ${$charter.done} of ${$charter.total} goals toward ${$charter.nextRankName}` : 'Village Charter: every chapter is signed'}
+                on:click={() => dispatch('journey')}>📜 {$charter.rankName}{#if $charter.chapter}<span class="chip-prog">{$charter.done}/{$charter.total}</span>{/if}</button>
             <span title="Charm grows with every tree, building and upgrade">💐 {$charm} charm</span>
             <span title={$vitality.blurb}>🌿 {$vitality.label}</span>
         </div>
@@ -246,6 +253,10 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
                                 </p>
                                 <div class="crop-bar" class:ripe={progress >= 1}><div style="width:{Math.round(progress * 100)}%"></div></div>
                                 <p class="perk next">Grows with every minute you focus. Each finished task waters it (+{TASK_WATERING_MINUTES}m). It never wilts.</p>
+                            {:else if selBuilding?.charterRank}
+                                <p class="perk">📜 Charter landmark, earned on becoming a {CHARTER_RANKS[selBuilding.charterRank]?.name}.</p>
+                                {#if selBuilding.perk}<p class="perk">⚡ {perkText(selBuilding, selected.level)}</p>{/if}
+                                {#if selBuilding.id === 'clock_tower'}<p class="perk next">It has struck {Math.floor(g.lifetimeStats.totalFocusMinutes / 60)} hours of your focus.</p>{/if}
                             {:else if selBuilding?.perk}
                                 <p class="perk">⚡ {perkText(selBuilding, selected.level)}</p>
                                 {#if !upgrade?.maxed}<p class="perk next">Next: {perkText(selBuilding, selected.level + 1)}</p>{/if}
@@ -396,10 +407,29 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
 .biome-twilight_moss { background: linear-gradient(135deg, #7df9ff, #3f4d8f); }
 .village-stats {
     display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     font-size: 0.72rem;
     color: var(--text-muted);
 }
+.charter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: auto;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 99px;
+    color: var(--text-normal);
+    background: var(--background-secondary);
+    border: 1px solid rgba(201, 162, 90, 0.55);
+    box-shadow: none;
+    cursor: pointer;
+}
+.charter-chip:hover { border-color: #c9a25a; }
+.chip-prog { color: var(--text-muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .layout {
     display: flex;
     flex-direction: column;

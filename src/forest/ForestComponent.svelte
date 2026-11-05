@@ -25,7 +25,7 @@ $: chestReady = !!$questBoard && questsLeft === 0 && !$questBoard.chestClaimed
 $: affordable =
     FLORA_SPECIES.some((s) => !g.unlockedSpecies.includes(s.id) && s.unlockLevel <= $levelInfo.level && g.sunlight >= s.sunlightCost && g.coins >= s.coinsCost) ||
     HOMESTEAD_BUILDINGS.some(
-        (b) => !(b.unique && g.unlockedBuildings.includes(b.id)) && b.category !== 'path' && b.unlockLevel <= $levelInfo.level && g.sunlight >= b.sunlightCost && g.coins >= b.coinsCost,
+        (b) => !b.charterRank && !(b.unique && g.unlockedBuildings.includes(b.id)) && b.category !== 'path' && b.unlockLevel <= $levelInfo.level && g.sunlight >= b.sunlightCost && g.coins >= b.coinsCost,
     )
 
 async function placeFromMarket(e: CustomEvent<string>) {
@@ -69,7 +69,7 @@ function greeting(): string {
 
     <div class="content">
         {#if activeTab === 'village'}
-            <VillageTab bind:this={village} {full} on:market={() => (activeTab = 'market')} />
+            <VillageTab bind:this={village} {full} on:market={() => (activeTab = 'market')} on:journey={() => (activeTab = 'journey')} />
         {:else if activeTab === 'grove'}
             <GroveTab {full} />
         {:else if activeTab === 'market'}

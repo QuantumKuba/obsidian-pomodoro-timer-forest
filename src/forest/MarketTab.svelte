@@ -3,6 +3,7 @@ import { createEventDispatcher } from 'svelte'
 import { gamificationStore, pluginInstance, levelInfo } from '../stores'
 import { FLORA_SPECIES, HOMESTEAD_BUILDINGS } from '../assets/floraCatalog'
 import { perkText } from '../services/Progression'
+import { CHARTER_RANKS } from '../services/Charter'
 import { ICONS } from '../assets/floraAssets'
 import type { FloraSpecies, HomesteadBuilding } from '../types/forest'
 
@@ -85,7 +86,7 @@ function placedCount(id: string): number {
     {:else}
         <p class="hint">Buildings grant lasting perks that grow with upgrades. Paths, brooks and decorations can be bought as often as you like. Garden plots grow crops while you focus.</p>
         <div class="grid">
-            {#each HOMESTEAD_BUILDINGS as b (b.id)}
+            {#each HOMESTEAD_BUILDINGS.filter((b) => !b.charterRank) as b (b.id)}
                 {@const owned = b.unique && g.unlockedBuildings.includes(b.id)}
                 {@const locked = level < b.unlockLevel}
                 {@const afford = g.sunlight >= b.sunlightCost && g.coins >= b.coinsCost}
@@ -110,6 +111,28 @@ function placedCount(id: string): number {
                                         {@html afford ? 'Build' : shortfallHtml(b.sunlightCost, b.coinsCost)}
                                     </button>
                                 {/if}
+                            {/if}
+                        </div>
+                    </div>
+                </div>
+            {/each}
+        </div>
+        <p class="hint charter-hint">📜 <b>Charter landmarks</b> are never sold. The village earns one each time it rises a rank in the Village Charter (see the Journey tab).</p>
+        <div class="grid">
+            {#each HOMESTEAD_BUILDINGS.filter((b) => b.charterRank) as b (b.id)}
+                {@const earned = g.unlockedBuildings.includes(b.id)}
+                {@const rankName = CHARTER_RANKS[b.charterRank ?? 0]?.name}
+                <div class="card charter" class:owned={earned} class:locked={!earned}>
+                    <div class="art">{@html b.iconSvg}{#if !earned}<span class="lock">📜 {rankName}</span>{/if}</div>
+                    <div class="body">
+                        <div class="title"><strong>{b.name}</strong><span class="tag">{b.category}</span></div>
+                        <p class="desc">{b.description}</p>
+                        {#if b.perk}<p class="perk">⚡ {perkText(b, 1)}</p>{/if}
+                        <div class="foot">
+                            {#if earned}
+                                <span class="active-seed">✓ Earned</span>
+                            {:else}
+                                <span class="muted">Earned when the village becomes a {rankName}</span>
                             {/if}
                         </div>
                     </div>
@@ -142,6 +165,9 @@ function placedCount(id: string): number {
     font-weight: 700;
 }
 .hint { margin: 0; font-size: 0.74rem; color: var(--text-muted); }
+.charter-hint { margin-top: 4px; }
+.card.charter { border-style: dashed; border-color: rgba(201, 162, 90, 0.55); }
+.card.charter.owned { border-style: solid; }
 .grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .full .grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .card {

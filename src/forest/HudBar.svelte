@@ -1,5 +1,5 @@
 <script lang="ts">
-import { sunlight, coins, streak, levelInfo, vitality } from '../stores'
+import { sunlight, coins, streak, levelInfo, vitality, charter } from '../stores'
 import { ICONS } from '../assets/floraAssets'
 import { tweened } from 'svelte/motion'
 import { cubicOut } from 'svelte/easing'
@@ -13,13 +13,16 @@ const xpRatio = tweened($levelInfo.ratio, { duration: 900, easing: cubicOut })
 $: sun.set($sunlight)
 $: coin.set($coins)
 $: xpRatio.set($levelInfo.ratio)
+$: chapterNote = $charter.chapter ? `${$charter.done} of ${$charter.total} goals toward ${$charter.nextRankName}` : 'the charter is complete'
 </script>
 
 <div class="pf-hud" class:compact>
-    <div class="level" title="{$levelInfo.title} · {$levelInfo.into}/{$levelInfo.needed} XP to level {$levelInfo.level + 1}">
+    <div class="level" title="{$levelInfo.title} · {$levelInfo.into}/{$levelInfo.needed} XP to level {$levelInfo.level + 1}. The village is a {$charter.rankName}: {chapterNote}.">
         <span class="lvl-badge">{$levelInfo.level}</span>
         <div class="lvl-meta">
-            {#if !compact}<span class="lvl-title">{$levelInfo.title}</span>{/if}
+            <span class="lvl-title">
+                {#if !compact}{`${$levelInfo.title} · `}{/if}<span class="rank">{$charter.rankName}</span>{#if $charter.chapter}<span class="rank-prog">{` · ${$charter.done}/${$charter.total}`}</span>{/if}
+            </span>
             <div class="xp-track"><div class="xp-fill" style="width:{Math.round($xpRatio * 100)}%"></div></div>
         </div>
     </div>
@@ -81,6 +84,8 @@ $: xpRatio.set($levelInfo.ratio)
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.rank { color: var(--text-normal); font-weight: 600; }
+.rank-prog { font-variant-numeric: tabular-nums; }
 .xp-track {
     height: 5px;
     border-radius: 99px;

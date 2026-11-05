@@ -20,6 +20,8 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 - [Building your village](#building-your-village)
   - [Garden plots and crops](#garden-plots-and-crops)
   - [Villagers and hens](#villagers-and-hens)
+- [The Village Charter](#the-village-charter)
+- [Neighbours and their requests](#neighbours-and-their-requests)
 - [Daily quests and achievements](#daily-quests-and-achievements)
 - [Streaks, vitality and withering](#streaks-vitality-and-withering)
 - [Smart seeds (tags)](#smart-seeds-tags)
@@ -40,6 +42,7 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 3. **Harvest.** You earn ☀️ Sunlight, 🪙 Coins and XP, and a sapling of the tree you grew.
 4. **Spend and place.** Buy buildings, plant your saplings, upgrade things. Perks make the next session pay more.
 5. **Come back tomorrow.** Fresh quests, a streak to keep, and a village that is happiest when you visit.
+6. **Aim further.** The [Village Charter](#the-village-charter) turns all of it into a long arc: your settlement rises from a Clearing to a City, one chapter at a time, while its [neighbours](#neighbours-and-their-requests) ask small favours along the way.
 
 ## Opening things
 
@@ -246,6 +249,7 @@ The full table lives in the [spec](../FOREST_SPEC.md#3-flora-catalog).
 | Hearth Campfire | The village fades more slowly on days off |
 | Friendly Scarecrow | Crops grow + % faster |
 | Chicken Coop | + Coins with your first tree of the day (fresh eggs) |
+| Notice Board ([charter](#the-village-charter) only) | One more neighbours' request can be open at once |
 
 - **Paths, brooks and bridges** shape the ground. Put a footbridge on a brook tile.
 - **Biomes** change the ground, foliage and hills. **Land** grows from 5×5 up to 8×8.
@@ -273,13 +277,42 @@ Select a plot to choose its crop. Switching crops keeps the minutes already grow
 
 Villagers come out as your village gets livelier and gains buildings. They walk around what you build, keep to paths and bridges where they can, stop by the well, the bench or a ripe garden plot, and gather at the campfire after dark. A **Chicken Coop** adds hens that potter around it.
 
-Click a villager and they'll tell you how today is going. They cheer when you finish a tree, a quest or a level.
+Click a villager and they'll tell you how today is going. They cheer when you finish a tree, a quest or a level. The first four are [residents](#neighbours-and-their-requests) with names; one with a little envelope over their head has a request for you, and will tell you about it.
 
 With *Low animation frame rate* on, or when your system asks for reduced motion, everyone stands still instead.
 
 <p align="center">
   <img src="images/day-cycle.png" alt="The same village at dawn, midday, dusk and night" width="90%">
 </p>
+
+## The Village Charter
+
+Quests are for today; the charter is for the months ahead. Your settlement climbs seven ranks: **Clearing → Hamlet → Village → Market Town → Town → Borough → City**. Each step is a **chapter** of four or five goals drawn from what you already do, for example:
+
+| Chapter | To become | Goals (examples) |
+|---|---|---|
+| Putting down roots | Hamlet | Grow 5 trees, plant 3 in the village, check off 5 tasks, build a Village Well |
+| A place to stay | Village | 20 trees, a 3-day streak, 5 harvests, 10 daily quests, 30 charm |
+| Market day | Market Town | 25 hours of focus, a 7-day streak, 50 tasks, 10 chests, 6×6 land |
+| Lamps along the lane | Town | 100 trees, 50 hours, 30 harvests, a ★★★ building, 5 neighbours' requests |
+| A seat of the shire | Borough | 200 trees, 100 hours, a 14-day streak, 150 charm, a dear friend |
+| The grove city | City | 200 hours, a 30-day streak, 300 tasks, 25 requests, 10 species |
+
+- The current chapter sits at the top of the *Journey* tab, with a bar for every goal and the reward waiting at the end. The rank and its progress (e.g. *Market Town · 4/5*) also show in the HUD and above the village; click the chip to jump to the charter.
+- Finishing a chapter ranks the village up: Sunlight, Coins and XP, a new resident, and a **landmark you can only get this way** (Hamlet Signpost, Notice Board, Market Stall, Clock Tower, Town Hall, Founders' Fountain). They are listed under *Builders* in the market, but never for sale.
+- **Nothing is taken away.** Goals count your whole history, streak goals use your *longest* streak (a missed day never undoes one), and a goal you've met stays ticked even if you stow the building later. Ranks are never lost.
+- Played before the charter existed? Your history counts: on the first launch the village climbs every chapter it has already earned, with one celebration for all of them.
+
+## Neighbours and their requests
+
+Four residents live in the village, one more with each early rank: **Hollis** the farmer (from the start), **Maren** the gardener (Hamlet), **Ash** the woodsman (Village) and **Ida** the elder (Market Town).
+
+- Now and then, after a finished session, one of them pins a small **request** tied to real work: *Grow a Cherry Blossom for the square*, *Focus 50 minutes on something #reading*, *One session of 45 minutes or more*, *Take 2 proper breaks*, *Harvest 3 crops*, *Finish 2 board cards*. Requests only count work done after they were pinned. Tag requests use tags you have actually focused on lately.
+- At most **one new request a day**, and at most two open at once (three with the Notice Board). They **never expire**. Not in the mood? *Not now* lets one go at no cost.
+- Each fulfilled request pays a little more than a daily quest and earns a **heart** (up to ♥♥♥♥♥). At ♥♥♥ a resident's **keepsake** starts to work for good: Hollis +2 Coins with your first tree of the day, Maren crops grow 10 % faster, Ash +10 % Sunlight on sessions of 45 minutes or more, Ida +3 Sunlight per break. At ♥♥♥♥♥ they give you two saplings of their favourite tree.
+- Task and card requests only count tasks that pay, so the daily cap of 30 applies to them too.
+
+The *Neighbours* section of the *Journey* tab shows everyone, their hearts and what they're asking for.
 
 ## Daily quests and achievements
 

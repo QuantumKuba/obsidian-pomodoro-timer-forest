@@ -1,10 +1,12 @@
 import type PomodoroTimerPlugin from '../main'
 import PomodoroSettings, { type Settings } from '../Settings'
-import type { BiomeType, PluginData, GamificationData } from '../types/forest'
+import type { BiomeType, CharterState, PluginData, GamificationData, VillagerRequest } from '../types/forest'
 import { writable, type Writable, get } from 'svelte/store'
 import { Notice } from 'obsidian'
 import { BIOME_UNLOCK_LEVELS } from '../assets/floraCatalog'
 import { levelFromXp } from './Progression'
+import { CHARTER_CHAPTERS } from './Charter'
+import { requestReward } from './Neighbours'
 
 export const CURRENT_DATA_VERSION = 3
 
@@ -45,6 +47,10 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
     rewardedTaskKeys: { date: '', keys: [] },
     dailyLogs: {},
     boards: {},
+    charter: { rank: 0, met: [], reachedOn: {} },
+    requests: [],
+    friendship: {},
+    lastRequestDate: '',
     tagMappings: [
         { tag: '#code', speciesId: 'classic_pine' },
         { tag: '#dev', speciesId: 'classic_pine' },
@@ -76,6 +82,7 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
         hyperfocusSessions: 0,
         hyperfocusMinutes: 0,
         checkInsAcked: 0,
+        requestsFulfilled: 0,
     },
     preferences: {
         hardcoreMode: true,
@@ -93,6 +100,21 @@ export const DEFAULT_PLUGIN_DATA: PluginData = {
 
 export function freshGamificationData(): GamificationData {
     return structuredClone(DEFAULT_GAMIFICATION_DATA)
+}
+
+/** A charter from disk, or a fresh one; ranks and met goals are only ever kept, never lowered. */
+function normalizeCharter(raw: unknown): CharterState {
+    const c = (raw && typeof raw === 'object' ? raw : {}) as Partial<CharterState>
+    return {
+        rank: Math.max(0, Math.min(CHARTER_CHAPTERS.length, Math.floor(Number(c.rank) || 0))),
+        met: Array.isArray(c.met) ? c.met.filter((id): id is string => typeof id === 'string') : [],
+        reachedOn: c.reachedOn && typeof c.reachedOn === 'object' ? { ...c.reachedOn } : {},
+    }
+}
+
+function isRequest(r: unknown): r is VillagerRequest {
+    const q = r as Partial<VillagerRequest> | null
+    return !!q && typeof q.id === 'string' && typeof q.residentId === 'string' && typeof q.kind === 'string' && typeof q.target === 'number'
 }
 
 /** Old plugin versions stored their data in different shapes; nothing in it can be trusted. */
@@ -420,7 +442,16 @@ export default class StorageManager {
             dailyLogs: raw.dailyLogs || {},
             boards: raw.boards && typeof raw.boards === 'object' ? raw.boards : {},
             achievements: raw.achievements || [],
+            charter: normalizeCharter(raw.charter),
+            requests: Array.isArray(raw.requests)
+                ? raw.requests.filter(isRequest).map((r) => ({ ...r, progress: Math.max(0, Number(r.progress) || 0), reward: r.reward ?? requestReward(r.kind) }))
+                : [],
+            friendship: raw.friendship && typeof raw.friendship === 'object' ? { ...raw.friendship } : {},
+            lastRequestDate: typeof raw.lastRequestDate === 'string' ? raw.lastRequestDate : '',
         }
+        // The charter's rank is not worked out here: saves from before the charter start at
+        // rank 0, and the engine's first update ranks them up through every chapter whose goals
+        // their lifetime stats already meet, with one celebration for all of it.
 
         if (fromVersion < 3) {
             // v2 had every biome unlocked and awarded no XP; grant XP for past focus so

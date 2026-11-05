@@ -12,6 +12,7 @@
 import type { GamificationData, PlacedHomesteadItem } from '../types/forest'
 import { getBuilding, getCrop, isRipePlot } from '../assets/floraCatalog'
 import { dateKey } from '../services/Progression'
+import { RESIDENTS, residentsPresent, type Resident } from '../services/Neighbours'
 import { actorSprite, findCoop, henCount, henRange, sceneLayout, skyFor, villagerCount, type Layout } from './VillageScene'
 import { buildGrid, findPath, isWalkable, mainArea, nearestWalkable, neighbours, reachableFrom, type Tile, type VillageGrid } from './villageGrid'
 
@@ -49,6 +50,13 @@ interface Actor {
 }
 
 const pick = <T>(list: T[]): T => list[Math.floor(Math.random() * list.length)]
+
+/** A little envelope over a resident who has a request pinned up. */
+const REQUEST_MARK =
+    `<g xmlns="${SVG_NS}" class="pf-request" transform="translate(0 -23)"><g class="pf-request-bob">` +
+    '<circle r="3.6" fill="#fff8ec" stroke="#d9576b" stroke-width=".7"/>' +
+    '<rect x="-2.1" y="-1.4" width="4.2" height="2.9" rx=".4" fill="#ffffff" stroke="#b5473a" stroke-width=".45"/>' +
+    '<path d="M-2.1 -1.3L0 .3L2.1 -1.3" fill="none" stroke="#b5473a" stroke-width=".45" stroke-linejoin="round"/></g></g>'
 const same = (a: Tile, b: Tile) => a.x === b.x && a.y === b.y
 
 /** Things worth walking up to, and what a villager might say there. */
@@ -132,7 +140,15 @@ export default class VillageLife {
         actor.route = []
         actor.wait = 0.8
         actor.hop = HOP
-        this.speak(actor, actor.kind === 'hen' ? pick(['Bawk!', 'Cluck cluck.', 'Bawk bawk!']) : this.greeting())
+        if (actor.kind === 'hen') {
+            this.speak(actor, pick(['Bawk!', 'Cluck cluck.', 'Bawk bawk!']))
+            return
+        }
+        // A resident with a request mostly talks about that, in their own words
+        const request = this.requestOf(actor)
+        const resident = this.residentOf(actor)
+        if (request && Math.random() < 0.75) this.speak(actor, `${resident?.name}: “${request.quote}”`, 5.5)
+        else this.speak(actor, resident && Math.random() < 0.35 ? `${resident.name}, ${resident.role}. ${this.greeting()}` : this.greeting())
     }
 
     /** Everyone hops for joy; one villager may say why. */
@@ -232,6 +248,10 @@ export default class VillageLife {
         const sprite = this.sprite(actor.kind, actor.variant)
         if (sprite) body.appendChild(sprite)
         el.appendChild(body)
+        if (this.requestOf(actor)) {
+            const mark = new DOMParser().parseFromString(REQUEST_MARK, 'image/svg+xml').documentElement
+            if (mark.nodeName === 'g') el.appendChild(doc.importNode(mark, true))
+        }
         actor.el = el
         actor.body = body
         actor.before = undefined
@@ -439,6 +459,18 @@ export default class VillageLife {
         if (phase === 'dawn') today.push('Up early! The best light of the day.')
         const always = ['One task at a time.', 'Rest counts too, you know.', 'The village grows with you.', 'Nice day for a stroll.']
         return Math.random() < 0.75 ? pick(today) : pick(always)
+    }
+
+    /** The named resident a villager is, once they have moved in. */
+    private residentOf(actor: Actor): Resident | undefined {
+        if (actor.kind !== 'villager' || !this.g) return undefined
+        const resident = RESIDENTS.find((r) => r.variant === actor.variant)
+        return resident && residentsPresent(this.g).includes(resident) ? resident : undefined
+    }
+
+    private requestOf(actor: Actor) {
+        const resident = this.residentOf(actor)
+        return resident ? this.g?.requests?.find((r) => r.residentId === resident.id) : undefined
     }
 
     private speak(actor: Actor, text: string, seconds = 3.4): void {

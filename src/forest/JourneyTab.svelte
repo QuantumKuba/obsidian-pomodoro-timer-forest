@@ -5,6 +5,8 @@ import { ICONS } from '../assets/floraAssets'
 import { FLORA_SPECIES } from '../assets/floraCatalog'
 import { ACHIEVEMENTS, CHEST_REWARD, dateKey, xpForLevel } from '../services/Progression'
 import { generateStandaloneForestHtml } from '../services/HtmlExportService'
+import CharterCard from './CharterCard.svelte'
+import NeighboursCard from './NeighboursCard.svelte'
 
 export let full = false
 
@@ -43,6 +45,8 @@ function downloadHtml() {
 </script>
 
 <div class="pf-journey" class:full>
+    <CharterCard />
+
     <section class="quests">
         <div class="sec-head">
             <h4>📯 Today's quests</h4>
@@ -74,6 +78,8 @@ function downloadHtml() {
             <p class="muted">Quests appear each morning.</p>
         {/if}
     </section>
+
+    <NeighboursCard />
 
     <section>
         <div class="sec-head">
@@ -110,6 +116,7 @@ function downloadHtml() {
             <div class="stat"><b>{stats.questsCompleted}</b><span>quests</span></div>
             <div class="stat"><b>{stats.breaksCompleted}</b><span>breaks taken</span></div>
             {#if stats.cropsHarvested}<div class="stat"><b>{stats.cropsHarvested}</b><span>crops harvested</span></div>{/if}
+            {#if stats.requestsFulfilled}<div class="stat"><b>{stats.requestsFulfilled}</b><span>neighbours helped</span></div>{/if}
             <div class="stat"><b>{g.xp}</b><span>XP · next lvl at {xpForLevel($levelInfo.level + 1)}</span></div>
         </div>
     </section>
