@@ -203,6 +203,9 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
     height: 300px;
     margin-left: -150px;
     background: repeating-conic-gradient(from 0deg, rgba(255, 213, 79, 0.16) 0 12deg, transparent 12deg 24deg);
+    border-radius: 50%;
+    -webkit-mask-image: radial-gradient(circle, #000 35%, transparent 70%);
+    mask-image: radial-gradient(circle, #000 35%, transparent 70%);
     animation: pf-rays 14s linear infinite;
     pointer-events: none;
 }

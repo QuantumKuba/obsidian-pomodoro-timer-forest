@@ -33,7 +33,9 @@ Spend what you earn on buildings with real perks, plant your saplings, grow crop
 
 ## Something to aim for
 
-<!-- TODO: village rank / charter progression and villager requests. One or two sentences, an image, and a "More →" link into docs/GUIDE.md. -->
+Quests are for today; the **Village Charter** is for the months ahead. Your settlement climbs from Clearing to City through seven ranks, each earned by a short chapter of goals and rewarded with a landmark you can't buy. Along the way, four named neighbours pin small requests tied to real work, and their friendship unlocks permanent keepsake perks. Nothing expires, and ranks are never lost.
+
+[More on the charter →](docs/GUIDE.md#the-village-charter) · [Neighbours →](docs/GUIDE.md#neighbours-and-their-requests)
 
 ## A village that lives on your clock
 
@@ -43,7 +45,7 @@ The sky follows your real time of day. Windows glow at dusk, villagers gather at
 
 [More on villagers →](docs/GUIDE.md#villagers-and-hens)
 
-## Five biomes, eleven species, thirteen buildings
+## Five biomes, eleven species, two dozen buildings
 
 Level up to unlock more, from a humble Classic Pine to a glowing Celestial Gold Tree.
 
