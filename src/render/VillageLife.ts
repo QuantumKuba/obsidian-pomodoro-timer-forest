@@ -13,6 +13,8 @@ import type { GamificationData, PlacedHomesteadItem } from '../types/forest'
 import { getBuilding, getCrop, isRipePlot } from '../assets/floraCatalog'
 import { dateKey } from '../services/Progression'
 import { RESIDENTS, residentsPresent, type Resident } from '../services/Neighbours'
+import { NEEDS, heartNeed, heartStageIndex, heartTreeItem, tendedToday } from '../services/HeartTree'
+import { getTreasure } from '../assets/treasureCatalog'
 import { actorSprite, findCoop, henCount, henRange, sceneLayout, skyFor, villagerCount, type Layout } from './VillageScene'
 import { buildGrid, findPath, isWalkable, mainArea, nearestWalkable, neighbours, reachableFrom, type Tile, type VillageGrid } from './villageGrid'
 
@@ -70,6 +72,15 @@ const REMARKS: Record<string, string[]> = {
     greenhouse: ['It smells wonderful in there.'],
     cabin: ['Home sweet home.'],
 }
+
+/** What villagers say under the Heart Tree, by its stage. Admiring, never a reminder. */
+const HEART_REMARKS: string[][] = [
+    ['You chose well.', 'It’s finding its feet.'],
+    ['Roots well down now.', 'It’s settled in nicely.'],
+    ['I always stop here on my way past.', 'Good shade, this.'],
+    ['Feels older than the village itself.', 'It holds the light, doesn’t it?'],
+    ['Hard to imagine the place without it.', 'The heart of the village, that one.'],
+]
 
 export default class VillageLife {
     private frame: HTMLElement | null = null
@@ -158,6 +169,21 @@ export default class VillageLife {
             actor.hop = HOP * 2 + (i % 3) * 0.08
         })
         if (words && villagers.length) this.speak(pick(villagers), words)
+    }
+
+    /** A find rising from where it lay as it is picked up. `art` is the item's own SVG. */
+    public sparkle(tile: Tile, art: string, text: string): void {
+        if (!this.layer || !this.frame) return
+        const { cx, cy } = this.L.tile(tile.x, tile.y)
+        const scale = this.frame.clientWidth / this.L.width
+        const el = this.layer.createDiv({ cls: 'pf-pop pf-find' })
+        const icon = el.createSpan({ cls: 'pf-find-art' })
+        const svg = new DOMParser().parseFromString(art, 'image/svg+xml').documentElement
+        if (svg.nodeName === 'svg') icon.appendChild(this.win.document.importNode(svg, true))
+        el.createSpan({ text })
+        el.style.left = `${cx * scale}px`
+        el.style.top = `${(cy - 8) * scale}px`
+        this.win.setTimeout(() => el.remove(), 1700)
     }
 
     /** A small "+3" floating up from a tile, for a harvest. */
@@ -357,6 +383,11 @@ export default class VillageLife {
         const place = actor.visiting
         actor.visiting = undefined
         if (!place || Math.random() > 0.3 || this.actors.some((a) => a.speech)) return
+        const heart = this.g ? heartTreeItem(this.g) : undefined
+        if (heart && place.id === heart.id && this.g) {
+            this.speak(actor, pick(this.heartWords(this.g)), 3)
+            return
+        }
         const words = place.itemId === 'garden_plot'
             ? [isRipePlot(place) ? `The ${getCrop(place.cropId).name.toLowerCase()} are ready to pick!` : 'Coming along nicely.']
             : REMARKS[place.itemId]
@@ -425,6 +456,9 @@ export default class VillageLife {
         const phase = skyFor(new Date()).phase
         const fire = placed.find((i) => i.itemId === 'campfire')
         if (fire && (phase === 'night' || phase === 'dusk') && Math.random() < 0.6) return fire
+        // Everyone likes to stand under the Heart Tree now and then
+        const heart = heartTreeItem(g)
+        if (heart && Math.random() < 0.18) return heart
         if (Math.random() > 0.5) return undefined
         const ripe = placed.filter(isRipePlot)
         if (ripe.length && Math.random() < 0.4) return pick(ripe)
@@ -438,6 +472,18 @@ export default class VillageLife {
     // -----------------------------------------------------------------------
     // Speech
     // -----------------------------------------------------------------------
+
+    /** Something said under the Heart Tree: about the tree, what hangs on it, or (gently) what it would like. */
+    private heartWords(g: GamificationData): string[] {
+        const ht = g.heartTree
+        if (!ht) return ['Lovely tree.']
+        const words = [...HEART_REMARKS[heartStageIndex(ht.bond)]]
+        const hung = ht.hung.map((id) => getTreasure(id)?.name).filter((n): n is string => !!n)
+        if (hung.length) words.push(`I do like the ${pick(hung).toLowerCase()}.`)
+        const today = dateKey()
+        if (!tendedToday(g, today)) words.push(`It would like ${NEEDS[heartNeed(today)].ask} today, whenever suits.`)
+        return words
+    }
 
     /** What a villager says when clicked: mostly about how today is going, never a telling-off. */
     private greeting(): string {
@@ -453,6 +499,8 @@ export default class VillageLife {
         else today.push('Fancy growing a tree today?', 'A fresh seed is waiting for you.')
         if (g.streak.current >= 2) today.push(`${g.streak.current} days in a row. We noticed!`)
         if (Object.values(g.inventory).some((n) => n > 0)) today.push('You have things waiting to be placed.')
+        if (g.pickups?.length) today.push('Something’s glinting out there. Yours, I think.')
+        if (g.heartTree && !g.heartTree.itemId) today.push('Your Heart Tree is packed away. Plant it again whenever you like.')
         if (g.vitality < 45) today.push('Good to see you! We kept everything tidy.')
         const phase = skyFor(new Date()).phase
         if (phase === 'night') today.push('Lovely night for a fire.')

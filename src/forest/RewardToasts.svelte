@@ -3,7 +3,7 @@ import { onDestroy } from 'svelte'
 import { fly, scale, fade } from 'svelte/transition'
 import { backOut } from 'svelte/easing'
 import { pluginInstance } from '../stores'
-import { SPECIES_SVGS, GROWTH_STAGE_SVGS, ICONS, BUILDING_SVGS, VILLAGER_SVGS, growthSvg } from '../assets/floraAssets'
+import { SPECIES_SVGS, GROWTH_STAGE_SVGS, ICONS, BUILDING_SVGS, VILLAGER_SVGS, TREASURE_SVGS, growthSvg } from '../assets/floraAssets'
 import { getResident } from '../services/Neighbours'
 import type { RewardEvent } from '../types/forest'
 import { writable } from 'svelte/store'
@@ -14,8 +14,8 @@ const events = pluginInstance?.forestEngine?.rewardEvents ?? writable<RewardEven
 export let hide: (e: RewardEvent) => boolean = () => false
 
 /** Small things get a passing toast; everything else gets a card. */
-const isToast = (e: RewardEvent) => e.kind === 'task' || e.kind === 'break' || e.kind === 'crop'
-const TOAST_ICONS: Record<string, string> = { task: '✅', break: '🍵', crop: '🧺' }
+const isToast = (e: RewardEvent) => e.kind === 'task' || e.kind === 'break' || e.kind === 'crop' || !!e.minor
+const TOAST_ICONS: Record<string, string> = { task: '✅', break: '🍵', crop: '🧺', treasure: '✨', heart: '🌳' }
 
 $: small = $events.filter((e) => isToast(e) && !hide(e)).slice(-3)
 $: card = $events.find((e) => !isToast(e))
@@ -46,6 +46,8 @@ function art(e: RewardEvent): string {
     if (e.kind === 'harvest' && e.speciesId) return SPECIES_SVGS[e.speciesId] || SPECIES_SVGS.classic_pine
     if (e.kind === 'early' && e.speciesId) return growthSvg('sapling', e.speciesId)
     if (e.kind === 'chest') return ICONS.chest
+    if (e.kind === 'treasure') return (e.treasureId && TREASURE_SVGS[e.treasureId]) || ICONS.star
+    if (e.kind === 'heart') return (e.speciesId && SPECIES_SVGS[e.speciesId]) || ICONS.sapling
     if (e.kind === 'rank') return (e.buildingId && BUILDING_SVGS[e.buildingId]) || ICONS.charter
     if (e.kind === 'request') {
         const resident = e.residentId ? getResident(e.residentId) : undefined
@@ -77,9 +79,11 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
         <div class="pf-card-wrap" transition:fade={{ duration: 180 }}>
             <div class="pf-card {card.kind}" in:scale={{ start: 0.7, duration: 420, easing: backOut }}>
                 {#if card.kind !== 'wither'}<div class="rays"></div>{/if}
-                <div class="art {card.kind === 'harvest' || card.kind === 'early' || card.kind === 'rank' ? 'grow' : ''} {card.kind === 'request' ? 'person' : ''}">{@html art(card)}</div>
+                <div class="art {card.kind === 'harvest' || card.kind === 'early' || card.kind === 'rank' || card.kind === 'heart' || card.kind === 'treasure' ? 'grow' : ''} {card.kind === 'request' ? 'person' : ''} {card.kind === 'treasure' ? 'find' : ''}">{@html art(card)}</div>
                 {#if card.levelUp}<div class="lvl-num">Level {card.levelUp}</div>{/if}
                 {#if card.rank}<div class="rank-eyebrow">Village Charter</div><div class="rank-name">{card.rank}</div>{/if}
+                {#if card.kind === 'treasure'}<div class="rank-eyebrow">Only from missions</div>{/if}
+                {#if card.kind === 'heart'}<div class="rank-eyebrow heart-eyebrow">Heart Tree</div>{/if}
                 <h3>{card.title}</h3>
                 {#if card.subtitle}<p class="sub">{card.subtitle}</p>{/if}
                 {#if card.sunlight || card.coins || card.xp}
@@ -138,7 +142,7 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
     text-decoration: line-through;
     text-decoration-color: rgba(102, 187, 106, 0.7);
 }
-.toast.break .t-text, .toast.crop .t-text { text-decoration: none; }
+.toast.break .t-text, .toast.crop .t-text, .toast.treasure .t-text, .toast.heart .t-text { text-decoration: none; }
 .t-amt :global(svg), .lines em :global(svg), .tot :global(svg) {
     width: 13px;
     height: 13px;
@@ -175,6 +179,10 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
 .pf-card.achievement { border-color: #b39ddb; }
 .pf-card.rank { border-color: #c9a25a; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), inset 0 0 0 3px rgba(201, 162, 90, 0.18); }
 .pf-card.request { border-color: rgba(232, 128, 140, 0.7); }
+.pf-card.treasure { border-color: #e8c27a; }
+.pf-card.heart { border-color: rgba(122, 170, 96, 0.75); }
+.art.find { width: 64px; height: 64px; filter: drop-shadow(0 4px 10px rgba(255, 214, 120, 0.55)); }
+.heart-eyebrow { color: #6f9a50; }
 .art.person { width: 64px; height: 96px; }
 .rank-eyebrow {
     position: relative;

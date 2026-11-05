@@ -7,6 +7,7 @@ import { ACHIEVEMENTS, CHEST_REWARD, dateKey, xpForLevel } from '../services/Pro
 import { generateStandaloneForestHtml } from '../services/HtmlExportService'
 import CharterCard from './CharterCard.svelte'
 import NeighboursCard from './NeighboursCard.svelte'
+import HeartTreeCard from './HeartTreeCard.svelte'
 
 export let full = false
 
@@ -47,6 +48,8 @@ function downloadHtml() {
 <div class="pf-journey" class:full>
     <CharterCard />
 
+    <HeartTreeCard />
+
     <section class="quests">
         <div class="sec-head">
             <h4>📯 Today's quests</h4>
@@ -61,7 +64,7 @@ function downloadHtml() {
                         <div class="bar"><div class="fill" style="width:{Math.round((q.progress / q.target) * 100)}%"></div></div>
                     </div>
                     <span class="q-meta">{q.progress}/{q.target}</span>
-                    <span class="q-reward" title="Reward">+{q.rewardSunlight}{@html ICONS.sunlight} +{q.rewardCoins}{@html ICONS.coin}</span>
+                    <span class="q-reward" title="Reward, and a care item for your Heart Tree">+{q.rewardSunlight}{@html ICONS.sunlight} +{q.rewardCoins}{@html ICONS.coin}</span>
                 </div>
             {/each}
             <button class="chest" class:ready={allDone && !board.chestClaimed} disabled={!allDone || board.chestClaimed} on:click={() => engine?.openDailyChest()}>
@@ -69,7 +72,7 @@ function downloadHtml() {
                 {#if board.chestClaimed}
                     Chest opened — new quests at midnight
                 {:else if allDone}
-                    Open the daily chest! (+{CHEST_REWARD.sunlight}{@html ICONS.sunlight} +{CHEST_REWARD.coins}{@html ICONS.coin} + a sapling)
+                    Open the daily chest! (+{CHEST_REWARD.sunlight}{@html ICONS.sunlight} +{CHEST_REWARD.coins}{@html ICONS.coin}, a sapling and a find)
                 {:else}
                     Finish all three to open the daily chest
                 {/if}

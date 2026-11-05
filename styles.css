@@ -180,6 +180,28 @@ If your plugin does not need CSS, delete this file.
     filter: brightness(1.1) drop-shadow(0 0 3px rgba(255, 255, 255, 0.7));
 }
 
+/* Finds waiting to be picked up (src/services/Treasures.ts) */
+.pf-scene .pf-pickup {
+    cursor: pointer;
+}
+
+.pf-scene .pf-pickup:hover > svg {
+    filter: brightness(1.12) drop-shadow(0 0 3px rgba(255, 246, 200, 0.9));
+}
+
+/* The Heart Tree's ornaments and today's need belong to the tree: clicks go to it */
+.pf-scene .pf-ornaments,
+.pf-scene .pf-aura,
+.pf-scene .pf-need {
+    pointer-events: none;
+}
+
+.pf-scene .pf-swing,
+.pf-scene .pf-pickup-bob {
+    transform-box: view-box;
+}
+
+
 /* Motion is opt-out twice: the OS reduced-motion setting and the plugin's own
    "low animation FPS" setting (which adds .pf-still to the scene). */
 @media (prefers-reduced-motion: no-preference) {
@@ -235,6 +257,18 @@ If your plugin does not need CSS, delete this file.
     .pf-scene:not(.pf-still) .pf-request-bob {
         animation: pf-bob 1.3s ease-in-out infinite alternate;
     }
+    .pf-scene:not(.pf-still) .pf-pickup-bob {
+        animation: pf-bob 1.6s ease-in-out infinite alternate;
+    }
+    .pf-scene:not(.pf-still) .pf-glint {
+        animation: pf-halo 1.8s ease-in-out infinite alternate;
+    }
+    .pf-scene:not(.pf-still) .pf-swing {
+        animation: pf-swing 3.6s ease-in-out infinite alternate;
+    }
+    .pf-scene:not(.pf-still) .pf-aura {
+        animation: pf-halo 4.5s ease-in-out infinite alternate;
+    }
     .pf-scene .pf-walking .pf-leg-a {
         animation: pf-step 0.28s ease-in-out infinite alternate;
     }
@@ -254,6 +288,7 @@ If your plugin does not need CSS, delete this file.
     .pf-scene:not(.pf-still) .pf-firefly,
     .pf-scene:not(.pf-still) .pf-butterfly,
     .pf-scene:not(.pf-still) .pf-mist,
+    .pf-scene:not(.pf-still) .pf-swing,
     .pf-scene:not(.pf-still) .pf-ripe {
         animation-delay: calc(var(--t, 0s) + var(--d, 0s));
     }
@@ -314,6 +349,10 @@ If your plugin does not need CSS, delete this file.
 @keyframes pf-bob {
     from { transform: translateY(0); }
     to { transform: translateY(-2.5px); }
+}
+@keyframes pf-swing {
+    from { transform: rotate(-5deg); }
+    to { transform: rotate(5deg); }
 }
 @keyframes pf-step {
     from { transform: translateY(0); }

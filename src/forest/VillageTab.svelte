@@ -10,6 +10,9 @@ import {
 } from '../assets/floraCatalog'
 import { perkText, saplingSellValue, TASK_WATERING_MINUTES } from '../services/Progression'
 import { CHARTER_RANKS } from '../services/Charter'
+import { getTreasure } from '../assets/treasureCatalog'
+import { HEART_STAGES, heartStage } from '../services/HeartTree'
+import HeartTreeCard from './HeartTreeCard.svelte'
 import type { BiomeType, PlacedHomesteadItem, RewardEvent } from '../types/forest'
 
 export let full = false
@@ -37,6 +40,7 @@ $: sceneHtml = renderVillage(g, {
     still: $settings.lowFps,
     idPrefix: sceneId,
     liveActors: live,
+    pickups: true,
 })
 
 const life = new VillageLife()
@@ -100,6 +104,8 @@ const CHEERS: Partial<Record<RewardEvent['kind'], string>> = {
     achievement: 'That calls for a celebration!',
     rank: 'A new chapter for the village!',
     request: 'Thank you, neighbour!',
+    treasure: 'Ooh, what did you find?',
+    heart: 'That tree of yours looks happy.',
 }
 const cheered = new Set<string>()
 let watching = false
@@ -107,13 +113,27 @@ const stopWatching = engine?.rewardEvents.subscribe((events) => {
     for (const event of events) {
         if (cheered.has(event.id)) continue
         cheered.add(event.id)
-        // Events from before this view opened were celebrated elsewhere
-        if (watching && CHEERS[event.kind]) life.cheer(CHEERS[event.kind])
+        // Events from before this view opened were celebrated elsewhere; small things pass quietly
+        if (watching && !event.minor && CHEERS[event.kind]) life.cheer(CHEERS[event.kind])
     }
 })
 watching = true
 
+/** A find was clicked: it is picked up and rises from where it lay. */
+function pickUp(el: Element) {
+    const tile = { x: Number(el.getAttribute('data-px')), y: Number(el.getAttribute('data-py')) }
+    for (const got of engine?.collectPickups([el.getAttribute('data-pickup') || '']) ?? []) {
+        const t = getTreasure(got.itemId)
+        if (t) life.sparkle(tile, t.iconSvg, t.name)
+    }
+}
+
 function onSceneClick(e: MouseEvent) {
+    const find = (e.target as Element).closest('[data-pickup]')
+    if (find && !placingKey && !movingId) {
+        pickUp(find)
+        return
+    }
     const actor = (e.target as Element).closest('[data-actor]')
     if (actor && !placingKey && !movingId) {
         life.poke(actor.getAttribute('data-actor') || '')
@@ -191,6 +211,7 @@ $: maxLevel = selected?.itemType === 'tree' ? TREE_MAX_LEVEL : selBuilding?.maxL
 $: plot = selected?.itemType === 'building' && selected.itemId === GARDEN_PLOT_ID ? selected : null
 $: crop = plot ? getCrop(plot.cropId) : null
 $: ripeCount = g.homestead.filter(isRipePlot).length
+$: isHeart = !!selected && selected.itemType === 'tree' && g.heartTree?.itemId === selected.id
 </script>
 
 <div class="pf-village" class:full>
@@ -260,6 +281,8 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
                             {:else if selBuilding?.perk}
                                 <p class="perk">⚡ {perkText(selBuilding, selected.level)}</p>
                                 {#if !upgrade?.maxed}<p class="perk next">Next: {perkText(selBuilding, selected.level + 1)}</p>{/if}
+                            {:else if selected.itemType === 'tree' && isHeart}
+                                <p class="perk">♥ Your Heart Tree · {heartStage(g).name}</p>
                             {:else if selected.itemType === 'tree'}
                                 <p class="perk">Grows fuller with care. Adds charm to your village.</p>
                             {:else}
@@ -267,6 +290,9 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
                             {/if}
                         </div>
                     </div>
+                    {#if isHeart}
+                        <HeartTreeCard compact />
+                    {/if}
                     {#if plot && crop}
                         <div class="crops">
                             {#each CROPS as c (c.id)}
@@ -301,6 +327,14 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
                             </button>
                         {:else if upgrade?.maxed && maxLevel > 1}
                             <span class="maxed">Fully upgraded ✨</span>
+                        {/if}
+                        {#if selected.itemType === 'tree' && !isHeart}
+                            <button
+                                class="heart-pick"
+                                title={g.heartTree
+                                    ? 'Choose this tree instead. Its bond, stage and ornaments come along; nothing is lost.'
+                                    : `Look after this tree a little each day. It grows with you and carries the ornaments you find (+${HEART_STAGES[0].sunlightPct}% Sunlight to start).`}
+                                on:click={() => selected && engine?.chooseHeartTree(selected.id)}>♥ Make this my Heart Tree</button>
                         {/if}
                         <button on:click={() => { movingId = selected?.id ?? null; placingKey = null }}>↔ Move</button>
                         <button on:click={() => { if (selected) engine?.stowHomesteadItem(selected.id); selectedId = null }}>📦 Stow</button>
@@ -456,7 +490,8 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
 }
 .scene-frame.placing { box-shadow: 0 0 0 2px var(--interactive-accent); }
 /* While placing or moving, clicks go to the tiles, not to whoever stands on them */
-.scene-frame.placing :global(.pf-actor) { pointer-events: none; }
+.scene-frame.placing :global(.pf-actor),
+.scene-frame.placing :global(.pf-pickup) { pointer-events: none; }
 .life-layer {
     position: absolute;
     inset: 0;
@@ -501,6 +536,19 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
     transform: translate(-50%, -100%);
     animation: pf-pop-rise 1.4s ease-out forwards;
 }
+.life-layer :global(.pf-find) {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fffbe6;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+    animation-duration: 1.6s;
+}
+.life-layer :global(.pf-find-art) {
+    width: 22px;
+    height: 22px;
+    filter: drop-shadow(0 0 4px rgba(255, 236, 170, 0.9));
+}
+.life-layer :global(.pf-find-art svg) { width: 100%; height: 100%; display: block; }
 .life-layer :global(.pf-pop-coin) {
     width: 0.8em;
     height: 0.8em;
@@ -625,6 +673,12 @@ $: ripeCount = g.homestead.filter(isRipePlot).length
 }
 .insp-actions .primary:disabled { opacity: 0.5; }
 .maxed { flex: 1 1 100%; font-size: 0.75rem; color: #ffb300; font-weight: 700; }
+.insp-actions .heart-pick {
+    flex: 1 1 100%;
+    color: #4f7f37;
+    border: 1px solid rgba(122, 170, 96, 0.6);
+    background: rgba(140, 200, 103, 0.1);
+}
 .inv-head {
     display: flex;
     justify-content: space-between;

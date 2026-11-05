@@ -20,6 +20,7 @@ let village: VillageTab
 $: g = $gamificationStore
 $: toPlace = Object.values(g.inventory).reduce((a, b) => a + (b > 0 ? b : 0), 0)
 $: ripeCrops = g.homestead.filter(isRipePlot).length
+$: finds = g.pickups?.length ?? 0
 $: questsLeft = $questBoard ? $questBoard.quests.filter((q) => !q.claimed).length : 0
 $: chestReady = !!$questBoard && questsLeft === 0 && !$questBoard.chestClaimed
 $: affordable =
@@ -56,7 +57,7 @@ function greeting(): string {
 
     <nav class="tabs">
         <button class:active={activeTab === 'village'} on:click={() => (activeTab = 'village')}>
-            🏡 Village{#if ripeCrops}<span class="badge gold" title="Crops are ready to harvest">🧺</span>{:else if toPlace}<span class="badge">{toPlace}</span>{/if}
+            🏡 Village{#if ripeCrops}<span class="badge gold" title="Crops are ready to harvest">🧺</span>{:else if finds}<span class="badge gold" title="Finds are waiting to be picked up">✨</span>{:else if toPlace}<span class="badge">{toPlace}</span>{/if}
         </button>
         <button class:active={activeTab === 'grove'} on:click={() => (activeTab = 'grove')}>🌲 Grove</button>
         <button class:active={activeTab === 'market'} on:click={() => (activeTab = 'market')}>
