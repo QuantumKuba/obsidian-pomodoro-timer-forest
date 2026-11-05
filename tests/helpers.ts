@@ -10,12 +10,15 @@ export function makeEngine(setup: (g: GamificationData) => void = () => {}, sett
     g.sunlight = 5000
     g.coins = 500
     setup(g)
+    let saves = 0
     const storage = {
         getGamification: () => g,
         updateGamification: (fn: (s: GamificationData) => GamificationData) => {
             g = fn(g)
         },
-        markChanged() {},
+        markChanged() {
+            saves++
+        },
     }
     const plugin = {
         getSettings: () => ({
@@ -43,6 +46,10 @@ export function makeEngine(setup: (g: GamificationData) => void = () => {}, sett
         },
         get events() {
             return events
+        },
+        /** Times the engine asked for a change to be saved that it would not save by itself. */
+        get saves() {
+            return saves
         },
         today: () => g.dailyLogs[dateKey()],
     }
