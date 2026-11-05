@@ -74,9 +74,11 @@ ui('panel-levelup', 'scene=sidebar-levelup&settle=1', 356, 900, { clip: downTo('
 ui('panel-grove', 'scene=forest&tab=grove', 356, 1100, { clip: downTo('.heat', 14) })
 ui('panel-market', 'scene=forest&tab=market&player=mid&click=Builders', 356, 1400, { clip: downTo('.pf-market .card', 6, 2) })
 ui('panel-journey', 'scene=forest&tab=journey', 356, 2200, { clip: downTo('.chest', 14) })
+ui('panel-heart-tree', 'scene=forest&tab=journey', 356, 2200, { clip: around('.pf-heart', 8) })
 ui('panel-tasks', 'scene=tasks&pins=2', 356, 1000, { clip: downTo('.panel', 12) })
 ui('panel-tasks-edit', 'scene=tasks&press=.edit&nth=1&focus=1&tracking=1', 356, 1300, { clip: downTo('.group', 12, 0), settle: 1500 })
 ui('homestead-full', 'scene=homestead&select=cabin', 1360, 900, { pad: 0, extra: 'body{height:900px;overflow:hidden}', clip: around('.pf-forest > *', 28) })
+ui('homestead-heart-tree', 'scene=homestead&select=heart', 1360, 900, { pad: 0, extra: 'body{height:900px;overflow:hidden}', clip: around('.pf-forest > *', 28) })
 const boardPage = { pad: 0, extra: '#wrap,#app{height:100vh} body{overflow:hidden} .add-lane{display:none}', clip: downTo('.pf-lane', 24) }
 ui('board', 'scene=board&burst=1', 1520, 720, boardPage)
 ui('board-light', 'scene=board&theme=light', 1520, 720, boardPage)

@@ -142,5 +142,20 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
             target: 50, progress: 25, postedOn: today, reward: requestReward('tag'),
         },
     ]
+
+    // The Heart Tree: the old oak at the back, Venerable after a few weeks of care, three ornaments hung.
+    // Six of the twelve ornaments found: the first three chapters' (Market Town), Hollis's (♥♥♥) and both from the chest.
+    g.ornaments = ['carved_heart', 'paper_cranes', 'wishing_ribbons', 'birdhouse', 'firefly_jar', 'brass_bell']
+    g.heartTree = {
+        itemId: 's1', speciesId: 'ancient_oak', bond: 19, tendedOn: addDays(today, -1), blessing: false,
+        hung: ['wishing_ribbons', 'birdhouse', 'firefly_jar'], chosenOn: addDays(today, -26),
+    }
+    g.satchel = { spring_water: 2, leaf_mould: 1, pruning_twine: 3, beeswax_salve: 1 }
+    g.chestPity = 1
+    // Two finds waiting to be picked up: today's quest's, and what Hollis left for his last request
+    g.pickups = [
+        { id: 'pk_sample_quest', itemId: 'spring_water', source: 'quest', note: board.quests[0].title, on: today },
+        { id: 'pk_sample_hollis', itemId: 'leaf_mould', source: 'request', residentId: 'hollis', note: 'Harvest 3 crops', on: addDays(today, -1) },
+    ]
     return { ...g, ...overrides }
 }

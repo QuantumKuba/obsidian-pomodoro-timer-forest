@@ -22,6 +22,10 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
   - [Villagers and hens](#villagers-and-hens)
 - [The Village Charter](#the-village-charter)
 - [Neighbours and their requests](#neighbours-and-their-requests)
+- [The Heart Tree and mission finds](#the-heart-tree-and-mission-finds)
+  - [Finds and picking them up](#finds-and-picking-them-up)
+  - [Caring for your Heart Tree](#caring-for-your-heart-tree)
+  - [Ornaments](#ornaments)
 - [Daily quests and achievements](#daily-quests-and-achievements)
 - [Streaks, vitality and withering](#streaks-vitality-and-withering)
 - [Smart seeds (tags)](#smart-seeds-tags)
@@ -43,6 +47,7 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 4. **Spend and place.** Buy buildings, plant your saplings, upgrade things. Perks make the next session pay more.
 5. **Come back tomorrow.** Fresh quests, a streak to keep, and a village that is happiest when you visit.
 6. **Aim further.** The [Village Charter](#the-village-charter) turns all of it into a long arc: your settlement rises from a Clearing to a City, one chapter at a time, while its [neighbours](#neighbours-and-their-requests) ask small favours along the way.
+7. **Look after one tree.** Missions leave care items and ornaments in the village; pick them up and use them on your [Heart Tree](#the-heart-tree-and-mission-finds).
 
 ## Opening things
 
@@ -314,11 +319,50 @@ Four residents live in the village, one more with each early rank: **Hollis** th
 
 The *Neighbours* section of the *Journey* tab shows everyone, their hearts and what they're asking for.
 
+## The Heart Tree and mission finds
+
+Some things can't be bought: **care items** and **ornaments** only come from missions. Each one turns up in the village, and you look after one tree of your choosing with them, your **Heart Tree**.
+
+### Finds and picking them up
+
+| Mission | What it leaves |
+|---|---|
+| Each daily quest | A care item: whatever your Heart Tree needs today if you have none for it, otherwise whichever you have least of |
+| The daily chest | An ornament now and then (never more than three chests apart), otherwise a pot of Beeswax Salve |
+| A neighbour's request | Their own care item (Hollis: Leaf-mould Compost, Maren: Spring Water, Ash: Pruning Twine, Ida: Beeswax Salve), and once you reach ♥♥ with them, their ornament |
+| Each chapter of the charter | A rare ornament, one per chapter. Chapters signed before this existed bring theirs too |
+
+Nothing else hands them out, so there is nothing to grind. A find doesn't go straight into your pockets: it lies **glinting in the village**, near your Heart Tree (or near the resident who left it), until you click it. Up to four lie about at once; the rest wait their turn. They **never expire**. If you'd rather not go looking, the Heart Tree card in the *Journey* tab lists what's waiting and has **Collect all**.
+
+### Caring for your Heart Tree
+
+Select any planted tree in the village and choose **♥ Make this my Heart Tree** (or pick one in the Heart Tree card). Then:
+
+- **Each day it has one small need**: water (Spring Water), nourish (Leaf-mould Compost) or tend (Pruning Twine). Beeswax Salve meets any of them. Meet it from the card or the village inspector.
+- Meeting it adds a point of **bond** and leaves a **blessing**: +10 % Sunlight on your next session, whenever that is.
+- Bond grows it through five stages, each a little larger in the village with more room for ornaments and a bigger perk:
+
+| Stage | Bond | Sunlight on every session | Ornaments |
+|---|---|---|---|
+| Young | 0 | +2 % | 1 |
+| Rooted | 5 | +4 % | 2 |
+| Venerable | 14 | +6 % | 3 |
+| Ancient | 30 | +8 % | 4, and a soft light about it |
+| Elder | 50 | +10 % | 5 |
+
+- **A missed day costs nothing.** Bond never goes down and the tree never wilts; it simply waits, with today's need shown above it.
+- **Changing your mind is free.** The bond, stage, ornaments and today's care belong to you, not to the tree, so choosing another tree takes all of it along. Stowing the Heart Tree keeps everything too, and planting that kind of tree again makes it your Heart Tree once more.
+- The perk works while the tree stands in your village.
+
+### Ornaments
+
+There are twelve, each with its own source: one per charter chapter (Carved Heart, Wishing Ribbons, Brass Bell, String of Lanterns, Shrine Lantern, Old Owl), one from each neighbour (Birdhouse, Flower Garland, Rope Swing, Wind Chime) and two from the chest (Firefly Jar, Paper Cranes). Found ones are kept for good. Click one in the Heart Tree card to hang it on the tree or take it down; it shows on the tree in the village, on the branches, the trunk or by the roots. Ones not found yet show as silhouettes, with where they come from.
+
 ## Daily quests and achievements
 
-Each morning the *Journey* tab shows **three quests**, picked by date. They are things like *Focus for 75 minutes*, *Check off 3 tasks*, *Take a proper break*, *Focus on a specific task* or *Tend your village*. Once you use [boards](#kanban-boards), *Finish 2 cards on a board* and *Finish a card you focused on* join them. Finish all three to open the **daily chest**.
+Each morning the *Journey* tab shows **three quests**, picked by date. They are things like *Focus for 75 minutes*, *Check off 3 tasks*, *Take a proper break*, *Focus on a specific task* or *Tend your village*. Once you use [boards](#kanban-boards), *Finish 2 cards on a board* and *Finish a card you focused on* join them. Each finished quest also leaves a care item for your [Heart Tree](#the-heart-tree-and-mission-finds). Finish all three to open the **daily chest**.
 
-There are **25 achievements** (first tree, streaks, focus hours, tasks, finished cards, estimates on target, a cleared board, breaks, harvests, full plot, and more), each with a reward and a progress bar.
+There are **27 achievements** (first tree, streaks, focus hours, tasks, finished cards, estimates on target, a cleared board, breaks, harvests, full plot, a Rooted Heart Tree, half the ornaments, and more), each with a reward and a progress bar.
 
 ## Streaks, vitality and withering
 

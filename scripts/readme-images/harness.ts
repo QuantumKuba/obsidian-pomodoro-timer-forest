@@ -49,6 +49,10 @@ setPlugin({
         harvestCrops() { return [] },
         plantCrop() { return true },
         declineRequest() {},
+        chooseHeartTree() { return true },
+        tendHeartTree() { return true },
+        toggleOrnament() { return true },
+        collectPickups() { return [] },
         confettiEngine: { attach() {}, detach() {}, destroy() {} },
         getUpgradeInfo(item: PlacedHomesteadItem) {
             if (item.itemType === 'tree') return { sunlight: 40 * item.level, coins: 4 * item.level, maxed: item.level >= 3 }
@@ -149,10 +153,11 @@ if (MARKETING_SCENES.includes(scene)) {
             ;Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes(click))?.click()
         }, 50))
     }
+    // ?select=<item id> clicks that item in the village; ?select=heart picks the Heart Tree
     const select = q.get('select')
     if (select) {
         requestAnimationFrame(() => setTimeout(() => {
-            const id = g.homestead.find((i) => i.itemId === select)?.id
+            const id = select === 'heart' ? g.heartTree?.itemId : g.homestead.find((i) => i.itemId === select)?.id
             document.querySelector(`[data-item="${id}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
         }, 50))
     }
