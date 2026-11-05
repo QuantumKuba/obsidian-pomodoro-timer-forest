@@ -61,6 +61,7 @@ const ui = (name, query, w, h, opts = {}) => {
 
 ui('hero', 'scene=hero', 1600, 1000, { pad: 0, scale: 1.5, clip: 'body' })
 ui('how-it-works', 'scene=loop', 1600, 1000, { pad: 0, scale: 1.5, clip: 'body' })
+ui('charter', 'scene=charter', 1600, 1000, { pad: 0, scale: 1.5, clip: 'body' })
 composed('growth')
 composed('collection')
 composed('day-cycle', 1.25)
@@ -72,7 +73,7 @@ ui('panel-reward', 'scene=sidebar-reward&settle=1', 356, 900, { clip: downTo('.p
 ui('panel-levelup', 'scene=sidebar-levelup&settle=1', 356, 900, { clip: downTo('.pf-card', 18) })
 ui('panel-grove', 'scene=forest&tab=grove', 356, 1100, { clip: downTo('.heat', 14) })
 ui('panel-market', 'scene=forest&tab=market&player=mid&click=Builders', 356, 1400, { clip: downTo('.pf-market .card', 6, 2) })
-ui('panel-journey', 'scene=forest&tab=journey', 356, 1700, { clip: downTo('.ach', 6, 7) })
+ui('panel-journey', 'scene=forest&tab=journey', 356, 2200, { clip: downTo('.chest', 14) })
 ui('panel-tasks', 'scene=tasks&pins=2', 356, 1000, { clip: downTo('.panel', 12) })
 ui('panel-tasks-edit', 'scene=tasks&press=.edit&nth=1&focus=1&tracking=1', 356, 1300, { clip: downTo('.group', 12, 0), settle: 1500 })
 ui('homestead-full', 'scene=homestead&select=cabin', 1360, 900, { pad: 0, extra: 'body{height:900px;overflow:hidden}', clip: around('.pf-forest > *', 28) })

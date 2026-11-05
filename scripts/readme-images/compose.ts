@@ -26,8 +26,8 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
     const id = 'sakura'
     const stages: [string, string, string][] = [['seed', 'Seed', '0%'], ['sprout', 'Sprout', '25%'], ['sapling', 'Sapling', '50%'], ['mature', 'Grown', '75%+']]
     const chevron = `<svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="#b9ad97" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-    const tiles = stages.map(([s, name, pct], i) => `${i ? chevron : ''}<div class="tile st"><div class="art">${s === 'mature' ? SPECIES_SVGS[id] : growthSvg(s as any, id)}</div><div class="cap"><b>${name}</b><span class="pill">${pct}</span></div></div>`).join('')
-    const wither = `<div class="tile st dead"><div class="art">${GROWTH_STAGE_SVGS.withered}</div><div class="cap"><b>Withered</b><span class="pill red">gave up</span></div></div>`
+    const tiles = stages.map(([s, name, pct], i) => `${i ? chevron : ''}<div class="mk-tile st"><div class="art">${s === 'mature' ? SPECIES_SVGS[id] : growthSvg(s as any, id)}</div><div class="cap"><b>${name}</b><span class="mk-pill">${pct}</span></div></div>`).join('')
+    const wither = `<div class="mk-tile st dead"><div class="art">${GROWTH_STAGE_SVGS.withered}</div><div class="cap"><b>Withered</b><span class="mk-pill red">gave up</span></div></div>`
     write('growth', page(1600, 440, `
         body{padding:${T.margin}px}
         .row{display:flex;align-items:center;gap:10px;margin-top:22px}
@@ -40,24 +40,26 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
         .sep{width:1px;align-self:stretch;margin:8px 16px;background:${T.line}}
         .dead{flex:.85;background:#f8f4ec;border-style:dashed}
         .dead .art{background:radial-gradient(ellipse 60% 40% at 50% 86%,#ece3d3,transparent 70%)}
-        .pill.red{background:#f8e3dc;color:#b4472b}
-        `, `<div class="eyebrow">Grows while you focus</div><div class="title">One session, one tree</div><div class="row">${tiles}<div class="sep"></div>${wither}</div>`))
+        .mk-pill.red{background:#f8e3dc;color:#b4472b}
+        `, `<div class="mk-eyebrow">Grows while you focus</div><div class="mk-title">One session, one tree</div><div class="row">${tiles}<div class="sep"></div>${wither}</div>`))
 }
 
 // ---------------------------------------------------------------- collection: everything you can unlock, art first
 {
-    const species = FLORA_SPECIES.map((s) => `<div class="tile sp"><div class="art">${s.iconSvg}</div><b>${s.name}</b><span class="pill">Lv ${s.unlockLevel}</span></div>`).join('')
-    const perks = HOMESTEAD_BUILDINGS.filter((b) => b.perk)
-    const decor = HOMESTEAD_BUILDINGS.filter((b) => !b.perk)
+    const species = FLORA_SPECIES.map((s) => `<div class="mk-tile sp"><div class="art">${s.iconSvg}</div><b>${s.name}</b><span class="mk-pill">Lv ${s.unlockLevel}</span></div>`).join('')
+    // Charter landmarks are granted by rank, not bought; charter.png shows them
+    const market = HOMESTEAD_BUILDINGS.filter((b) => !b.charterRank)
+    const perks = market.filter((b) => b.perk)
+    const decor = market.filter((b) => !b.perk)
     const bTile = (icon: string, name: string, meta: string, tag: string) =>
-        `<div class="tile bd"><div class="ic">${icon}</div><div class="tx"><b>${name}</b><div class="meta">${meta}</div>${tag ? `<span class="tag">${tag}</span>` : ''}</div></div>`
-    const buildings = perks.map((b) => bTile(b.iconSvg, b.name, `<span class="pill gold">Lv ${b.unlockLevel}</span>${stars(b.maxLevel)}`, perkTag(b))).join('')
-    const crops = `<div class="tile bd"><div class="ic crops">${CROPS.slice(0, 4).map((c) => `<span>${c.icon}</span>`).join('')}</div><div class="tx"><b>${CROPS.length} crops</b><div class="meta"><span class="pill gold">Garden plot</span></div><span class="tag">grow as you focus</span></div></div>`
-    const decorTiles = decor.map((b) => bTile(b.iconSvg, b.name, `<span class="pill gold">Lv ${b.unlockLevel}</span>`, '')).join('')
+        `<div class="mk-tile bd"><div class="ic">${icon}</div><div class="tx"><b>${name}</b><div class="meta">${meta}</div>${tag ? `<span class="tag">${tag}</span>` : ''}</div></div>`
+    const buildings = perks.map((b) => bTile(b.iconSvg, b.name, `<span class="mk-pill gold">Lv ${b.unlockLevel}</span>${stars(b.maxLevel)}`, perkTag(b))).join('')
+    const crops = `<div class="mk-tile bd"><div class="ic crops">${CROPS.slice(0, 4).map((c) => `<span>${c.icon}</span>`).join('')}</div><div class="tx"><b>${CROPS.length} crops</b><div class="meta"><span class="mk-pill gold">Garden plot</span></div><span class="tag">grow as you focus</span></div></div>`
+    const decorTiles = decor.map((b) => bTile(b.iconSvg, b.name, `<span class="mk-pill gold">Lv ${b.unlockLevel}</span>`, '')).join('')
     write('collection', page(1600, 706, `
         body{padding:${T.margin}px}
         h3{display:flex;align-items:baseline;gap:12px;margin:0 0 14px}
-        h3 .eyebrow{font-size:14px}
+        h3 .mk-eyebrow{font-size:14px}
         h3 small{font-size:15px;color:${T.muted};font-weight:500}
         .sps{display:grid;grid-template-columns:repeat(11,1fr);gap:10px;margin-bottom:34px}
         .sp{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px 12px;text-align:center}
@@ -74,8 +76,8 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
         .tag{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:#5b4a2a}
         .tag svg{width:14px;height:14px;flex:none}
         .decor{margin-top:10px}
-        `, `<h3><span class="eyebrow">The nursery</span><small>${FLORA_SPECIES.length} species, unlocked as you level up</small></h3><div class="sps">${species}</div>
-        <h3><span class="eyebrow">The builders</span><small>buildings with perks that grow as you upgrade them</small></h3><div class="bds">${buildings}</div><div class="bds decor">${decorTiles}${crops}</div>`))
+        `, `<h3><span class="mk-eyebrow">The nursery</span><small>${FLORA_SPECIES.length} species, unlocked as you level up</small></h3><div class="sps">${species}</div>
+        <h3><span class="mk-eyebrow">The builders</span><small>buildings with perks that grow as you upgrade them</small></h3><div class="bds">${buildings}</div><div class="bds decor">${decorTiles}${crops}</div>`))
 }
 
 // ---------------------------------------------------------------- day cycle: the same village at four times of day
@@ -108,7 +110,7 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
         const g: GamificationData = { ...base, landSize: 5, activeBiome: b, vitality: 90, homestead: mini.map(([t, id, x, y, l], k) => ({ id: `m${k}`, itemType: t as any, itemId: id, gridX: x, gridY: y, level: l ?? 1 })) }
         const date = b === 'twilight_moss' ? at(20) : at(13)
         const svg = crop(renderVillage(g, { date, idPrefix: `bm${i}`, still: true }), 0, 22, 368, 290)
-        return `<div class="tile cell"><div class="art">${svg}</div><div class="cap"><b>${BIOME_CONFIGS[b].name}</b><span class="pill">Lv ${BIOME_UNLOCK_LEVELS[b]}</span></div></div>`
+        return `<div class="mk-tile cell"><div class="art">${svg}</div><div class="cap"><b>${BIOME_CONFIGS[b].name}</b><span class="mk-pill">Lv ${BIOME_UNLOCK_LEVELS[b]}</span></div></div>`
     }).join('')
     write('biomes', page(1600, 434, `
         body{padding:${T.margin}px}
@@ -117,7 +119,7 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
         .art svg{display:block;width:100%;height:auto;aspect-ratio:368/290}
         .cap{display:flex;align-items:center;justify-content:space-between;padding:11px 14px 13px}
         .cap b{font-size:16px;font-weight:700}
-        `, `<style>${SCENE_CSS}</style><div class="eyebrow">Five biomes</div><div class="title">Switch the ground under your village</div><div class="row">${cells}</div>`))
+        `, `<style>${SCENE_CSS}</style><div class="mk-eyebrow">Five biomes</div><div class="mk-title">Switch the ground under your village</div><div class="row">${cells}</div>`))
 }
 
 // ---------------------------------------------------------------- frames for village-day.gif: one day, dawn to night

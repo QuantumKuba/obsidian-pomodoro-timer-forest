@@ -2,19 +2,23 @@
  * Browser-side marketing scenes that need the live timer dial: the hero, the
  * how-it-works loop and the frames of the timer-growth animation. Everything drawn
  * here is the plugin's own component, renderer and art; the pages only arrange it.
- *   ?scene=hero | loop | dial&ratio=0.4
+ * The charter scene arranges the real Village Charter card, landmarks and residents.
+ *   ?scene=hero | loop | charter | dial&ratio=0.4
  */
 import { readable } from 'svelte/store'
 import TimerViewComponent from '../../src/TimerViewComponent.svelte'
 import { activePlantStore } from '../../src/stores'
 import { renderVillage } from '../../src/render/VillageScene'
-import { ICONS, SPECIES_SVGS } from '../../src/assets/floraAssets'
-import { getBuilding } from '../../src/assets/floraCatalog'
+import { ICONS, SPECIES_SVGS, VILLAGER_SVGS } from '../../src/assets/floraAssets'
+import { charterLandmark, getBuilding } from '../../src/assets/floraCatalog'
+import { CHARTER_RANKS } from '../../src/services/Charter'
+import CharterCard from '../../src/forest/CharterCard.svelte'
+import { MAX_HEARTS, RESIDENTS, hearts, residentsPresent } from '../../src/services/Neighbours'
 import type { GamificationData } from '../../src/types/forest'
 import { FONT, SHARED_CSS, T } from './theme'
 import { perkTag, stars } from './perk-tags'
 
-export const MARKETING_SCENES = ['hero', 'loop', 'dial']
+export const MARKETING_SCENES = ['hero', 'loop', 'charter', 'dial']
 
 const COUNT = 25 * 60_000
 const stageFor = (r: number) => (r >= 0.75 ? 'mature' : r >= 0.5 ? 'sapling' : r >= 0.25 ? 'sprout' : 'seed')
@@ -79,6 +83,72 @@ export function mountMarketing(scene: string, q: URLSearchParams, g: Gamificatio
         return
     }
 
+    if (scene === 'charter') {
+        const W = 1600, H = 752
+        const at = new Date(); at.setHours(12, 0, 0, 0)
+        const current = Math.max(0, Math.floor(g.charter?.rank || 0))
+        // Each rank's landmark; the Clearing starts around the campfire
+        const steps = CHARTER_RANKS.map((r, i) => {
+            const art = (i === 0 ? getBuilding('campfire') : charterLandmark(i))?.iconSvg || ''
+            const state = i < current ? 'reached' : i === current ? 'current' : 'ahead'
+            return `<li class="${state}"><div class="lm">${art}</div><b>${r.name}</b>${i === current ? '<span class="mk-pill">You are here</span>' : `<span class="rk">Rank ${i + 1}</span>`}</li>`
+        }).join('')
+        const n = CHARTER_RANKS.length
+        // The rail runs between the first and last circle centres; the green part ends at the current rank
+        const rail = `calc((100% - ${(n - 1) * 10}px) / ${n} / 2)`
+        const fillTo = `calc(${rail} + (100% - 2 * ${rail}) * ${current / (n - 1)})`
+        const people = RESIDENTS.filter((r) => residentsPresent(g).includes(r)).map((r) => {
+            const h = hearts(g, r.id)
+            const req = (g.requests || []).find((q) => q.residentId === r.id)
+            return `<div class="mk-tile nb${req ? ' asking' : ''}"><span class="pt">${VILLAGER_SVGS[r.variant % VILLAGER_SVGS.length]}</span>
+                <div class="nb-tx"><div class="nb-head"><b>${r.name}</b><span class="hearts">${'♥'.repeat(h)}<i>${'♥'.repeat(MAX_HEARTS - h)}</i></span></div>
+                ${req ? `<span class="req">${req.title}</span><div class="bar"><div style="width:${Math.round((req.progress / Math.max(1, req.target)) * 100)}%"></div></div>` : `<span class="role">${r.role}</span>`}</div></div>`
+        }).join('')
+        style(base(W, H, T.paper) + `
+            body{padding:${T.margin}px}
+            .mk-ladder{position:relative;display:grid;grid-template-columns:repeat(${n},1fr);gap:10px;list-style:none;margin:22px 0 0;padding:0}
+            .mk-ladder::before,.mk-ladder::after{content:'';position:absolute;top:56px;height:3px;border-radius:3px}
+            .mk-ladder::before{left:${rail};right:${rail};background:${T.line}}
+            .mk-ladder::after{left:${rail};width:calc(${fillTo} - ${rail});background:${T.green}}
+            .mk-ladder li{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+            .lm{width:112px;height:112px;border-radius:50%;background:${T.card};border:1px solid ${T.line};display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(60,45,20,.07)}
+            .lm svg{width:80px;height:80px}
+            .current .lm{border:3px solid ${T.green};box-shadow:0 0 0 6px #e3efd9,0 8px 22px rgba(46,125,50,.18)}
+            .ahead .lm svg{filter:grayscale(1);opacity:.4}
+            .mk-ladder b{font-size:17px;font-weight:750;margin-top:6px}
+            .ahead b{color:${T.muted};font-weight:650}
+            .rk{font-size:12.5px;color:${T.muted}}
+            .mk-row{display:grid;grid-template-columns:auto 330px 1fr;gap:16px;margin-top:28px;align-items:stretch}
+            .dark{align-self:start;background:#1e1e1e;border:1px solid #333;border-radius:${T.radius + 4}px;padding:12px;color:var(--text-normal);box-shadow:0 14px 34px rgba(30,25,15,.16)}
+            .dark > div{width:356px;zoom:1.12}
+            .nbs{display:flex;flex-direction:column;gap:10px;min-height:0}
+            .nbs h4{margin:2px 2px 2px;font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${T.muted}}
+            .nb{flex:1 1 0;min-height:0;display:flex;align-items:center;gap:12px;padding:10px 14px 10px 10px}
+            .nb.asking{border-color:#e7c3b8;background:#fff8f4}
+            .pt{width:52px;height:52px;flex:none;border-radius:50%;background:#efe9dc;display:flex;align-items:center;justify-content:center;overflow:hidden}
+            .pt svg{width:44px;height:44px}
+            .nb-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+            .nb-head{display:flex;align-items:center;justify-content:space-between}
+            .nb-head b{font-size:16px}
+            .hearts{color:#e05a6b;font-size:14px;letter-spacing:1px}.hearts i{font-style:normal;color:#ddd3c3}
+            .role{font-size:13px;color:${T.muted}}
+            .req{font-size:13px;font-weight:600;color:#9a4a33;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .bar{height:5px;border-radius:5px;background:#efe3d9}.bar div{height:100%;border-radius:5px;background:#e0866c}
+            .isle{min-height:0;border-radius:${T.radius + 4}px;overflow:hidden;background:linear-gradient(#80c4ef,#d4eefc);box-shadow:0 14px 34px rgba(30,25,15,.12)}
+            .isle svg{display:block;width:100%;height:100%}
+            `)
+        const svg = renderVillage(g, { date: at, idPrefix: 'charter', still: true }).replace(/viewBox="[^"]+"/, 'viewBox="0 34 560 320"').replace('preserveAspectRatio="xMidYMid meet"', 'preserveAspectRatio="xMidYMid slice"')
+        app.innerHTML = `<div class="mk-eyebrow">Something to aim for</div><div class="mk-title">Grow a clearing into a city</div>
+            <ol class="mk-ladder">${steps}</ol>
+            <div class="mk-row"><div class="dark"><div id="charter"></div></div><div class="nbs"><h4>Neighbours</h4>${people}</div><div class="isle">${svg}</div></div>`
+        new CharterCard({ target: document.getElementById('charter')! })
+        // The charter card sets the row's height; the page ends one margin below it
+        const row = document.querySelector('.mk-row') as HTMLElement
+        row.style.height = `${(document.querySelector('.dark') as HTMLElement).offsetHeight}px`
+        document.body.style.height = `${Math.ceil(row.getBoundingClientRect().bottom) + T.margin}px`
+        return
+    }
+
     if (scene === 'loop') {
         const W = 1600, H = 494
         const at = new Date(); at.setHours(13, 0, 0, 0)
@@ -92,7 +162,7 @@ export function mountMarketing(scene: string, q: URLSearchParams, g: Gamificatio
         const cabin = getBuilding('cabin')!
         const chev = `<svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="#b9ad97" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
         const step = (n: number, name: string, line: string, art: string, cls = '') =>
-            `<div class="tile step ${cls}"><div class="art">${art}</div><div class="cap"><span class="n">${n}</span><div><b>${name}</b><span>${line}</span></div></div></div>`
+            `<div class="mk-tile step ${cls}"><div class="art">${art}</div><div class="cap"><span class="n">${n}</span><div><b>${name}</b><span>${line}</span></div></div></div>`
         style(base(W, H, T.paper) + DIAL_CARD + `
             body{padding:${T.margin}px}
             .row{display:flex;align-items:stretch;gap:8px;margin-top:22px}
@@ -122,7 +192,7 @@ export function mountMarketing(scene: string, q: URLSearchParams, g: Gamificatio
             .back svg{width:18px;height:18px}
             `)
         const loop = `<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5" fill="none" stroke="${T.green}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-        app.innerHTML = `<div class="eyebrow">How it works</div><div class="title">Your focus builds something</div>
+        app.innerHTML = `<div class="mk-eyebrow">How it works</div><div class="mk-title">Your focus builds something</div>
             <div class="back">${loop}Every session feeds the next</div>
             <div class="row">
             ${step(1, 'Focus', 'Start a session on a task', '<div class="dialcard-free" id="dial"></div>', 'focus')}${chev}

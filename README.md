@@ -35,6 +35,8 @@ Spend what you earn on buildings with real perks, plant your saplings, grow crop
 
 Quests are for today; the **Village Charter** is for the months ahead. Your settlement climbs from Clearing to City through seven ranks, each earned by a short chapter of goals and rewarded with a landmark you can't buy. Along the way, four named neighbours pin small requests tied to real work, and their friendship unlocks permanent keepsake perks. Nothing expires, and ranks are never lost.
 
+<p align="center"><img src="docs/images/charter.png" alt="The Village Charter: seven ranks from Clearing to City, each with its own landmark, the current chapter's goals, neighbours with hearts and open requests, and the village where the earned landmarks stand" width="100%"></p>
+
 [More on the charter →](docs/GUIDE.md#the-village-charter) · [Neighbours →](docs/GUIDE.md#neighbours-and-their-requests)
 
 ## A village that lives on your clock

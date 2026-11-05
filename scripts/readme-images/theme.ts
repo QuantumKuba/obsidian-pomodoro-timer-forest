@@ -23,10 +23,10 @@ export const page = (w: number, h: number, css: string, body: string, bg: string
 
 /** Building blocks used across images. */
 export const SHARED_CSS = `
-.eyebrow{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${T.green}}
-.title{font-size:30px;font-weight:750;letter-spacing:-.015em;margin:4px 0 0;line-height:1.1}
-.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;background:#e8f1e1;color:${T.green};white-space:nowrap}
-.pill.gold{background:#f7ecd6;color:${T.gold}}
-.pill svg{width:13px;height:13px}
-.tile{background:${T.card};border:1px solid ${T.line};border-radius:${T.radius}px;box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 6px 18px rgba(60,45,20,.06)}
+.mk-eyebrow{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${T.green}}
+.mk-title{font-size:30px;font-weight:750;letter-spacing:-.015em;margin:4px 0 0;line-height:1.1}
+.mk-pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:99px;background:#e8f1e1;color:${T.green};white-space:nowrap}
+.mk-pill.gold{background:#f7ecd6;color:${T.gold}}
+.mk-pill svg{width:13px;height:13px}
+.mk-tile{background:${T.card};border:1px solid ${T.line};border-radius:${T.radius}px;box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 6px 18px rgba(60,45,20,.06)}
 `
