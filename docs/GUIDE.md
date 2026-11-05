@@ -1,6 +1,6 @@
 # Forest & Homestead: user guide
 
-A short guide to how the game layer of **Pomodoro Timer Forest** works. For the exact numbers and data schema see the [technical spec](../FOREST_SPEC.md). The [README](../README.md) covers installation and the classic timer features (logging, task tracking, Dataview).
+A short guide to how the game layer of **Pomodoro Timer Forest** works. For the exact numbers and data schema see the [technical spec](../FOREST_SPEC.md). Installation is in the [README's quick start](../README.md#quick-start), and the classic timer features (task tracking, logging, Dataview, CSS variables) have their own page: [Timer, tasks and logging](TIMER.md).
 
 - [The loop in one minute](#the-loop-in-one-minute)
 - [Opening things](#opening-things)
@@ -11,6 +11,7 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
   - [Boards and the Kanban plugin](#boards-and-the-kanban-plugin)
   - [Lanes](#lanes)
   - [Cards](#cards)
+  - [On a phone](#on-a-phone)
   - [Focusing on a card](#focusing-on-a-card)
   - [What finishing a card earns](#what-finishing-a-card-earns)
   - [Board statistics](#board-statistics)
@@ -27,6 +28,7 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 - [Settings](#settings)
 - [Export and sharing](#export-and-sharing)
 - [Your data](#your-data)
+  - [Permissions and privacy](#permissions-and-privacy)
   - [Uninstalling without losing your progress](#uninstalling-without-losing-your-progress)
   - [Using more than one device](#using-more-than-one-device)
 - [Troubleshooting](#troubleshooting)
@@ -115,6 +117,12 @@ Boards use the file format of the [Kanban plugin](https://github.com/mgmeyers/ob
 | Leave as they are | Whatever Obsidian or the Kanban plugin would open; switch by hand |
 
 Switching an open board to another view is always respected. With both plugins installed you can keep the Kanban plugin as your default and still get the rewards: **cards finished in the Kanban plugin's view count too**, and so do cards you move by editing the markdown.
+
+What the Kanban plugin writes carries over: Kanban dates (`@{2025-10-03}`), the Tasks plugin's emoji fields, checklists inside cards, links, tags, block IDs, the Complete lane and the archive. Boards follow your Obsidian theme, light or dark.
+
+<p align="center">
+  <img src="images/board-light.png" alt="A board in the light theme" width="100%">
+</p>
 
 ### Lanes
 
@@ -220,6 +228,7 @@ The full table lives in the [spec](../FOREST_SPEC.md#3-flora-catalog).
 ## Building your village
 
 - **Inventory.** Every finished session gives you a sapling of the species you grew. Buildings you buy also go to your inventory. Open the *Village* tab, pick an item, then tap an empty tile.
+- **Sell spare saplings.** Have more than you can plant? Press **Sell** on a sapling in the inventory to trade one for a few Coins. Shift-click sells the whole stack.
 - **Select** any placed item to see what it does, then **Upgrade**, **Move** or **Stow** it back into your inventory. Press `Esc` to cancel placing.
 - **Perks** are real and scale with upgrades. Two copies of the same building don't stack; the strongest counts.
 
@@ -240,7 +249,7 @@ The full table lives in the [spec](../FOREST_SPEC.md#3-flora-catalog).
 
 - **Paths, brooks and bridges** shape the ground. Put a footbridge on a brook tile.
 - **Biomes** change the ground, foliage and hills. **Land** grows from 5×5 up to 8×8.
-- The sky follows your computer's clock: dawn, day, dusk and night, with lights and fireflies after dark.
+- The sky follows your computer's clock: dawn, day, dusk and night. Windows glow at dusk, fireflies come out after dark, windmill sails turn and chimneys smoke.
 
 ### Garden plots and crops
 
@@ -267,6 +276,10 @@ Villagers come out as your village gets livelier and gains buildings. They walk 
 Click a villager and they'll tell you how today is going. They cheer when you finish a tree, a quest or a level.
 
 With *Low animation frame rate* on, or when your system asks for reduced motion, everyone stands still instead.
+
+<p align="center">
+  <img src="images/day-cycle.png" alt="The same village at dawn, midday, dusk and night" width="90%">
+</p>
 
 ## Daily quests and achievements
 
@@ -350,6 +363,19 @@ In the *Journey* tab:
 ## Your data
 
 Everything is stored locally in the plugin's `data.json` inside your vault (`.obsidian/plugins/pomodoro-timer-forest/`, or your vault's config folder if you renamed it). It holds your village, XP, streaks, quests, achievements and the plugin's settings. The game makes no network requests and uses no external assets. Data from earlier versions is upgraded automatically, and past focus time is converted into starting XP.
+
+### Permissions and privacy
+
+- **No network requests, no accounts, no telemetry.** Everything stays in your vault.
+- **Vault files.** The plugin only reads or writes notes for features you turn on:
+  - task tracking updates the `[🍅:: …]` field on the task you focus on ([how it works](TIMER.md#task-tracking));
+  - session logging writes to your daily note, weekly note or a note you choose;
+  - *Log trees to daily note* adds one line per tree to today's daily note;
+  - the Kanban boards you open with it: each change you make on a board is written to that note, and focusing a card gives it a block ID such as `^a1b2c3`.
+
+  Its own data is saved in the plugin's `data.json`.
+- **Clipboard.** Written only when you press *Copy dashboard JSON* (or run the matching command).
+- **Notifications.** System notifications are optional and use the browser's Notification API. Otherwise you get an in-app notice.
 
 ### Uninstalling without losing your progress
 
