@@ -1,60 +1,98 @@
 /**
- * Node entry: renders the composed marketing pages (hero, day cycle, biomes,
- * growth stages, catalog) as standalone HTML using the plugin's real renderer,
- * catalog and art. Usage: node compose.cjs <outDir>
+ * Node entry: renders the composed marketing pages (growth, collection, day cycle,
+ * biomes, and the frames of the day-cycle animation) as standalone HTML, using the
+ * plugin's real renderer, catalog and art. Usage: node compose.cjs <outDir>
+ * The hero and the how-it-works loop need the live timer component, so they are
+ * harness scenes (marketing.ts).
  */
 import * as fs from 'fs'
 import { renderVillage } from '../../src/render/VillageScene'
 import { SCENE_CSS } from '../../src/render/sceneCss'
-import { BIOME_CONFIGS, SPECIES_SVGS, growthSvg } from '../../src/assets/floraAssets'
-import { BIOME_UNLOCK_LEVELS, FLORA_SPECIES, HOMESTEAD_BUILDINGS, LAND_EXPANSIONS } from '../../src/assets/floraCatalog'
-import { perkText } from '../../src/services/Progression'
-import type { BiomeType } from '../../src/types/forest'
+import { BIOME_CONFIGS, GROWTH_STAGE_SVGS, SPECIES_SVGS, growthSvg } from '../../src/assets/floraAssets'
+import { BIOME_UNLOCK_LEVELS, CROPS, FLORA_SPECIES, HOMESTEAD_BUILDINGS } from '../../src/assets/floraCatalog'
+import type { BiomeType, GamificationData } from '../../src/types/forest'
 import { village } from './sample-data'
+import { T, page } from './theme'
+import { perkTag, stars } from './perk-tags'
 
 const out = process.argv[2]
 const at = (h: number, m = 0) => { const d = new Date(); d.setHours(h, m, 0, 0); return d }
-const FONT = `-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif`
-const page = (w: number, h: number, css: string, body: string) =>
-    `<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;width:${w}px;height:${h}px;overflow:hidden;font-family:${FONT};${''}}${css}</style></head><body>${body}</body></html>`
 const write = (name: string, html: string) => fs.writeFileSync(`${out}/${name}.html`, html)
+/** Crop a scene SVG to part of its viewBox (in scene units). */
+const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.replace(/viewBox="[^"]+"/, `viewBox="${x} ${y} ${w} ${h}"`)
 
-// ---------------------------------------------------------------- hero
+// ---------------------------------------------------------------- growth: one tree, four stages, and what giving up costs
 {
-    const svg = renderVillage(village(), { embedCss: true, date: at(12), idPrefix: 'hero' })
-    write('hero', page(1600, 720, `
-        body{background:linear-gradient(#79c1ee,#d9f1ff);position:relative}
-        .scene{position:absolute;right:-30px;top:0;width:990px;-webkit-mask-image:linear-gradient(to right,transparent 0,#000 24%)}
-        .copy{position:absolute;left:72px;top:150px;width:600px;color:#10324a}
-        .kicker{display:inline-block;font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:5px 14px;border-radius:99px;background:rgba(255,255,255,.7);color:#2e7d32}
-        h1{font-size:76px;line-height:1;margin:18px 0 16px;letter-spacing:-.02em;color:#0d2c40}
-        h1 em{font-style:normal;color:#2e7d32}
-        p{font-size:25px;line-height:1.4;margin:0 0 26px;color:#1d4560}
-        .chips{display:flex;gap:10px;flex-wrap:wrap}
-        .chip{font-size:18px;font-weight:600;padding:9px 16px;border-radius:14px;background:rgba(255,255,255,.78);box-shadow:0 4px 14px rgba(20,60,90,.12)}
-        `, `<div class="scene">${svg}</div><div class="copy"><span class="kicker">Obsidian plugin</span><h1>Pomodoro Timer <em>Forest</em></h1><p>Every focus session grows a tree.<br>Every tree builds your village.</p><div class="chips"><span class="chip">🌲 Grow trees</span><span class="chip">🏡 Build a village</span><span class="chip">🔥 Keep a streak</span><span class="chip">✅ Tick off tasks</span></div></div>`))
+    const id = 'sakura'
+    const stages: [string, string, string][] = [['seed', 'Seed', '0%'], ['sprout', 'Sprout', '25%'], ['sapling', 'Sapling', '50%'], ['mature', 'Grown', '75%+']]
+    const chevron = `<svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="#b9ad97" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+    const tiles = stages.map(([s, name, pct], i) => `${i ? chevron : ''}<div class="tile st"><div class="art">${s === 'mature' ? SPECIES_SVGS[id] : growthSvg(s as any, id)}</div><div class="cap"><b>${name}</b><span class="pill">${pct}</span></div></div>`).join('')
+    const wither = `<div class="tile st dead"><div class="art">${GROWTH_STAGE_SVGS.withered}</div><div class="cap"><b>Withered</b><span class="pill red">gave up</span></div></div>`
+    write('growth', page(1600, 440, `
+        body{padding:${T.margin}px}
+        .row{display:flex;align-items:center;gap:10px;margin-top:22px}
+        .st{flex:1;display:flex;flex-direction:column;padding:12px 12px 14px}
+        .art{height:230px;border-radius:12px;background:radial-gradient(ellipse 60% 40% at 50% 86%,#e1eed3,transparent 70%)}
+        .art svg{width:100%;height:100%}
+        .cap{display:flex;align-items:center;justify-content:space-between;padding:10px 6px 0}
+        .cap b{font-size:19px;font-weight:700}
+        .chev{width:26px;height:26px;flex:none}
+        .sep{width:1px;align-self:stretch;margin:8px 16px;background:${T.line}}
+        .dead{flex:.85;background:#f8f4ec;border-style:dashed}
+        .dead .art{background:radial-gradient(ellipse 60% 40% at 50% 86%,#ece3d3,transparent 70%)}
+        .pill.red{background:#f8e3dc;color:#b4472b}
+        `, `<div class="eyebrow">Grows while you focus</div><div class="title">One session, one tree</div><div class="row">${tiles}<div class="sep"></div>${wither}</div>`))
 }
 
-// ---------------------------------------------------------------- day cycle
+// ---------------------------------------------------------------- collection: everything you can unlock, art first
+{
+    const species = FLORA_SPECIES.map((s) => `<div class="tile sp"><div class="art">${s.iconSvg}</div><b>${s.name}</b><span class="pill">Lv ${s.unlockLevel}</span></div>`).join('')
+    const perks = HOMESTEAD_BUILDINGS.filter((b) => b.perk)
+    const decor = HOMESTEAD_BUILDINGS.filter((b) => !b.perk)
+    const bTile = (icon: string, name: string, meta: string, tag: string) =>
+        `<div class="tile bd"><div class="ic">${icon}</div><div class="tx"><b>${name}</b><div class="meta">${meta}</div>${tag ? `<span class="tag">${tag}</span>` : ''}</div></div>`
+    const buildings = perks.map((b) => bTile(b.iconSvg, b.name, `<span class="pill gold">Lv ${b.unlockLevel}</span>${stars(b.maxLevel)}`, perkTag(b))).join('')
+    const crops = `<div class="tile bd"><div class="ic crops">${CROPS.slice(0, 4).map((c) => `<span>${c.icon}</span>`).join('')}</div><div class="tx"><b>${CROPS.length} crops</b><div class="meta"><span class="pill gold">Garden plot</span></div><span class="tag">grow as you focus</span></div></div>`
+    const decorTiles = decor.map((b) => bTile(b.iconSvg, b.name, `<span class="pill gold">Lv ${b.unlockLevel}</span>`, '')).join('')
+    write('collection', page(1600, 706, `
+        body{padding:${T.margin}px}
+        h3{display:flex;align-items:baseline;gap:12px;margin:0 0 14px}
+        h3 .eyebrow{font-size:14px}
+        h3 small{font-size:15px;color:${T.muted};font-weight:500}
+        .sps{display:grid;grid-template-columns:repeat(11,1fr);gap:10px;margin-bottom:34px}
+        .sp{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px 12px;text-align:center}
+        .sp .art{width:92px;height:92px}.sp .art svg{width:100%;height:100%}
+        .sp b{font-size:13.5px;line-height:1.2;min-height:2.4em;display:flex;align-items:center}
+        .bds{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+        .bd{display:flex;align-items:center;gap:12px;padding:12px 14px 12px 12px;min-height:104px}
+        .ic{width:70px;height:70px;flex:none}.ic svg{width:100%;height:100%}
+        .ic.crops{display:grid;grid-template-columns:32px 32px;grid-auto-rows:32px;gap:4px;align-content:center;justify-content:center;font-size:26px;line-height:32px;text-align:center}
+        .tx{display:flex;flex-direction:column;gap:5px;min-width:0}
+        .tx b{font-size:15px;line-height:1.15}
+        .meta{display:flex;align-items:center;gap:6px}
+        .stars{font-size:11px;letter-spacing:1px;color:#e0a526}
+        .tag{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:#5b4a2a}
+        .tag svg{width:14px;height:14px;flex:none}
+        .decor{margin-top:10px}
+        `, `<h3><span class="eyebrow">The nursery</span><small>${FLORA_SPECIES.length} species, unlocked as you level up</small></h3><div class="sps">${species}</div>
+        <h3><span class="eyebrow">The builders</span><small>buildings with perks that grow as you upgrade them</small></h3><div class="bds">${buildings}</div><div class="bds decor">${decorTiles}${crops}</div>`))
+}
+
+// ---------------------------------------------------------------- day cycle: the same village at four times of day
 {
     const g = village()
-    const cells: [string, string, Date][] = [
-        ['🌅 Dawn', 'Mist lifts, the first windows glow', at(6, 30)],
-        ['☀️ Day', 'Sails turn, villagers wander', at(12)],
-        ['🌇 Dusk', 'Lanterns and hearth light up', at(19)],
-        ['🌙 Night', 'Fireflies, stars and a warm campfire', at(23)],
-    ]
-    const html = cells.map(([t, sub, d], i) => `<div class="cell"><div class="tag"><b>${t}</b><span>${sub}</span></div>${renderVillage(g, { embedCss: i === 0, date: d, idPrefix: `dc${i}`, still: true })}</div>`).join('')
-    write('day-cycle', page(1320, 990, `
-        body{background:#15181a;padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start}
-        .cell{position:relative;border-radius:18px;overflow:hidden;height:475px}
-        .cell svg{width:100%;height:100%}
-        .tag{position:absolute;left:14px;bottom:14px;z-index:2;display:flex;flex-direction:column;gap:2px;padding:8px 14px;border-radius:12px;background:rgba(10,14,20,.62);color:#fff;backdrop-filter:blur(6px)}
-        .tag b{font-size:20px}.tag span{font-size:13px;opacity:.85}
+    const cells: [string, string, Date][] = [['Dawn', '06:30', at(6, 30)], ['Day', '12:00', at(12)], ['Dusk', '19:00', at(19)], ['Night', '23:00', at(23)]]
+    const html = cells.map(([t, clock, d], i) => `<div class="cell">${crop(renderVillage(g, { date: d, idPrefix: `dc${i}`, still: true }), 0, 6, 560, 392)}<div class="tag"><b>${t}</b><span>${clock}</span></div></div>`).join('')
+    write('day-cycle', page(1320, 1000, `
+        body{padding:${T.margin}px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        .cell{position:relative;border-radius:${T.radius}px;overflow:hidden;height:452px;box-shadow:0 6px 18px rgba(60,45,20,.08)}
+        .cell svg{display:block;width:100%;height:100%}
+        .tag{position:absolute;left:16px;top:16px;display:flex;align-items:baseline;gap:8px;padding:6px 13px;border-radius:99px;background:rgba(12,18,24,.55);color:#fff;backdrop-filter:blur(6px)}
+        .tag b{font-size:16px;font-weight:700}.tag span{font-size:13px;opacity:.75;font-variant-numeric:tabular-nums}
         `, `<style>${SCENE_CSS}</style>${html}`))
 }
 
-// ---------------------------------------------------------------- biomes
+// ---------------------------------------------------------------- biomes: five grounds, side by side
 {
     type R = [string, string, number, number, number?]
     const mini: R[] = [
@@ -67,52 +105,30 @@ const write = (name: string, html: string) => fs.writeFileSync(`${out}/${name}.h
     const base = village()
     const biomes = Object.keys(BIOME_UNLOCK_LEVELS) as BiomeType[]
     const cells = biomes.map((b, i) => {
-        const g = { ...base, landSize: 5, activeBiome: b, vitality: 90, homestead: mini.map(([t, id, x, y, l], k) => ({ id: `m${k}`, itemType: t as any, itemId: id, gridX: x, gridY: y, level: l ?? 1 })) }
+        const g: GamificationData = { ...base, landSize: 5, activeBiome: b, vitality: 90, homestead: mini.map(([t, id, x, y, l], k) => ({ id: `m${k}`, itemType: t as any, itemId: id, gridX: x, gridY: y, level: l ?? 1 })) }
         const date = b === 'twilight_moss' ? at(20) : at(13)
-        const conf = BIOME_CONFIGS[b]
-        return `<div class="cell">${renderVillage(g, { embedCss: i === 0, date, idPrefix: `bm${i}`, still: true })}<div class="cap"><b>${conf.name}</b><span>${conf.description}</span><i>Unlocks at level ${BIOME_UNLOCK_LEVELS[b]}</i></div></div>`
+        const svg = crop(renderVillage(g, { date, idPrefix: `bm${i}`, still: true }), 0, 22, 368, 290)
+        return `<div class="tile cell"><div class="art">${svg}</div><div class="cap"><b>${BIOME_CONFIGS[b].name}</b><span class="pill">Lv ${BIOME_UNLOCK_LEVELS[b]}</span></div></div>`
     }).join('')
-    const lands = LAND_EXPANSIONS.map((l) => `${l.size}×${l.size} at level ${l.unlockLevel}`).join(' · ')
-    write('biomes', page(1440, 1000, `
-        body{background:#f4f1ea;padding:22px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-content:start;color:#2b2a27}
-        .cell{background:#fffdf8;border:1px solid #e4ddd0;border-radius:20px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.07)}
-        .cell svg{display:block;width:100%;height:auto;aspect-ratio:368/316}
-        .cap{display:flex;flex-direction:column;gap:2px;padding:10px 16px 14px}
-        .cap b{font-size:20px}.cap span{font-size:14px;color:#6f6a60}.cap i{font-size:13px;color:#2e7d32;font-style:normal;font-weight:600;margin-top:4px}
-        .note{border-radius:20px;background:linear-gradient(135deg,#2e7d32,#1b5e20);color:#fff;padding:26px;display:flex;flex-direction:column;justify-content:center;gap:10px}
-        .note h3{margin:0;font-size:28px;line-height:1.15}.note p{margin:0;font-size:16px;opacity:.92;line-height:1.45}
-        `, `<style>${SCENE_CSS}</style>${cells}<div class="note"><h3>Five biomes.<br>Your land keeps growing.</h3><p>Each biome has its own ground, foliage and hills — and reacts to the time of day. Start on a 5×5 plot and expand it: ${lands}.</p></div>`))
+    write('biomes', page(1600, 434, `
+        body{padding:${T.margin}px}
+        .row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:22px}
+        .cell{overflow:hidden;padding:0}
+        .art svg{display:block;width:100%;height:auto;aspect-ratio:368/290}
+        .cap{display:flex;align-items:center;justify-content:space-between;padding:11px 14px 13px}
+        .cap b{font-size:16px;font-weight:700}
+        `, `<style>${SCENE_CSS}</style><div class="eyebrow">Five biomes</div><div class="title">Switch the ground under your village</div><div class="row">${cells}</div>`))
 }
 
-// ---------------------------------------------------------------- growth
+// ---------------------------------------------------------------- frames for village-day.gif: one day, dawn to night
 {
-    const rows: [string, string][] = [['sakura', 'Cherry Blossom'], ['classic_pine', 'Classic Pine'], ['sunflower', 'Sunflower'], ['bonsai', 'Zen Bonsai'], ['golden_tree', 'Celestial Gold Tree']]
-    const stages: [string, string][] = [['seed', '0% · Seed planted'], ['sprout', '25% · Sprouting'], ['sapling', '50% · Sapling'], ['mature', '75–100% · Fully grown']]
-    const head = stages.map(([, l]) => `<div class="h">${l}</div>`).join('')
-    const body = rows.map(([id, name]) => `<div class="name">${name}</div>` + stages.map(([s]) => `<div class="c">${s === 'mature' ? SPECIES_SVGS[id] : growthSvg(s as any, id)}</div>`).join('')).join('')
-    write('growth', page(1240, 1010, `
-        body{background:#f4f1ea;padding:26px 30px;color:#2b2a27}
-        h2{margin:0 0 4px;font-size:30px}.sub{margin:0 0 18px;color:#6f6a60;font-size:16px}
-        .g{display:grid;grid-template-columns:170px repeat(4,1fr);gap:10px;align-items:center}
-        .h{font-size:14px;font-weight:700;text-align:center;color:#2e7d32;text-transform:uppercase;letter-spacing:.05em}
-        .name{font-weight:700;font-size:17px}
-        .c{height:150px;border-radius:18px;background:radial-gradient(circle at 50% 78%,#e2efd3,#f8f6ee 70%);border:1px solid #e4ddd0;padding:8px}
-        .c svg{width:100%;height:100%}
-        `, `<h2>Watch it grow — in real time</h2><p class="sub">The plant in your timer advances through four stages as the minutes pass. Give up early and it withers.</p><div class="g"><div></div>${head}${body}</div>`))
-}
-
-// ---------------------------------------------------------------- collection
-{
-    const trees = FLORA_SPECIES.map((s) => `<div class="card"><div class="art">${s.iconSvg}</div><b>${s.name}</b><span class="lv">Level ${s.unlockLevel}</span><span class="d">${s.recommendedDuration}m · ${s.category}</span></div>`).join('')
-    const builds = HOMESTEAD_BUILDINGS.filter((b) => b.category !== 'path' || b.id === 'water_stream' || b.id === 'cobblestone_path').map((b) => `<div class="card b"><div class="art">${b.iconSvg}</div><b>${b.name}</b><span class="lv">Level ${b.unlockLevel}${b.maxLevel > 1 ? ' · ' + '★'.repeat(b.maxLevel) : ''}</span><span class="d">${b.perk ? '⚡ ' + perkText(b, 1) : b.description}</span></div>`).join('')
-    write('collection', page(1400, 1030, `
-        body{background:#f4f1ea;padding:26px 30px;color:#2b2a27}
-        h2{margin:0 0 12px;font-size:26px}h2 small{font-size:15px;color:#6f6a60;font-weight:500;margin-left:8px}
-        .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:26px}
-        .card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;padding:12px 8px 12px;border-radius:16px;background:#fffdf8;border:1px solid #e4ddd0}
-        .art{width:78px;height:78px}.art svg{width:100%;height:100%}
-        b{font-size:14px}.lv{font-size:12px;font-weight:700;color:#2e7d32}.d{font-size:11.5px;color:#6f6a60;line-height:1.3}
-        .b .lv{color:#c47f00}
-        `, `<h2>🌱 The nursery<small>${FLORA_SPECIES.length} species, unlocked as you level up</small></h2><div class="grid">${trees}</div><h2>🔨 The builders<small>buildings with perks that grow when you upgrade them</small></h2><div class="grid">${builds}</div>`))
+    const g = village()
+    const frames: number[] = []
+    for (let m = 5 * 60; m <= 23 * 60 + 30; m += 30) frames.push(m)
+    frames.forEach((m, i) => {
+        const svg = crop(renderVillage(g, { date: at(Math.floor(m / 60), m % 60), idPrefix: `vd${i}`, still: true }), 0, 6, 560, 392)
+        write(`village-day-${String(i).padStart(2, '0')}`, page(560, 392, `svg{display:block;width:560px;height:392px}`, `<style>${SCENE_CSS}</style>${svg}`))
+    })
+    fs.writeFileSync(`${out}/village-day.json`, JSON.stringify(frames.length))
 }
 console.log('composed')

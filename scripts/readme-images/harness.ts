@@ -18,6 +18,7 @@ import type { PlacedHomesteadItem, RewardEvent } from '../../src/types/forest'
 import { SCENE_CSS } from '../../src/render/sceneCss'
 import { village } from './sample-data'
 import { mountBoard } from './board-scene'
+import { MARKETING_SCENES, mountMarketing } from './marketing'
 
 // main.ts injects this once for every view in the real plugin
 document.head.appendChild(Object.assign(document.createElement('style'), { textContent: SCENE_CSS }))
@@ -89,7 +90,9 @@ const cloneTimer = (elapsed: number, running: boolean, inSession: boolean) => {
     return readable({ count, elapsed, running, inSession, mode: 'WORK', remained: { millis: left, human }, finished: false } as any)
 }
 
-if (scene === 'sidebar' || scene === 'sidebar-reward' || scene === 'sidebar-levelup') {
+if (MARKETING_SCENES.includes(scene)) {
+    mountMarketing(scene, q, g, app)
+} else if (scene === 'sidebar' || scene === 'sidebar-reward' || scene === 'sidebar-levelup') {
     const ratio = 0.62
     activePlantStore.set({ speciesId: 'sakura', startTime: 0, totalDurationMillis: 25 * 60000, currentStage: 'sapling', progressRatio: ratio, taskText: 'Write chapter 3 draft' })
     if (scene === 'sidebar-reward') { activePlantStore.set(null); rewardEvents.set([harvest]) }
