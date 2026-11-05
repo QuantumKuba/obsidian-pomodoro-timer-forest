@@ -39,6 +39,19 @@ Quests are for today; the **Village Charter** is for the months ahead. Your sett
 
 [More on the charter →](docs/GUIDE.md#the-village-charter) · [Neighbours →](docs/GUIDE.md#neighbours-and-their-requests)
 
+## Your Heart Tree
+
+Some things can't be bought. Quests, the daily chest, neighbours' requests and charter chapters leave care items and ornaments glinting in your village for you to pick up. Choose one tree as your **Heart Tree**, meet its small daily need, and it grows from Young to Elder, stands taller, and wears the ornaments you've found. A missed day costs nothing; it simply waits.
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="68%"><img src="docs/images/homestead-heart-tree.png" alt="The village with the Heart Tree selected: a larger Ancient Oak hung with ribbons, a birdhouse and a firefly jar, with finds glinting nearby"></td>
+    <td align="center" valign="top" width="32%"><img src="docs/images/panel-heart-tree.png" alt="The Heart Tree card: stage and bond, today's need with a Tend button, the satchel of care items and the ornament collection"></td>
+  </tr>
+</table>
+
+[More on the Heart Tree →](docs/GUIDE.md#the-heart-tree-and-mission-finds)
+
 ## A village that lives on your clock
 
 The sky follows your real time of day. Windows glow at dusk, villagers gather at the campfire after dark, and one session wakes a sleepy village back up.
