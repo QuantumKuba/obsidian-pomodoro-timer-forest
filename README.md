@@ -85,6 +85,7 @@ Most Pomodoro apps assume you'll stick to the schedule. This one is built around
 - **Streaks that sleep instead of breaking.** Miss a few days and the village naps under a bit of mist. One session wakes it up. Nothing is lost.
 - **Done early? Harvest early.** Finished in 12 minutes? Tick the task off and keep 75% of the reward.
 - **Start from the task.** Press play on any `- [ ]` task or Kanban card, so starting is one click.
+- **One step at a time.** Nest subtasks under a task and the timer walks you through them. Tick off a step mid-session and it offers the next one, with the same session and the same tree. ([subtasks](docs/TIMER.md#subtasks))
 
 [Hyperfocus mode in detail →](docs/GUIDE.md#hyperfocus-mode-ride-the-wave)
 
