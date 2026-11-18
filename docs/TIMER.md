@@ -53,6 +53,29 @@ This is what ends up in your note:
 
 `4/6` is four pomodoros done out of six planned. Dates follow the *Task format* setting: the Tasks emoji format shown above, or Dataview fields (`[start:: 2025-09-25] [due:: 2025-10-03]`).
 
+### Subtasks
+
+Break a big task into steps by nesting tasks under it. The panel reads the nesting you already write:
+
+```markdown
+- [ ] Apply fixes to the DRAC paper #drac
+    - [x] Introduction
+    - [ ] Background
+    - [ ] Methodology
+        - [ ] Redo figure 3
+    - [ ] Results
+```
+
+<p align="center"><img src="images/panel-tasks-subtasks.png" alt="Focus card on a subtask, showing its parent task above it and the next step below; the list shows subtasks indented under their parent" width="360"></p>
+
+- **A tree, not a flat list.** Subtasks are indented under their parent. The parent shows how many steps are done (`1/4`). Click that chip to fold the steps away. A plain bullet between a task and its checkboxes (`- Sections`) does not break the link.
+- **Pomodoros add up.** A parent with pomodoros on its steps also shows the total for the whole task, such as `🍅 4/6 in all`. Each session is still counted on the line you focused.
+- **Know where you are.** When you focus a subtask, the focus card shows the tasks above it (`Apply fixes to the DRAC paper ›`). Click one to focus it instead.
+- **Up next.** The focus card always offers the next step. Focus a parent and it suggests its first open step. Focus a step and it suggests the one after it.
+- **Move straight on.** Tick off the step you are focusing on during a session and the timer offers **Next: Background**. The session and its tree carry on with the next step. If you harvest early, the focus moves to the next step by itself. When the last step is done, the focus goes back to the parent so you can tick it off.
+- **Steps belong to their parent.** A subtask inherits its parent's tags, so a `#drac` parent grows the DRAC island and counts toward tag quests. The log names the step with its parent, such as `Apply fixes to the DRAC paper › Background`. Custom log templates can read the trail as `log.task.ancestors`.
+- **Searching** shows matching steps under their parents, with the parents dimmed. That way you can see where each match sits.
+
 ### Typing it by hand
 
 The panel is optional; you can still write the field yourself after the task's text. Enable tracking in the settings and the timer updates the count at the end of each work session.

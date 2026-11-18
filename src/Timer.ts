@@ -1,13 +1,14 @@
 import PomodoroTimerPlugin from 'main'
 // @ts-ignore: replaced at build time by the inline-worker esbuild plugin
 import createClockWorker from 'clock.worker'
-import { writable, derived } from 'svelte/store'
+import { writable, derived, get } from 'svelte/store'
 import type { Readable } from 'svelte/store'
 import { Notice, TFile, moment } from 'obsidian'
 import Logger, { type LogContext } from 'Logger'
 import DEFAULT_NOTIFICATION from 'Notification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
+import { nextStep, taskLabel, taskTags } from 'tasks/hierarchy'
 import {
     earlyHarvestMinMinutes,
     pomodoroEquivalents,
@@ -326,9 +327,9 @@ export default class Timer implements Readable<TimerStore> {
         if (ctx.mode == 'WORK') {
             await this.plugin.tracker?.updateActual()
             this.plugin.forestEngine?.completeSession(ctx.duration, {
-                taskText: ctx.task.name || ctx.task.text,
+                taskText: taskLabel(ctx.task),
                 notePath: ctx.task.path,
-                tags: ctx.task.tags,
+                tags: taskTags(ctx.task),
             })
         } else {
             this.plugin.forestEngine?.completeBreak()
@@ -358,9 +359,9 @@ export default class Timer implements Readable<TimerStore> {
                     const file = this.plugin.tracker?.file
                     this.plugin.forestEngine?.startSession(
                         capMin,
-                        task?.name || task?.text,
+                        taskLabel(task),
                         task?.path || file?.path,
-                        task?.tags,
+                        taskTags(task),
                         true,
                     )
                 } else {
@@ -371,9 +372,9 @@ export default class Timer implements Readable<TimerStore> {
                         const file = this.plugin.tracker?.file
                         this.plugin.forestEngine?.startSession(
                             s.workLen,
-                            task?.name || task?.text,
+                            taskLabel(task),
                             task?.path || file?.path,
-                            task?.tags,
+                            taskTags(task),
                             false,
                         )
                     }
@@ -486,9 +487,9 @@ export default class Timer implements Readable<TimerStore> {
                     this.plugin.forestEngine?.landHyperfocus(
                         focusedMin,
                         {
-                            taskText: ctx.task.name || ctx.task.text,
+                            taskText: taskLabel(ctx.task),
                             notePath: ctx.task.path,
-                            tags: ctx.task.tags,
+                            tags: taskTags(ctx.task),
                         },
                         {
                             pomodoros: poms,
@@ -541,7 +542,7 @@ export default class Timer implements Readable<TimerStore> {
         this.plugin.forestEngine?.abortSession(
             state.elapsed / 60000,
             {
-                taskText: task?.name || task?.text,
+                taskText: taskLabel(task),
                 notePath: task?.path || file?.path,
             },
             state.taskDoneAt !== null,
@@ -577,9 +578,9 @@ export default class Timer implements Readable<TimerStore> {
             const file = this.plugin.tracker?.file
             this.plugin.forestEngine?.startSession(
                 capMin,
-                task?.name || task?.text,
+                taskLabel(task),
                 task?.path || file?.path,
-                task?.tags,
+                taskTags(task),
                 true,
             )
 
@@ -659,9 +660,9 @@ export default class Timer implements Readable<TimerStore> {
         this.plugin.forestEngine?.landHyperfocus(
             focusedMin,
             {
-                taskText: ctx.task.name || ctx.task.text,
+                taskText: taskLabel(ctx.task),
                 notePath: ctx.task.path,
-                tags: ctx.task.tags,
+                tags: taskTags(ctx.task),
             },
             {
                 pomodoros: poms,
@@ -735,10 +736,16 @@ export default class Timer implements Readable<TimerStore> {
         const s = this.state as TimerStore
         const ready = s.elapsed >= this.earlyHarvestAt(s)
         const fragment = new DocumentFragment()
+        const step = this.nextStepAfterDone()
+        const next = step.next
+            ? ` Next up: ${step.next.description}.`
+            : step.parentReady && step.parent
+              ? ` That was the last step of “${step.parent.description}”.`
+              : ''
         fragment.createSpan({
             text: ready
-                ? `✅ Task done with ${s.remained.human.replace(/ /g, '')} to spare. Open the timer to harvest your tree early, or keep focusing for the full tree.`
-                : '✅ Task done! Open the timer to end the session without withering, or pick your next task and keep focusing.',
+                ? `✅ Task done with ${s.remained.human.replace(/ /g, '')} to spare.${next} Open the timer to harvest your tree early, or keep focusing for the full tree.`
+                : `✅ Task done!${next} Open the timer to end the session without withering, or move on and keep focusing.`,
         })
         fragment.addEventListener('click', () => void this.plugin.activateView())
         new Notice(fragment, 10000)
@@ -759,9 +766,9 @@ export default class Timer implements Readable<TimerStore> {
         // Before anything else can start a new plant
         if (harvest) {
             this.plugin.forestEngine?.harvestEarly(ctx.elapsed / 60000, ctx.duration, {
-                taskText: ctx.task.name || ctx.task.text,
+                taskText: taskLabel(ctx.task),
                 notePath: ctx.task.path,
-                tags: ctx.task.tags,
+                tags: taskTags(ctx.task),
             })
         }
         this.finishDoneTask(ctx, halfway, harvest).catch((err) =>
@@ -785,13 +792,35 @@ export default class Timer implements Readable<TimerStore> {
         if (autostart) this.start()
     }
 
+    /**
+     * Where to go once the focused task is done: the next open subtask under the same parent,
+     * or the parent itself once every one of its subtasks is done.
+     */
+    public nextStepAfterDone(task: TaskItem | undefined = this.plugin.tracker?.task) {
+        const list = this.plugin.tasks ? get(this.plugin.tasks).list : []
+        return nextStep(list, task, true)
+    }
+
     private async finishDoneTask(ctx: LogContext, countPomodoro: boolean, harvested: boolean) {
         const tracker = this.plugin.tracker
         if (countPomodoro) await tracker?.updateActual()
-        // The task is done: don't carry it into the next session
+        // The task is done: don't carry it into the next session. Working down a list of
+        // subtasks, the focus moves on to the next one, so there is nothing to pick.
         const current = tracker?.task
         if (current && current.path === ctx.task.path && current.blockLink === ctx.task.blockLink) {
-            tracker?.clear()
+            const step = this.nextStepAfterDone(current)
+            const follow = step.next ?? (step.parentReady ? step.parent : undefined)
+            if (follow && tracker) {
+                await tracker.active(follow)
+                new Notice(
+                    step.next
+                        ? `🌱 Up next: ${step.next.description}`
+                        : `🌳 Every step of “${follow.description}” is done. Tick it off when you're ready.`,
+                    6000,
+                )
+            } else {
+                tracker?.clear()
+            }
         }
         await this.logger.log({ ...ctx, early: harvested })
     }

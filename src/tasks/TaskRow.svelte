@@ -16,11 +16,22 @@ export let render: (content: string, el: HTMLElement) => void
 export let onSelect: () => void
 export let onEdit: () => void
 export let onMenu: (e: MouseEvent) => void
+/** Shown only because a subtask under it matches the search. */
+export let context = false
+/** Its subtasks are folded away. */
+export let collapsed = false
+export let onToggle: () => void = () => {}
+
+$: depth = item.depth ?? 0
+$: sub = item.subtasks ?? { done: 0, total: 0 }
+$: rollup = item.rollup ?? { actual: item.actual, expected: item.expected }
+// Pomodoros spent on the steps, when there are more than on the task's own line
+$: rolledUp = sub.total > 0 && (rollup.actual > item.actual || rollup.expected > item.expected)
 
 $: ratio = item.expected > 0 ? Math.min(100, (item.actual / item.expected) * 100) : 0
 $: due = item.due ? describeDue(item.due, item.checked) : null
 $: start = item.start ? describeStart(item.start) : null
-$: hasMeta = item.actual > 0 || item.expected > 0 || !!due || !!start || !!item.lane
+$: hasMeta = item.actual > 0 || item.expected > 0 || !!due || !!start || !!item.lane || sub.total > 0
 
 function onKey(e: KeyboardEvent) {
     if (e.target !== e.currentTarget) return
@@ -38,7 +49,9 @@ function onKey(e: KeyboardEvent) {
     class:editing
     class:waiting={!!start && start.tone === 'future' && !item.checked}
     class:has-progress={showProgress && ratio > 0}
-    style="--pct:{ratio}%"
+    class:context
+    class:subtask={depth > 0}
+    style="--pct:{ratio}%; --depth:{depth}"
     role="button"
     tabindex="0"
     aria-pressed={active}
@@ -55,10 +68,28 @@ function onKey(e: KeyboardEvent) {
 
         {#if hasMeta}
             <div class="meta">
+                {#if sub.total > 0}
+                    <button
+                        class="chip steps"
+                        class:all={sub.done === sub.total}
+                        aria-expanded={!collapsed}
+                        title="{sub.done} of {sub.total} subtasks done · {collapsed ? 'show' : 'hide'} them"
+                        on:click|stopPropagation={onToggle}
+                        on:keydown|stopPropagation
+                    >
+                        <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={10} />
+                        <Icon name="list-checks" size={10} />{sub.done}/{sub.total}
+                    </button>
+                {/if}
                 {#if item.lane}
                     <span class="chip lane" title="Lane on the board">{item.lane}</span>
                 {/if}
                 <Pomodoros actual={item.actual} expected={item.expected} />
+                {#if rolledUp}
+                    <span class="chip rollup" title="Pomodoros on this task and its subtasks: {rollup.actual} done{rollup.expected > 0 ? ` of ${rollup.expected} planned` : ''}">
+                        🍅 {rollup.actual}{rollup.expected > 0 ? `/${rollup.expected}` : ''} in all
+                    </span>
+                {/if}
                 {#if start}
                     <span class="chip start {start.tone}" title="Start date: {longDate(item.start)}">
                         <Icon name="play" size={10} filled />{start.text}
@@ -91,7 +122,7 @@ function onKey(e: KeyboardEvent) {
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    padding: 8px 8px 8px 12px;
+    padding: 8px 8px 8px calc(12px + var(--depth, 0) * 18px);
     cursor: pointer;
     outline: none;
     background-color: transparent;
@@ -116,6 +147,23 @@ function onKey(e: KeyboardEvent) {
 }
 .row.active:focus-visible {
     box-shadow: inset 3px 0 0 var(--interactive-accent), inset 0 0 0 2px var(--interactive-accent);
+}
+/* A thread back up to the parent task */
+.row.subtask::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(18px + (var(--depth) - 1) * 18px);
+    width: 1px;
+    background: var(--background-modifier-border);
+}
+.row.subtask {
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+.row.context .body {
+    opacity: 0.6;
 }
 .status {
     margin-top: 2px;
@@ -161,6 +209,32 @@ function onKey(e: KeyboardEvent) {
     white-space: nowrap;
     color: var(--text-muted);
     background: var(--background-modifier-hover);
+}
+.chip.steps {
+    height: 16px;
+    padding: 0 6px 0 3px;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+}
+.chip.steps:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-active-hover, var(--background-modifier-hover));
+}
+.chip.steps:focus-visible {
+    box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+.chip.steps.all {
+    color: var(--color-green);
+    background: color-mix(in srgb, var(--color-green) 14%, transparent);
+}
+.chip.rollup {
+    font-weight: 500;
+    color: var(--text-faint);
+    background: transparent;
+    padding: 0;
+    font-variant-numeric: tabular-nums;
 }
 .chip.lane {
     max-width: 110px;

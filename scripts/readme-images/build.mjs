@@ -76,6 +76,7 @@ ui('panel-market', 'scene=forest&tab=market&player=mid&click=Builders', 356, 140
 ui('panel-journey', 'scene=forest&tab=journey', 356, 2200, { clip: downTo('.chest', 14) })
 ui('panel-heart-tree', 'scene=forest&tab=journey', 356, 2200, { clip: around('.pf-heart', 8) })
 ui('panel-tasks', 'scene=tasks&pins=2', 356, 1000, { clip: downTo('.panel', 12) })
+ui('panel-tasks-subtasks', 'scene=tasks&pins=2&focus=sub', 356, 1000, { clip: downTo('.panel', 12) })
 ui('panel-tasks-edit', 'scene=tasks&press=.edit&nth=1&focus=1&tracking=1', 356, 1300, { clip: downTo('.group', 12, 0), settle: 1500 })
 ui('homestead-full', 'scene=homestead&select=cabin', 1360, 900, { pad: 0, extra: 'body{height:900px;overflow:hidden}', clip: around('.pf-forest > *', 28) })
 ui('homestead-heart-tree', 'scene=homestead&select=heart', 1360, 900, { pad: 0, extra: 'body{height:900px;overflow:hidden}', clip: around('.pf-forest > *', 28) })

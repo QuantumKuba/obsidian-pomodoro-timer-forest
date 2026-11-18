@@ -9,6 +9,7 @@ import Pomodoros from './tasks/Pomodoros.svelte'
 import TaskRow from './tasks/TaskRow.svelte'
 import TaskEditor from './tasks/TaskEditor.svelte'
 import { describeDue, longDate } from './tasks/dates'
+import { ancestorsOf, nextStep, sameTask } from './tasks/hierarchy'
 
 export let tasks: Tasks
 export let tracker: TaskTracker
@@ -30,8 +31,16 @@ let query = ''
 let editingKey = ''
 let tasksPlugin = false
 let collapsed: Record<string, boolean> = {}
+/** Tasks whose subtasks are folded away. */
+let folded: Record<string, boolean> = {}
 
 const keyOf = (t: TaskItem) => `${t.path}\n${t.line}`
+/** Lines move as the note is edited; a task keeps its block id and its words. */
+const foldKey = (t: TaskItem) => `${t.path}\n${t.blockLink.trim() || [...(t.ancestors ?? []), t.description].join('\n')}`
+const toggleFold = (t: TaskItem) => {
+    const key = foldKey(t)
+    folded = { ...folded, [key]: !folded[key] }
+}
 
 function matches(item: TaskItem, status: Status, needle: string) {
     if (status === 'todo' && item.checked) return false
@@ -45,11 +54,28 @@ function matches(item: TaskItem, status: Status, needle: string) {
 
 $: needle = query.trim().toLowerCase()
 $: filtering = status !== '' || needle !== ''
-$: groups = ($tasks?.groups ?? []).map((g) => ({
-    ...g,
-    shown: g.tasks.filter((item) => matches(item, status, needle)),
-    open: g.tasks.filter((item) => !item.checked).length,
-}))
+$: groups = ($tasks?.groups ?? []).map((g) => {
+    const byLine = new Map(g.tasks.map((t) => [t.line, t]))
+    const parentOf = (t: TaskItem) => byLine.get(t.parentLine ?? -1)
+    const hit = new Set(g.tasks.filter((item) => matches(item, status, needle)).map((t) => t.line))
+    // A subtask that matches is shown under the tasks it belongs to, so it is not out of context
+    const keep = new Set(hit)
+    for (const line of hit) {
+        for (let p = parentOf(byLine.get(line)!); p && !keep.has(p.line); p = parentOf(p)) keep.add(p.line)
+    }
+    const hidden = (t: TaskItem) => {
+        for (let p = parentOf(t); p; p = parentOf(p)) if (folded[foldKey(p)]) return true
+        return false
+    }
+    return {
+        ...g,
+        // While searching every match shows; otherwise folded subtasks stay folded
+        shown: g.tasks
+            .filter((t) => keep.has(t.line) && (filtering || !hidden(t)))
+            .map((item) => ({ item, context: !hit.has(item.line) })),
+        open: g.tasks.filter((item) => !item.checked).length,
+    }
+})
 $: visible = filtering ? groups.filter((g) => g.shown.length > 0) : groups
 $: openTotal = groups.reduce((n, g) => n + g.open, 0)
 $: anyTasks = groups.some((g) => g.tasks.length > 0)
@@ -58,12 +84,20 @@ $: focus = $tracker.task
 $: focusLeft = focus && focus.expected > 0 ? Math.max(0, focus.expected - focus.actual) : 0
 $: focusDue = focus?.due ? describeDue(focus.due, focus.checked) : null
 
-/** Block ids identify a task once it has one; before that its place in the note does. */
-function isActive(item: TaskItem, task: TaskItem | undefined) {
-    if (!task || task.path !== item.path) return false
-    if (task.blockLink && item.blockLink) return task.blockLink === item.blockLink
-    return task.line === item.line && task.description === item.description
-}
+// The focused task among the listed ones, with its subtasks and the tasks it sits under
+$: list = $tasks?.list ?? []
+$: focusItem = focus ? list.find((t) => sameTask(t, focus)) : undefined
+$: trail = focus
+    ? focusItem
+        ? ancestorsOf(list, focusItem).map((t) => ({ label: t.description, task: t as TaskItem | undefined }))
+        : (focus.ancestors ?? []).map((label) => ({ label, task: undefined as TaskItem | undefined }))
+    : []
+$: focusSteps = focusItem?.subtasks ?? focus?.subtasks
+$: step = nextStep(list, focus, !!focusItem?.checked)
+$: openSteps = !!focusItem && !focusItem.checked && (focusItem.subtasks?.done ?? 0) < (focusItem.subtasks?.total ?? 0)
+$: nextLabel = openSteps ? 'Start with' : focusItem?.checked ? 'Next' : 'After this'
+
+const isActive = (item: TaskItem, task: TaskItem | undefined) => sameTask(item, task)
 
 const select = (item: TaskItem) => {
     void tracker.active(item)
@@ -106,6 +140,24 @@ const showTaskMenu = (item: TaskItem) => (e: MouseEvent) => {
             .setIcon('target')
             .onClick(() => select(item)),
     )
+    const first = (item.subtasks?.total ?? 0) > (item.subtasks?.done ?? 0) && !item.checked ? nextStep(list, item).next : undefined
+    if (first) {
+        menu.addItem((i) =>
+            i
+                .setTitle(`Focus on its next step: ${first.description}`)
+                .setIcon('list-checks')
+                .onClick(() => select(first)),
+        )
+    }
+    if (item.subtasks?.total) {
+        const isFolded = !!folded[foldKey(item)]
+        menu.addItem((i) =>
+            i
+                .setTitle(isFolded ? 'Show subtasks' : 'Hide subtasks')
+                .setIcon(isFolded ? 'chevron-down' : 'chevron-right')
+                .onClick(() => toggleFold(item)),
+        )
+    }
     menu.addItem((i) =>
         i
             .setTitle('Edit pomodoros and dates')
@@ -139,6 +191,19 @@ const showTaskMenu = (item: TaskItem) => (e: MouseEvent) => {
                     <Icon name="x" size={13} />
                 </button>
             </div>
+            {#if trail.length}
+                <div class="trail" aria-label="Subtask of">
+                    {#each trail as a, i}
+                        {#if i > 0}<span class="sep">›</span>{/if}
+                        {#if a.task}
+                            <button class="crumb" title="Focus on “{a.label}”" on:click={() => a.task && select(a.task)}>{a.label}</button>
+                        {:else}
+                            <span class="crumb static">{a.label}</span>
+                        {/if}
+                    {/each}
+                    <span class="sep">›</span>
+                </div>
+            {/if}
             <input class="focus-name" type="text" value={focus.name} on:input={changeTaskName} aria-label="Task name, as it appears in your log" />
             <div class="focus-meta">
                 <Pomodoros actual={focus.actual} expected={focus.expected} max={10} />
@@ -156,8 +221,26 @@ const showTaskMenu = (item: TaskItem) => (e: MouseEvent) => {
                         <Icon name="calendar" size={10} />{focusDue.text}
                     </span>
                 {/if}
+                {#if focusSteps && focusSteps.total > 0}
+                    <span class="steps-chip" class:all={focusSteps.done === focusSteps.total} title="{focusSteps.done} of {focusSteps.total} subtasks done">
+                        <Icon name="list-checks" size={10} />{focusSteps.done}/{focusSteps.total} steps
+                    </span>
+                {/if}
                 <span class="focus-from" title={focus.path}>{noteName(focus.fileName)}</span>
             </div>
+            {#if step.next}
+                <button class="up-next" on:click={() => step.next && select(step.next)} title="Focus on “{step.next.description}”">
+                    <span class="up-label">{nextLabel}</span>
+                    <span class="up-name">{step.next.description}</span>
+                    <Icon name="arrow-right" size={12} />
+                </button>
+            {:else if step.parentReady && step.parent && focusItem?.checked}
+                <button class="up-next" on:click={() => step.parent && select(step.parent)} title="Every step is done: focus on “{step.parent.description}”">
+                    <span class="up-label">All steps done</span>
+                    <span class="up-name">{step.parent.description}</span>
+                    <Icon name="arrow-right" size={12} />
+                </button>
+            {/if}
         </section>
     {/if}
 
@@ -236,9 +319,12 @@ const showTaskMenu = (item: TaskItem) => (e: MouseEvent) => {
                     {#if !collapsed[g.path]}
                         {#if g.shown.length > 0}
                             <div class="list">
-                                {#each g.shown as item (item.line)}
+                                {#each g.shown as { item, context } (item.line)}
                                     <TaskRow
                                         {item}
+                                        {context}
+                                        collapsed={!!folded[foldKey(item)] && !filtering}
+                                        onToggle={() => toggleFold(item)}
                                         render={r}
                                         showProgress={$settings.showTaskProgress}
                                         active={isActive(item, focus)}
@@ -401,6 +487,103 @@ const showTaskMenu = (item: TaskItem) => (e: MouseEvent) => {
 .icon-btn:hover {
     background: var(--background-modifier-hover);
     color: var(--text-normal);
+}
+
+.trail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 4px;
+    margin-top: 2px;
+    font-size: 0.7rem;
+    color: var(--text-faint);
+    min-width: 0;
+}
+.crumb {
+    height: auto;
+    max-width: 100%;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: inherit;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.crumb:hover {
+    color: var(--text-accent, var(--interactive-accent));
+    text-decoration: underline;
+}
+.crumb.static {
+    cursor: default;
+}
+.crumb.static:hover {
+    color: var(--text-muted);
+    text-decoration: none;
+}
+.sep {
+    color: var(--text-faint);
+}
+.steps-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 6px;
+    height: 16px;
+    border-radius: 99px;
+    font-size: 0.66rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    background: var(--background-modifier-hover);
+}
+.steps-chip.all {
+    color: var(--color-green);
+    background: color-mix(in srgb, var(--color-green) 14%, transparent);
+}
+.up-next {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: auto;
+    margin-top: 4px;
+    padding: 6px 8px;
+    border: 1px dashed color-mix(in srgb, var(--interactive-accent) 40%, var(--background-modifier-border));
+    border-radius: 8px;
+    box-shadow: none;
+    background: transparent;
+    font-size: 0.76rem;
+    color: var(--text-normal);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.12s, border-color 0.12s;
+}
+.up-next:hover {
+    border-style: solid;
+    background: color-mix(in srgb, var(--interactive-accent) 9%, transparent);
+}
+.up-label {
+    flex: none;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.up-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+.up-next > :global(.pf-icon) {
+    flex: none;
+    color: var(--interactive-accent);
 }
 
 /* The list */

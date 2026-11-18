@@ -41,6 +41,7 @@ export type TaskLog = Pick<
     | 'priority'
     | 'recurrence'
     | 'tags'
+    | 'ancestors'
 >
 
 export type LogContext = TimerState & { task: TaskItem; early?: boolean; breadcrumb?: string }

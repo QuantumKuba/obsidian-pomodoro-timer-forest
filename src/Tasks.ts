@@ -11,6 +11,7 @@ import TaskWriter from 'TaskWriter'
 import { settings } from 'stores'
 import { BOARD_FRONTMATTER_KEY, parseBoard } from 'board/BoardModel'
 import { stripKanbanDates } from 'board/cards'
+import { nestTasks, type TaskNesting } from 'tasks/hierarchy'
 
 export type TaskItem = {
     path: string
@@ -35,7 +36,7 @@ export type TaskItem = {
     line: number
     /** The lane of a card on a Kanban board. */
     lane?: string
-}
+} & Partial<TaskNesting>
 
 /** The tasks of one note, as listed in the task panel. */
 export type TaskGroup = {
@@ -262,6 +263,17 @@ export function resolveTasks(
 
     let cache: Record<number, TaskItem> = {}
     const lines = content.split('\n')
+    // The list item each list item sits under, so subtasks can be told from their parents
+    const parents = new Map<number, number>()
+    const indent = (line: number) => lines[line]?.match(/^[\s>]*/)?.[0].length ?? 0
+    for (const li of metadata.listItems || []) {
+        const line = li.position.start.line
+        let parent = li.parent
+        // A root item's parent is minus the line its list starts on, which is 0 (not negative)
+        // for a list at the very top of a note: only a deeper item really sits under line 0
+        if (parent >= 0 && (parent >= line || (parent === 0 && indent(line) <= indent(0)))) parent = -1
+        parents.set(line, parent)
+    }
     for (let rawElement of metadata.listItems || []) {
         if (rawElement.task) {
             let lineNr = rawElement.position.start.line
@@ -306,5 +318,5 @@ export function resolveTasks(
         }
     }
 
-    return Object.values(cache)
+    return nestTasks(Object.values(cache), parents)
 }

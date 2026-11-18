@@ -6,6 +6,7 @@
 import { readable, writable } from 'svelte/store'
 import TimerViewComponent from '../../src/TimerViewComponent.svelte'
 import TasksComponent from '../../src/TasksComponent.svelte'
+import { nestTasks } from '../../src/tasks/hierarchy'
 import type { TaskItem, TaskGroup } from '../../src/Tasks'
 import { addDays, today } from '../../src/tasks/dates'
 import { settings } from '../../src/stores'
@@ -213,18 +214,26 @@ function mountTasks() {
             item(weekly, 7, 'Book dentist', { start: D(4) }),
             item(weekly, 8, 'Tidy the reading list'),
         ] },
-        [thesis]: { name: 'Thesis chapter 3', tasks: [
-            item(thesis, 2, 'Draft the methods section', { expected: 6, actual: 4, due: D(2), start: D(-5) }),
-            item(thesis, 3, 'Re-run the regression with the new dataset', { expected: 2, actual: 0, due: D(9) }),
-            item(thesis, 4, 'Send figures to the co-author', { expected: 1, actual: 3, due: D(1) }),
-        ] },
+        // The methods section is broken into steps: subtasks nested under it in the note
+        [thesis]: { name: 'Thesis chapter 3', tasks: nestTasks([
+            item(thesis, 2, 'Draft the methods section', { expected: 2, actual: 1, due: D(2), start: D(-5) }),
+            item(thesis, 3, 'Sampling and participants', { expected: 1, actual: 2, checked: true, status: 'x' }),
+            item(thesis, 4, 'Model specification', { expected: 2, actual: 1 }),
+            item(thesis, 5, 'Robustness checks', { expected: 1 }),
+            item(thesis, 6, 'Re-run the regression with the new dataset', { expected: 2, actual: 0, due: D(9) }),
+            item(thesis, 7, 'Send figures to the co-author', { expected: 1, actual: 3, due: D(1) }),
+        ], new Map([[2, -2], [3, 2], [4, 2], [5, 2], [6, -2], [7, -2]])) },
         [garden]: { name: 'Garden plan', tasks: [item(garden, 1, 'Order tulip bulbs', { start: D(30), due: D(45) })] },
     }
     const pinnedOnly = q.get('pins') === '2' ? [thesis, garden] : [thesis]
     const tracker = writable<any>({
         file: { path: weekly, name: 'Weekly review.md', basename: 'Weekly review' },
         pinned: pinnedOnly,
-        task: q.get('focus') === '0' ? undefined : { ...data[thesis].tasks[0], name: data[thesis].tasks[0].description, fileName: 'Thesis chapter 3.md' },
+        // focus=sub: focused on one of the methods section's steps
+        task: q.get('focus') === '0' ? undefined : (() => {
+            const t = data[thesis].tasks[q.get('focus') === 'sub' ? 2 : 0]
+            return { ...t, name: t.description, fileName: 'Thesis chapter 3.md' }
+        })(),
     })
     const store = writable<{ groups: TaskGroup[]; list: TaskItem[] }>({ groups: [], list: [] })
     const publish = () => {

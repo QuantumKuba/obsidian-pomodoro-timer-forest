@@ -132,6 +132,15 @@ function pickNextTask() {
     extra = 'tasks'
 }
 
+// Working down a list of subtasks: the next one is a click away, and the session carries on with it
+$: doneStep = showTaskDone && $tasks ? timer.nextStepAfterDone($tracker.task) : undefined
+$: follow = doneStep?.next ?? (doneStep?.parentReady ? doneStep.parent : undefined)
+$: followText = doneStep?.next ? `Next: ${doneStep.next.description}` : follow ? `Back to ${follow.description}` : ''
+
+function moveOn() {
+    if (follow) void tracker.active(follow)
+}
+
 $: goal = $settings.dailyGoal || 4
 $: doneToday = $todayLog.completedPomodoros
 $: questsDone = $questBoard ? $questBoard.quests.filter((q) => q.claimed).length : 0
@@ -328,16 +337,29 @@ function onAmbient(e: Event) {
                     <span class="td-title">✅ Task done with {spare} to spare</span>
                     <button class="x" on:click={keepGoing} aria-label="Keep focusing" title="Keep focusing">✕</button>
                 </div>
+                {#if doneStep?.parentReady && doneStep.parent}
+                    <p class="td-step">🌳 That was the last step of <strong>{doneStep.parent.description}</strong>.</p>
+                {:else if doneStep?.next && doneStep.parent}
+                    <p class="td-step">{doneStep.parent.subtasks?.done ?? 0}/{doneStep.parent.subtasks?.total ?? 0} steps of <strong>{doneStep.parent.description}</strong> done.</p>
+                {/if}
                 {#if harvestReady}
-                    <p>Harvest a young tree now for your {focusedMin} focused minutes at {earlyPct} of the usual rewards, or keep going for the full tree and its sapling.</p>
+                    <p>Harvest a young tree now for your {focusedMin} focused minutes at {earlyPct} of the usual rewards, or keep going{doneStep?.next ? ' with the next step' : follow ? ` with ${follow.description}` : ''} for the full tree and its sapling.</p>
                     <div class="td-actions">
                         <button class="td-main" on:click={() => timer.harvestEarly()}>🌿 Harvest early</button>
-                        <button on:click={keepGoing}>Keep going</button>
+                        {#if follow}
+                            <button class="td-next" on:click={moveOn} title={followText}>{followText}</button>
+                        {:else}
+                            <button on:click={keepGoing}>Keep going</button>
+                        {/if}
                     </div>
                 {:else}
-                    <p>Early harvest opens in {readyIn}. Pick your next task and keep this tree growing, or end the session now. It won't wither.</p>
+                    <p>Early harvest opens in {readyIn}. {doneStep?.next ? 'Move on to the next step' : follow ? `Go back to ${follow.description}` : 'Pick your next task'} and keep this tree growing, or end the session now. It won't wither.</p>
                     <div class="td-actions">
-                        <button class="td-main" on:click={pickNextTask}>Pick next task</button>
+                        {#if follow}
+                            <button class="td-main td-next" on:click={moveOn} title={followText}>{followText}</button>
+                        {:else}
+                            <button class="td-main" on:click={pickNextTask}>Pick next task</button>
+                        {/if}
                         <button on:click={() => timer.harvestEarly()}>End session</button>
                     </div>
                 {/if}
@@ -722,6 +744,8 @@ function onAmbient(e: Event) {
 .td-actions button { font-size: 0.72rem; padding: 3px 10px; }
 .td-main { background: #43a047; color: #fff; }
 .td-main:hover { background: #388e3c; }
+.task-done p.td-step { margin-bottom: 0; color: var(--text-normal); }
+.td-next { min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .abandon button { font-size: 0.72rem; padding: 3px 10px; }
 .keep { background: var(--interactive-accent); color: var(--text-on-accent); }
 
