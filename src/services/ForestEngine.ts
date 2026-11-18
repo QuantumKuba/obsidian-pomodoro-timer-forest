@@ -10,6 +10,8 @@ import type {
     ForestExportPayload,
     GamificationData,
     GrowthStage,
+    Island,
+    IslandFocus,
     PlacedHomesteadItem,
     PlantedTree,
     QuestKind,
@@ -69,11 +71,40 @@ import {
     type BaseReward,
     type CardCompletion,
 } from './Progression'
-import { CHARTER_CHAPTERS, CHARTER_RANKS, chapterComplete, charterRank, goalStatus, residentJoining } from './Charter'
+import { CHARTER_CHAPTERS, CHARTER_RANKS, chapterComplete, charterLegacy, charterRank, currentChapter, goalStatus, legacyRankName, residentJoining } from './Charter'
 import { FRIEND_GIFT, KEEPSAKE_HEARTS, MAX_HEARTS, RESIDENTS, getResident, hearts, keepsakeValue, makeRequest, requestReward, requestSlots } from './Neighbours'
 import { CHARTER_ORNAMENTS, ORNAMENTS, getTreasure, isOrnament } from '../assets/treasureCatalog'
 import { HEART_BLESSING_PCT, HEART_STAGES, NEEDS, careFor, heartNeed, heartPerkPct, heartSlots, heartStage, heartStageIndex, heartTreeItem, newHeartTree } from './HeartTree'
 import { charterOrnamentsDue, chestTreasure, makePickup, questCareItem, residentTreasures } from './Treasures'
+import {
+    addIslandFocus,
+    bridgeProgress,
+    cleanFolder,
+    cleanTag,
+    focusKey,
+    focusLabel,
+    focusRate,
+    getIsland,
+    islandBoon,
+    islandLandSize,
+    islandName,
+    isReached,
+    itemsOn,
+    landSizeOf,
+    libraryMilestone,
+    libraryReward,
+    masteryProgress,
+    masteryReward,
+    masteryTitle,
+    newIsland,
+    reachReward,
+    shouldSight,
+    suggestFocuses,
+    ISLAND_LAND_LEVELS,
+    type FocusSuggestion,
+    type SessionContext,
+    type VaultSurvey,
+} from './Islands'
 import SoundManager, { type AmbientSoundType } from './SoundManager'
 import ConfettiEngine from './ConfettiEngine'
 import { writable, type Writable, get } from 'svelte/store'
@@ -178,14 +209,16 @@ export default class ForestEngine {
     private mutate(fn: (g: GamificationData) => void, options: { persist?: boolean } = {}): void {
         const g: GamificationData = structuredClone(this.state)
         const levelBefore = levelFromXp(g.xp)
-        const rankBefore = charterRank(g)
+        const rankBefore = charterRank(g) + (g.charter?.legacy || 0)
+        const islandsBefore = g.islands?.length || 0
         fn(g)
         this.checkAchievements(g)
         this.checkCharter(g)
         this.applyLevelUps(g, levelBefore)
+        this.checkIslands(g)
         this.storage.updateGamification(() => g, options)
-        // A rank-up is celebrated once: save it even when the change itself would not be saved
-        if (options.persist === false && charterRank(g) > rankBefore) this.storage.markChanged()
+        // A rank-up or a sighting is celebrated once: save it even when the change itself would not be saved
+        if (options.persist === false && (charterRank(g) + (g.charter?.legacy || 0) > rankBefore || g.islands.length > islandsBefore)) this.storage.markChanged()
         this.flushEvents()
     }
 
@@ -255,7 +288,7 @@ export default class ForestEngine {
         const g0 = this.state
         // A chapter can be complete without a change today, e.g. an old save on its first launch
         // (or chapters signed before their ornaments existed, still to bring them)
-        if (g0.lastVisitDate === today && g0.questBoard?.date === today && !chapterComplete(g0) && !charterOrnamentsDue(g0).length) return
+        if (g0.lastVisitDate === today && g0.questBoard?.date === today && !chapterComplete(g0) && !charterOrnamentsDue(g0).length && !shouldSight(g0)) return
 
         let shieldUsed = false
         this.mutate((g) => {
@@ -279,8 +312,10 @@ export default class ForestEngine {
             shieldUsed = this.resolveStreak(g, today)
 
             if (g.questBoard?.date !== today) {
+                const toward = (g.islands || []).find((i) => i.focus && !isReached(i)) ?? (g.islands || []).filter((i) => i.focus).pop()
                 g.questBoard = generateQuestBoard(today, settings.dailyGoal || 4, settings.workLen || 25, {
                     boards: Object.keys(g.boards || {}).length > 0,
+                    island: toward ? islandName(toward) : undefined,
                 })
             }
             g.lastVisitDate = today
@@ -442,6 +477,7 @@ export default class ForestEngine {
         const settings = this.settings()
         const isHyper = !!hyperfocus || !!currentPlant?.hyperfocus
         const tags = mergeTags(taskContext?.tags, currentPlant?.tags)
+        const ctx = this.sessionContext(taskContext?.notePath || currentPlant?.notePath, tags)
 
         const newTree: PlantedTree = {
             id: `tree_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -465,7 +501,7 @@ export default class ForestEngine {
 
             // Streak first, so today's session counts toward its own bonus
             this.checkInStreak(g, today)
-            const { sunPct, coinPct } = this.focusBonuses(g, base, durationMinutes, lines)
+            const { sunPct, coinPct } = this.focusBonuses(g, base, durationMinutes, lines, ctx)
 
             const log = this.todayLog(g, today)
             const firstToday = log.completedPomodoros === 0
@@ -521,6 +557,7 @@ export default class ForestEngine {
             g.inventory[key] = (g.inventory[key] || 0) + 1
             lines.push({ label: `🌱 ${species.name} sapling added to your village inventory` })
             this.growCrops(g, durationMinutes, lines)
+            this.progressIslands(g, durationMinutes, ctx, today, lines)
 
             log.trees.push(newTree)
             log.totalMinutes += durationMinutes
@@ -615,6 +652,7 @@ export default class ForestEngine {
             tags: taskContext?.tags,
         }
         const tags = mergeTags(taskContext?.tags, currentPlant?.tags)
+        const ctx = this.sessionContext(youngTree.notePath, tags)
 
         let result: SessionCompletionResult | null = null
 
@@ -625,9 +663,10 @@ export default class ForestEngine {
 
             // Real focus happened today, so the streak holds
             this.checkInStreak(g, today)
-            const { sunPct, coinPct } = this.focusBonuses(g, base, minutes, lines)
+            const { sunPct, coinPct } = this.focusBonuses(g, base, minutes, lines, ctx)
             lines.push({ label: `🌳 Finish the full ${sessionMinutes}m next time for a sapling and a tree toward your goal` })
             this.growCrops(g, minutes, lines)
+            this.progressIslands(g, minutes, ctx, today, lines)
 
             const earned = this.grant(g, {
                 sunlight: base.sunlight * (1 + sunPct / 100),
@@ -685,7 +724,7 @@ export default class ForestEngine {
     }
 
     /** Streak and building percentages on a session's base reward; adds a line for each. */
-    private focusBonuses(g: GamificationData, base: BaseReward, minutes: number, lines: RewardLine[]): { sunPct: number; coinPct: number } {
+    private focusBonuses(g: GamificationData, base: BaseReward, minutes: number, lines: RewardLine[], ctx?: SessionContext): { sunPct: number; coinPct: number } {
         let sunPct = 0
         let coinPct = 0
         const pctLine = (label: string, pct: number, kind: 'sun' | 'coin') => {
@@ -714,6 +753,9 @@ export default class ForestEngine {
         const hour = new Date().getHours()
         if (hour >= 19 || hour < 5) pctLine('🏮 Lanterns (evening)', perkValue(g.homestead, 'night_sunlight_pct'), 'sun')
         pctLine('🪣 Village Well', perkValue(g.homestead, 'coins_pct'), 'coin')
+        // Work on a subject that has an island of its own pays a little more, the more it is mastered
+        const boon = ctx ? islandBoon(g, ctx) : null
+        if (boon) pctLine(`🏝️ ${islandName(boon.island)} (${masteryTitle(boon.island.level).toLowerCase()})`, boon.pct, 'sun')
         return { sunPct, coinPct }
     }
 
@@ -817,8 +859,10 @@ export default class ForestEngine {
             const log = this.todayLog(g)
             log.tasksCompleted = (log.tasksCompleted || 0) + 1
             g.vitality = Math.min(100, g.vitality + 2)
-            // A finished task waters the garden
+            // A finished task waters the garden, and lays a plank where it belongs
             this.growCrops(g, TASK_WATERING_MINUTES)
+            const notePath = key.includes('::') ? key.slice(0, key.indexOf('::')) : undefined
+            this.progressIslands(g, TASK_WATERING_MINUTES, this.sessionContext(notePath, this.contextTags(notePath, text)), today)
             this.emit({ kind: 'task', title: text.length > 60 ? `${text.slice(0, 57)}…` : text, ...earned, lines })
             this.progressQuests(g, 'tasks', 1)
             this.progressRequests(g, 'tasks', 1)
@@ -1040,26 +1084,37 @@ export default class ForestEngine {
     private checkCharter(g: GamificationData): void {
         g.charter ??= { rank: 0, met: [], reachedOn: {} }
         const today = dateKey()
-        const reached: number[] = []
+        const signed: { rankName: string; blurb: string; title: string; number: number; buildingId?: string }[] = []
         const lines: RewardLine[] = []
         const total = { sunlight: 0, coins: 0, xp: 0 }
-        for (;;) {
+        // Bounded, so a save with enormous totals cannot spin through chapters forever
+        for (let guard = 0; guard < 40; guard++) {
             const rank = charterRank(g)
-            const chapter = CHARTER_CHAPTERS[rank]
-            if (!chapter) break
+            const chapter = currentChapter(g)
             for (const goal of chapter.goals) {
                 if (!g.charter.met.includes(goal.id) && goalStatus(g, goal).done) g.charter.met.push(goal.id)
             }
             if (!chapter.goals.every((goal) => g.charter.met.includes(goal.id))) break
 
-            const next = rank + 1
-            g.charter.rank = next
             g.charter.met = []
-            g.charter.reachedOn = { ...g.charter.reachedOn, [next]: today }
             const earned = this.grant(g, chapter.reward)
             total.sunlight += earned.sunlight
             total.coins += earned.coins
             total.xp += earned.xp
+
+            if (rank >= CHARTER_CHAPTERS.length) {
+                // Past the last rank the city earns a star for every chapter, with no end to them
+                const stars = charterLegacy(g) + 1
+                g.charter.legacy = stars
+                g.charter.reachedOn = { ...g.charter.reachedOn, [`star${stars}`]: today }
+                lines.push({ label: `📜 ${legacyRankName(stars)} · ${chapter.title}`, ...earned })
+                signed.push({ rankName: legacyRankName(stars), blurb: chapter.story, title: chapter.title, number: rank + stars })
+                continue
+            }
+
+            const next = rank + 1
+            g.charter.rank = next
+            g.charter.reachedOn = { ...g.charter.reachedOn, [next]: today }
             lines.push({ label: `📜 ${CHARTER_RANKS[next].name} · ${chapter.title}`, ...earned })
             const landmark = charterLandmark(next)
             if (landmark) {
@@ -1073,22 +1128,22 @@ export default class ForestEngine {
             if (ornament && charterOrnamentsDue(g).includes(ornament)) {
                 lines.push(...this.leaveFind(g, ornament, 'charter', { note: chapter.title, id: `pk_charter_${ornament}` }))
             }
-            reached.push(next)
+            signed.push({ rankName: CHARTER_RANKS[next].name, blurb: CHARTER_RANKS[next].blurb, title: chapter.title, number: next, buildingId: landmark?.id })
         }
         // Chapters signed before ornaments existed still bring theirs, once
         for (const ornament of charterOrnamentsDue(g)) {
             const chapter = CHARTER_CHAPTERS[CHARTER_ORNAMENTS.indexOf(ornament)]
             this.leaveFind(g, ornament, 'charter', { note: chapter?.title, id: `pk_charter_${ornament}` })
         }
-        if (!reached.length) return
+        if (!signed.length) return
 
-        const top = reached[reached.length - 1]
+        const top = signed[signed.length - 1]
         this.emit({
             kind: 'rank',
-            rank: CHARTER_RANKS[top].name,
-            buildingId: charterLandmark(top)?.id,
-            title: reached.length > 1 ? `${reached.length} chapters of the charter, signed at once` : `Chapter ${top} complete: ${CHARTER_CHAPTERS[top - 1].title}`,
-            subtitle: reached.length > 1 ? `Everything you had already built counts. ${CHARTER_RANKS[top].blurb}` : CHARTER_RANKS[top].blurb,
+            rank: top.rankName,
+            buildingId: [...signed].reverse().find((c) => c.buildingId)?.buildingId,
+            title: signed.length > 1 ? `${signed.length} chapters of the charter, signed at once` : `Chapter ${top.number} complete: ${top.title}`,
+            subtitle: signed.length > 1 ? `Everything you had already built counts. ${top.blurb}` : top.blurb,
             ...total,
             lines,
         })
@@ -1384,6 +1439,231 @@ export default class ForestEngine {
     }
 
     // -----------------------------------------------------------------------
+    // The archipelago
+    // -----------------------------------------------------------------------
+
+    /** What a session (or a finished task) was about, for the islands: its tags, its note and what that note links to. */
+    private sessionContext(notePath: string | undefined, tags: string[]): SessionContext {
+        const links = notePath ? this.plugin.app?.metadataCache?.resolvedLinks?.[notePath] : undefined
+        return { tags, notePath, ...(links ? { linked: Object.keys(links) } : {}) }
+    }
+
+    /** The islands the running session counts toward: the bridge being built first, then the reached ones. */
+    public sessionIslands(): Island[] {
+        const plant = get(this.activePlantStore)
+        if (!plant) return []
+        const ctx = this.sessionContext(plant.notePath, plant.tags ?? [])
+        return (this.state.islands || []).filter((i) => focusRate(i.focus, ctx) > 0).sort((a, b) => Number(isReached(a)) - Number(isReached(b)))
+    }
+
+    /** A new island comes into view whenever nothing is on the horizon. */
+    private checkIslands(g: GamificationData): void {
+        g.islands ??= []
+        if (!shouldSight(g)) return
+        const island = newIsland(g, dateKey())
+        g.islands.push(island)
+        const first = island.index === 1
+        this.emit({
+            kind: 'island',
+            islandId: island.id,
+            biome: island.biome,
+            title: '🧭 Land sighted!',
+            subtitle: first
+                ? 'An island lies off your village. Open the Isles tab and decide what it stands for: a tag, a folder or a note. Focusing on that builds the bridge.'
+                : 'Another island on the horizon. Chart it in the Isles tab when you know what it should stand for.',
+            sunlight: 0, coins: 0, xp: 0,
+            lines: [{ label: `🪵 ${bridgeProgress(island).target} focus minutes will bridge it` }, { label: `🗺️ ${island.biome.replace(/_/g, ' ')} ground` }],
+        })
+    }
+
+    /**
+     * Focus minutes go where they belong: into the bridge being built, and into the mastery of
+     * every reached island the work was about. Adds a line for each to `lines`.
+     */
+    private progressIslands(g: GamificationData, minutes: number, ctx: SessionContext, today: string, lines?: RewardLine[]): void {
+        if (!g.islands?.length) return
+        const steps = addIslandFocus(g, minutes, ctx, today)
+        if (!steps.length) return
+        const m = (n: number) => `${Math.round(n * 10) / 10}m`
+        let counted = 0
+        for (const { island, added, reached, levels } of steps) {
+            counted = Math.max(counted, added)
+            const name = islandName(island)
+            if (reached) {
+                lines?.push({ label: `🪵 The bridge to ${name} is finished!` })
+                this.reachIsland(g, island)
+            } else if (!isReached(island)) {
+                const b = bridgeProgress(island)
+                lines?.push({ label: `🪵 Bridge to ${name} +${m(added)} (${Math.floor(b.laid)}/${b.target})` })
+            } else if (levels.length) {
+                for (const level of levels) this.masterIsland(g, island, level)
+            } else {
+                const p = masteryProgress(island.minutes)
+                lines?.push({ label: `🏝️ ${name} +${m(added)} (${Math.floor(p.into)}/${p.needed} to ${masteryTitle(p.level + 1).toLowerCase()})` })
+            }
+        }
+        g.lifetimeStats.islandMinutes = Math.round(((g.lifetimeStats.islandMinutes || 0) + counted) * 10) / 10
+        this.progressQuests(g, 'island_focus', Math.round(counted))
+    }
+
+    /** The bridge is finished: the island is land to build on, and its biome comes home too. */
+    private reachIsland(g: GamificationData, island: Island): void {
+        const name = islandName(island)
+        const earned = this.grant(g, reachReward(island.index))
+        g.lifetimeStats.islandsReached = (g.lifetimeStats.islandsReached || 0) + 1
+        g.vitality = Math.min(100, g.vitality + 10)
+        const size = islandLandSize(island.level)
+        const lines: RewardLine[] = [
+            { label: `🪵 ${bridgeProgress(island).target} focus minutes on ${focusLabel(island.focus)}`, ...earned },
+            { label: `🧱 ${size}×${size} of new land to build on` },
+            { label: `☀️ Focus on ${focusLabel(island.focus)} now earns extra Sunlight` },
+        ]
+        if (!g.unlockedBiomes.includes(island.biome)) {
+            g.unlockedBiomes.push(island.biome)
+            lines.push({ label: `🗺️ New ground for your home village: ${island.biome.replace(/_/g, ' ')}` })
+        }
+        // The library starts from what is already written: only notes added from here on are celebrated
+        island.notes = this.surveyVault([island.focus]).counts[0]
+        island.notesMark = libraryMilestone(island.notes)
+        this.emit({
+            kind: 'island',
+            islandId: island.id,
+            biome: island.biome,
+            title: `You reached ${name}!`,
+            subtitle: 'Built plank by plank, out of your own focus. It grows from here with every minute you give its subject.',
+            ...earned,
+            lines,
+        })
+    }
+
+    private masterIsland(g: GamificationData, island: Island, level: number): void {
+        const earned = this.grant(g, masteryReward(level))
+        const lines: RewardLine[] = [{ label: `${formatMinutes(island.minutes)} of focus on ${focusLabel(island.focus)}`, ...earned }]
+        if (ISLAND_LAND_LEVELS.includes(level)) {
+            const size = islandLandSize(level)
+            lines.push({ label: `🧱 The island grew to ${size}×${size}` })
+        }
+        this.emit({
+            kind: 'island',
+            islandId: island.id,
+            biome: island.biome,
+            title: `${islandName(island)} is now a ${masteryTitle(level)}`,
+            subtitle: `Mastery ${level}. What you keep returning to keeps growing.`,
+            ...earned,
+            lines,
+        })
+    }
+
+    /**
+     * Counts the vault's notes per tag and folder, and how many belong to each of `focuses`.
+     * One pass over the metadata cache; nothing is read from disk.
+     */
+    private surveyVault(focuses: (IslandFocus | null)[] = []): VaultSurvey & { counts: number[] } {
+        const out = { tags: {} as Record<string, number>, folders: {} as Record<string, number>, total: 0, counts: focuses.map(() => 0) }
+        const app = this.plugin.app
+        const files = app?.vault?.getMarkdownFiles?.() ?? []
+        const links = app?.metadataCache?.resolvedLinks ?? {}
+        for (const file of files) {
+            out.total += 1
+            const cache = app.metadataCache.getFileCache(file)
+            const tags = cache ? Array.from(new Set((getAllTags(cache) ?? []).map((t) => t.toLowerCase()))) : []
+            for (const tag of tags) out.tags[tag] = (out.tags[tag] || 0) + 1
+            const parts = file.path.split('/').slice(0, -1)
+            parts.forEach((_, i) => {
+                const folder = parts.slice(0, i + 1).join('/')
+                out.folders[folder] = (out.folders[folder] || 0) + 1
+            })
+            if (!focuses.length) continue
+            const ctx: SessionContext = { tags, notePath: file.path, linked: Object.keys(links[file.path] ?? {}) }
+            focuses.forEach((focus, i) => {
+                if (focus && focusRate(focus, ctx) > 0) out.counts[i] += 1
+            })
+        }
+        return out
+    }
+
+    /** What an island could stand for, read from where the focus has gone lately and where the notes are. */
+    public suggestIslandFocus(limit = 6): FocusSuggestion[] {
+        return suggestFocuses(this.state, this.surveyVault(), dateKey(), limit)
+    }
+
+    /** The vault's tags and folders, fullest first, for the pickers. */
+    public vaultIndex(limit = 200): { tags: string[]; folders: string[] } {
+        const survey = this.surveyVault()
+        const top = (counts: Record<string, number>) =>
+            Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([name]) => name)
+        return { tags: top(survey.tags), folders: top(survey.folders) }
+    }
+
+    /** Gives a sighted island its meaning, or changes it. Bridge and mastery are kept either way. */
+    public chartIsland(id: string, focus: IslandFocus): boolean {
+        const clean: IslandFocus | null =
+            focus.kind === 'any' ? { kind: 'any' }
+            : focus.kind === 'tag' ? (cleanTag(focus.value) ? { kind: 'tag', value: cleanTag(focus.value) } : null)
+            : focus.kind === 'folder' ? { kind: 'folder', value: cleanFolder(focus.value) }
+            : focus.value ? { kind: 'note', value: focus.value } : null
+        const g0 = this.state
+        const island = getIsland(g0, id)
+        if (!island || !clean) return false
+        if (g0.islands.some((i) => i.id !== id && focusKey(i.focus) === focusKey(clean))) {
+            new Notice(`Another island already stands for ${focusLabel(clean)}.`)
+            return false
+        }
+        const notes = this.surveyVault([clean]).counts[0]
+        this.mutate((g) => {
+            const target = getIsland(g, id)
+            if (!target) return
+            target.focus = clean
+            target.notes = notes
+            if (isReached(target)) target.notesMark = Math.max(target.notesMark, libraryMilestone(notes))
+            this.progressQuests(g, 'village_action', 1)
+        })
+        return true
+    }
+
+    public renameIsland(id: string, name: string): void {
+        if (!getIsland(this.state, id)) return
+        this.mutate((g) => {
+            const island = getIsland(g, id)
+            if (island) island.name = name.trim().slice(0, 40)
+        })
+    }
+
+    /**
+     * Looks at how many notes each island's subject holds now. A reached island celebrates the
+     * milestones its library passes. Cheap enough to call whenever the islands are looked at.
+     */
+    public refreshIslandLibraries(): void {
+        const islands = this.state.islands || []
+        if (!islands.some((i) => i.focus)) return
+        const { counts } = this.surveyVault(islands.map((i) => i.focus))
+        if (islands.every((island, i) => !island.focus || island.notes === counts[i])) return
+        let celebrated = false
+        this.mutate((g) => {
+            g.islands.forEach((island, i) => {
+                if (!island.focus) return
+                island.notes = counts[i]
+                const mark = libraryMilestone(island.notes)
+                if (!isReached(island) || mark <= island.notesMark) return
+                island.notesMark = mark
+                celebrated = true
+                const earned = this.grant(g, libraryReward(mark))
+                this.emit({
+                    kind: 'island',
+                    islandId: island.id,
+                    biome: island.biome,
+                    title: `📚 ${islandName(island)} holds ${mark} notes`,
+                    subtitle: `Your notes on ${focusLabel(island.focus)} are becoming a library.`,
+                    ...earned,
+                    lines: [],
+                })
+            })
+        }, { persist: false })
+        // The count is worked out again whenever it is needed; only a celebration has to be saved
+        if (celebrated) this.storage.markChanged()
+    }
+
+    // -----------------------------------------------------------------------
     // Nursery, market & village building
     // -----------------------------------------------------------------------
 
@@ -1462,16 +1742,20 @@ export default class ForestEngine {
         return g.homestead.filter((i) => i.itemType === 'building' && i.itemId === buildingId).length + (g.inventory[`building:${buildingId}`] || 0)
     }
 
-    private isFree(g: GamificationData, x: number, y: number, ignoreId?: string): boolean {
-        if (x < 0 || y < 0 || x >= g.landSize || y >= g.landSize) return false
-        return !g.homestead.some((i) => i.id !== ignoreId && i.gridX === x && i.gridY === y)
+    /** A tile of an island's land (the home village for `null`) with nothing on it. */
+    private isFree(g: GamificationData, x: number, y: number, ignoreId?: string, islandId: string | null = null): boolean {
+        const size = landSizeOf(g, islandId)
+        if (x < 0 || y < 0 || x >= size || y >= size) return false
+        return !itemsOn(g, islandId).some((i) => i.id !== ignoreId && i.gridX === x && i.gridY === y)
     }
 
-    /** Place an inventory item (`tree:<id>` or `building:<id>`) onto a tile. */
-    public placeFromInventory(key: string, gridX: number, gridY: number): boolean {
+    /** Place an inventory item (`tree:<id>` or `building:<id>`) onto a tile of the home village, or of a reached island. */
+    public placeFromInventory(key: string, gridX: number, gridY: number, islandId: string | null = null): boolean {
         const g0 = this.state
         if (!(g0.inventory[key] > 0)) return false
-        if (!this.isFree(g0, gridX, gridY)) {
+        const island = getIsland(g0, islandId)
+        if (islandId && !(island && isReached(island))) return false
+        if (!this.isFree(g0, gridX, gridY, undefined, islandId)) {
             new Notice('That tile is taken — pick an empty one.')
             return false
         }
@@ -1491,14 +1775,17 @@ export default class ForestEngine {
                 level: 1,
                 // A new plot is sown right away, so there is always something growing
                 ...(itemType === 'building' && itemId === GARDEN_PLOT_ID ? { cropId: CROPS[0].id, cropGrowth: 0 } : {}),
+                ...(islandId ? { island: islandId } : {}),
             })
             this.progressQuests(g, 'village_action', 1)
         })
         return true
     }
 
+    /** Moves a placed item to another tile of the island it stands on. */
     public moveHomesteadItem(id: string, newX: number, newY: number): boolean {
-        if (!this.isFree(this.state, newX, newY, id)) return false
+        const placed = this.state.homestead.find((i) => i.id === id)
+        if (!placed || !this.isFree(this.state, newX, newY, id, placed.island || null)) return false
         this.mutate((g) => {
             const item = g.homestead.find((i) => i.id === id)
             if (item) {

@@ -144,3 +144,122 @@ export function mainArea(grid: VillageGrid): Tile[] {
     }
     return best
 }
+
+// ---------------------------------------------------------------------------
+// Water: what a brook joins, where a bridge points, and where it leaves the island
+// ---------------------------------------------------------------------------
+
+/** A bridge has water under it, so brooks run straight through one. */
+export function isWater(grid: VillageGrid, x: number, y: number): boolean {
+    const kind = kindAt(grid, x, y)
+    return kind === 'water' || kind === 'bridge'
+}
+
+/** Solid ground a bridge can land on: anything on the island that is not water. */
+function isBank(grid: VillageGrid, x: number, y: number): boolean {
+    return kindAt(grid, x, y) !== null && !isWater(grid, x, y)
+}
+
+/**
+ * The four sides of a tile, named by where they are on screen: `nw` faces (x − 1, y),
+ * `ne` faces (x, y − 1), `se` faces (x + 1, y) and `sw` faces (x, y + 1).
+ */
+export type TileSide = 'nw' | 'ne' | 'se' | 'sw'
+
+export const SIDE_STEP: Record<TileSide, [number, number]> = { nw: [-1, 0], ne: [0, -1], se: [1, 0], sw: [0, 1] }
+
+/** What lies past one side of a water tile: more water, a bank, or the island's edge. */
+export type WaterSide = 'water' | 'bank' | 'edge'
+
+/** A water tile's four sides, so a brook is drawn as one stream with banks only against land. */
+export function waterSides(grid: VillageGrid, x: number, y: number): Record<TileSide, WaterSide> {
+    const side = (s: TileSide): WaterSide => {
+        const nx = x + SIDE_STEP[s][0]
+        const ny = y + SIDE_STEP[s][1]
+        return kindAt(grid, nx, ny) === null ? 'edge' : isWater(grid, nx, ny) ? 'water' : 'bank'
+    }
+    return { nw: side('nw'), ne: side('ne'), se: side('se'), sw: side('sw') }
+}
+
+/** `x`: the deck runs between the tile's nw and se sides. `y`: between its ne and sw sides. */
+export type BridgeAxis = 'x' | 'y'
+
+/** Where a bridge tile sits in a straight run of bridges: ramps at the ends, level in between. */
+export type BridgeSpan = 'single' | 'start' | 'mid' | 'end'
+
+export interface BridgeLayout {
+    axis: BridgeAxis
+    /** `start` is the end with the lower coordinate. */
+    span: BridgeSpan
+}
+
+interface AxisScore {
+    /** Ends of the bridge run that land on solid ground (0–2). */
+    banks: number
+    /** Sides of this tile that the stream runs through, across the deck (0–2). */
+    crossing: number
+    /** Bridge tiles in the straight run, this one included. */
+    run: number
+}
+
+function scoreAxis(grid: VillageGrid, x: number, y: number, axis: BridgeAxis): AxisScore {
+    const [dx, dy] = axis === 'x' ? [1, 0] : [0, 1]
+    let banks = 0
+    let run = 1
+    for (const dir of [-1, 1]) {
+        let step = 1
+        while (kindAt(grid, x + dx * dir * step, y + dy * dir * step) === 'bridge') step++
+        run += step - 1
+        if (isBank(grid, x + dx * dir * step, y + dy * dir * step)) banks++
+    }
+    // The stream a bridge crosses flows along the other axis
+    const crossing = [-1, 1].filter((dir) => isWater(grid, x + dy * dir, y + dx * dir)).length
+    return { banks, crossing, run }
+}
+
+/**
+ * The way a bridge points: along the axis whose two ends are banks, so it spans the water
+ * between land. With nothing to choose between, it crosses the stream flowing past it, then
+ * lines up with the bridges next to it.
+ */
+export function bridgeAxis(grid: VillageGrid, x: number, y: number): BridgeAxis {
+    const a = scoreAxis(grid, x, y, 'x')
+    const b = scoreAxis(grid, x, y, 'y')
+    if (a.banks !== b.banks) return a.banks > b.banks ? 'x' : 'y'
+    if (a.crossing !== b.crossing) return a.crossing > b.crossing ? 'x' : 'y'
+    if (a.run !== b.run) return a.run > b.run ? 'x' : 'y'
+    return 'x'
+}
+
+/** A bridge tile's axis, and its place among the bridges lined up with it. */
+export function bridgeLayout(grid: VillageGrid, x: number, y: number): BridgeLayout {
+    const axis = bridgeAxis(grid, x, y)
+    const [dx, dy] = axis === 'x' ? [1, 0] : [0, 1]
+    const continues = (dir: number) =>
+        kindAt(grid, x + dx * dir, y + dy * dir) === 'bridge' && bridgeAxis(grid, x + dx * dir, y + dy * dir) === axis
+    const before = continues(-1)
+    const after = continues(1)
+    return { axis, span: before && after ? 'mid' : before ? 'end' : after ? 'start' : 'single' }
+}
+
+export interface WaterEdge extends Tile {
+    side: TileSide
+    /** The two lower edges on screen (`se`, `sw`): the fall is in full view. */
+    front: boolean
+}
+
+/** Every place water reaches the island's edge and pours over it, back edges first. */
+export function waterEdges(grid: VillageGrid): WaterEdge[] {
+    const last = grid.size - 1
+    const edges: WaterEdge[] = []
+    for (let y = 0; y < grid.size; y++) {
+        for (let x = 0; x < grid.size; x++) {
+            if (!isWater(grid, x, y)) continue
+            if (x === 0) edges.push({ x, y, side: 'nw', front: false })
+            if (y === 0) edges.push({ x, y, side: 'ne', front: false })
+            if (x === last) edges.push({ x, y, side: 'se', front: true })
+            if (y === last) edges.push({ x, y, side: 'sw', front: true })
+        }
+    }
+    return edges.sort((a, b) => Number(a.front) - Number(b.front) || a.x + a.y - (b.x + b.y))
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
 import { afterUpdate, createEventDispatcher, onDestroy, onMount } from 'svelte'
-import { gamificationStore, pluginInstance, clockMinute, settings, charm, vitality, levelInfo, charter } from '../stores'
+import { gamificationStore, pluginInstance, clockMinute, settings, charm, vitality, levelInfo, charter, viewedIsland } from '../stores'
 import { renderVillage, homesteadItemSprite, sceneLayout, tileAtPoint } from '../render/VillageScene'
 import VillageLife from '../render/VillageLife'
 import { SPECIES_SVGS, BUILDING_SVGS, BIOME_CONFIGS, ICONS, cropSvg } from '../assets/floraAssets'
@@ -13,11 +13,15 @@ import { CHARTER_RANKS } from '../services/Charter'
 import { getTreasure } from '../assets/treasureCatalog'
 import { HEART_STAGES, heartStage } from '../services/HeartTree'
 import HeartTreeCard from './HeartTreeCard.svelte'
+import {
+    ISLAND_LAND_LEVELS, bridgeProgress, focusLabel, frontier, getIsland, islandLandSize, islandLinks, islandName, islandView, isReached,
+    masteryTitle, reachedIslands,
+} from '../services/Islands'
 import type { BiomeType, PlacedHomesteadItem, RewardEvent } from '../types/forest'
 
 export let full = false
 
-const dispatch = createEventDispatcher<{ market: void; journey: void }>()
+const dispatch = createEventDispatcher<{ market: void; journey: void; isles: void }>()
 const engine = pluginInstance?.forestEngine
 const sceneId = `pfv${Math.random().toString(36).slice(2, 7)}`
 
@@ -25,7 +29,15 @@ let selectedId: string | null = null
 let placingKey: string | null = null
 let movingId: string | null = null
 
-$: g = $gamificationStore
+// The village tab shows one island at a time: the home village, or a reached island. Everything
+// below works on that island's view of the game (its own land, ground and items).
+$: world = $gamificationStore
+$: here = getIsland(world, $viewedIsland)
+$: islandId = here && isReached(here) ? here.id : null
+$: g = islandView(world, islandId)
+$: reached = reachedIslands(world)
+$: horizon = frontier(world)
+$: horizonBridge = horizon ? bridgeProgress(horizon) : null
 $: selected = g.homestead.find((i) => i.id === selectedId) || null
 // The sky only needs to move every few minutes; re-rendering less keeps things calm
 $: skySlot = Math.floor($clockMinute.getTime() / 300_000)
@@ -40,7 +52,12 @@ $: sceneHtml = renderVillage(g, {
     still: $settings.lowFps,
     idPrefix: sceneId,
     liveActors: live,
-    pickups: true,
+    // Finds are left in the home village
+    pickups: !islandId,
+    island: islandId,
+    seed: islandId ?? undefined,
+    // The bridges to the neighbouring islands need room around the island: only the full page has it
+    links: full ? islandLinks(world, islandId) : [],
 })
 
 const life = new VillageLife()
@@ -154,7 +171,8 @@ $: inventory = Object.entries(g.inventory)
     })
     .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'building' ? -1 : 1))
 
-$: nextLand = LAND_EXPANSIONS.find((l) => l.size === g.landSize + 1)
+$: nextLand = islandId ? undefined : LAND_EXPANSIONS.find((l) => l.size === g.landSize + 1)
+$: islandNextLand = here && islandId ? ISLAND_LAND_LEVELS.find((l) => l > here.level && islandLandSize(l) > islandLandSize(here.level)) : undefined
 $: freeTiles = g.landSize * g.landSize - g.homestead.filter((i) => i.gridX < g.landSize && i.gridY < g.landSize).length
 $: placingName = placingKey ? inventory.find((i) => i.key === placingKey)?.name : ''
 
@@ -190,6 +208,7 @@ const CHEERS: Partial<Record<RewardEvent['kind'], string>> = {
     request: 'Thank you, neighbour!',
     treasure: 'Ooh, what did you find?',
     heart: 'That tree of yours looks happy.',
+    island: 'Land ho!',
 }
 const cheered = new Set<string>()
 let watching = false
@@ -227,6 +246,12 @@ function onSceneClick(e: MouseEvent) {
         life.poke(actor.getAttribute('data-actor') || '')
         return
     }
+    // A bridge leads somewhere: across it when it is finished, to the map while it is being built
+    const link = (e.target as Element).closest('[data-link]')
+    if (link && !placingKey && !movingId) {
+        travel(link.getAttribute('data-link') || 'home')
+        return
+    }
     const el = (e.target as Element).closest('[data-x]')
     if (!el || !engine) {
         cancelModes()
@@ -243,7 +268,7 @@ function onSceneClick(e: MouseEvent) {
             return
         }
         const key = placingKey
-        if (engine.placeFromInventory(key, x, y)) {
+        if (engine.placeFromInventory(key, x, y, islandId)) {
             // Keep laying paths/brooks/saplings while there are more of the same
             if (!(($gamificationStore.inventory[key] ?? 0) > 0)) placingKey = null
             selectedId = null
@@ -458,7 +483,23 @@ function onKey(e: KeyboardEvent) {
     }
 }
 
-const BIOME_IDS = Object.keys(BIOME_UNLOCK_LEVELS) as BiomeType[]
+// Biomes earned by level, then the ones brought home from islands
+$: BIOME_IDS = [
+    ...(Object.keys(BIOME_UNLOCK_LEVELS) as BiomeType[]),
+    ...world.unlockedBiomes.filter((b) => BIOME_UNLOCK_LEVELS[b] === undefined),
+]
+
+/** Go to an island (or home, for `home`). One that is not reached yet opens the map instead. */
+function travel(key: string) {
+    const target = key === 'home' ? null : getIsland(world, key)
+    if (target && !isReached(target)) {
+        dispatch('isles')
+        return
+    }
+    cancelModes()
+    selectedId = null
+    viewedIsland.set(target ? target.id : null)
+}
 
 function selectBiome(id: BiomeType) {
     engine?.selectBiome(id)
@@ -482,21 +523,51 @@ $: isHeart = !!selected && selected.itemType === 'tree' && g.heartTree?.itemId =
 </script>
 
 <div class="pf-village" class:full>
-    <div class="village-head">
-        <div class="biomes">
-            {#each BIOME_IDS as id}
-                {@const conf = BIOME_CONFIGS[id]}
-                {@const unlocked = g.unlockedBiomes.includes(id)}
-                <button
-                    class="biome {id === g.activeBiome ? 'active' : ''}"
-                    class:locked={!unlocked}
-                    title={unlocked ? `${conf.name}: ${conf.description}` : `${conf.name} — unlocks at level ${BIOME_UNLOCK_LEVELS[id]}`}
-                    on:click={() => selectBiome(id)}>
-                    <span class="swatch biome-{id}"></span>{#if full}{conf.name}{/if}
-                    {#if !unlocked}<span class="lock">🔒</span>{/if}
+    {#if world.islands?.length}
+        <div class="isles">
+            <button class="isle" class:active={!islandId} on:click={() => travel('home')}>🏡 Home</button>
+            {#each reached as isle (isle.id)}
+                <button class="isle" class:active={islandId === isle.id} title="{islandName(isle)}: {masteryTitle(isle.level)}, mastery {isle.level}" on:click={() => travel(isle.id)}>
+                    <span class="swatch biome-{isle.biome}"></span>{islandName(isle)}
                 </button>
             {/each}
+            {#if horizon && horizonBridge}
+                <button
+                    class="isle far"
+                    title={horizon.focus ? `The bridge to ${islandName(horizon)} grows with focus on ${focusLabel(horizon.focus)}` : 'An island is in sight. Decide what it stands for.'}
+                    on:click={() => dispatch('isles')}>
+                    {#if horizon.focus}
+                        🪵 {islandName(horizon)}<span class="chip-prog">{Math.floor(horizonBridge.laid)}/{horizonBridge.target}</span>
+                    {:else}
+                        🧭 Land sighted<span class="chip-prog">chart it</span>
+                    {/if}
+                </button>
+            {/if}
         </div>
+    {/if}
+    <div class="village-head">
+        {#if here && islandId}
+            <div class="isle-title">
+                <span class="swatch biome-{here.biome}"></span>
+                <strong>{islandName(here)}</strong>
+                <span class="muted">{BIOME_CONFIGS[here.biome]?.name} · {masteryTitle(here.level)} · {focusLabel(here.focus)}</span>
+            </div>
+        {:else}
+            <div class="biomes">
+                {#each BIOME_IDS as id}
+                    {@const conf = BIOME_CONFIGS[id]}
+                    {@const unlocked = g.unlockedBiomes.includes(id)}
+                    <button
+                        class="biome {id === g.activeBiome ? 'active' : ''}"
+                        class:locked={!unlocked}
+                        title={unlocked ? `${conf.name}: ${conf.description}` : `${conf.name} — unlocks at level ${BIOME_UNLOCK_LEVELS[id]}`}
+                        on:click={() => selectBiome(id)}>
+                        <span class="swatch biome-{id}"></span>{#if full}{conf.name}{/if}
+                        {#if !unlocked}<span class="lock">🔒</span>{/if}
+                    </button>
+                {/each}
+            </div>
+        {/if}
         <div class="village-stats">
             {#if ripeCount}
                 <button class="harvest-all" title="Pick every ripe crop" on:click={() => harvest()}>🧺 Harvest {ripeCount}</button>
@@ -718,6 +789,12 @@ $: isHeart = !!selected && selected.itemType === 'tree' && g.heartTree?.itemId =
                 {/if}
             </div>
 
+            {#if here && islandId}
+                <div class="land">
+                    <span>🧱 {g.landSize}×{g.landSize} of island</span>
+                    <span class="muted">{islandNextLand ? `Grows at mastery ${islandNextLand}` : 'As large as an island gets'}</span>
+                </div>
+            {/if}
             {#if nextLand}
                 <div class="land">
                     <span>🧭 Expand to {nextLand.size}×{nextLand.size}</span>
@@ -781,6 +858,42 @@ $: isHeart = !!selected && selected.itemType === 'tree' && g.heartTree?.itemId =
 .biome-autumn_valley { background: linear-gradient(135deg, #f0a24a, #c6743f); }
 .biome-alpine_frost { background: linear-gradient(135deg, #ffffff, #a4bccd); }
 .biome-twilight_moss { background: linear-gradient(135deg, #7df9ff, #3f4d8f); }
+.biome-coral_lagoon { background: linear-gradient(135deg, #f1dfae, #63c1bd); }
+.biome-ember_highlands { background: linear-gradient(135deg, #ff9a3d, #4a3836); }
+.biome-jade_marsh { background: linear-gradient(135deg, #a8d8c4, #3f866f); }
+.isles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.isle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: auto;
+    padding: 3px 9px;
+    font-size: 0.72rem;
+    border-radius: 99px;
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.isle.active {
+    font-weight: 700;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+.isle.far { border-style: dashed; color: var(--text-muted); }
+.isle-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 0.82rem;
+}
+.isle-title .muted { font-size: 0.7rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .village-stats {
     display: flex;
     align-items: center;

@@ -163,7 +163,7 @@ test('finds wait in the village: a handful shown, the rest queued, each on its o
     assert.deepEqual(got.map((p) => p.id), ['p0'])
     assert.equal(t.g.satchel.spring_water, 1)
     assert.equal(t.g.pickups.length, 6)
-    assert.equal(t.events[t.events.length - 1].minor, true, 'a care item is a passing toast')
+    assert.equal(t.events.filter((e) => e.kind === 'treasure').pop()?.minor, true, 'a care item is a passing toast')
     t.engine.collectPickups()
     assert.equal(t.g.satchel.spring_water, 7)
     assert.equal(t.g.pickups.length, 0)

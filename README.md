@@ -135,7 +135,19 @@ Your village mirrors your real-world environment. Watch the sky transition from 
 
 ---
 
-## Five biomes, eleven species, two dozen buildings
+## Islands for the things you care about
+
+Your village is only the first island. Each island beyond it stands for a part of your vault that **you** choose: a tag like `#thesis`, a project folder, or a hub note. The only way across is a bridge built from focus on exactly that. Once you land, the island grows with every minute you give its subject and every note you write about it, and the next island appears on the horizon. There is no last one.
+
+- **Smart suggestions** read your own focus history, tags and folders to propose what an island could stand for.
+- **Mastery without a ceiling**: more land, a stronger Sunlight bonus and new ground the more you return.
+- **New biomes** found only out there: Coral Lagoon, Ember Highlands and Jade Marsh.
+
+[Read more on the archipelago →](docs/GUIDE.md#the-archipelago-islands-for-the-things-you-work-on)
+
+---
+
+## Eight biomes, eleven species, two dozen buildings
 
 As you focus, you gain XP and level up, unlocking a rich catalogue of flora and architecture—from the Classic Pine and Golden Birch to the mystical Celestial Gold Tree.
 

@@ -21,6 +21,7 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
   - [Garden plots and crops](#garden-plots-and-crops)
   - [Villagers and hens](#villagers-and-hens)
 - [The Village Charter](#the-village-charter)
+- [The archipelago: islands for the things you work on](#the-archipelago-islands-for-the-things-you-work-on)
 - [Neighbours and their requests](#neighbours-and-their-requests)
 - [The Heart Tree and mission finds](#the-heart-tree-and-mission-finds)
   - [Finds and picking them up](#finds-and-picking-them-up)
@@ -47,7 +48,8 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 4. **Spend and place.** Buy buildings, plant your saplings, upgrade things. Perks make the next session pay more.
 5. **Come back tomorrow.** Fresh quests, a streak to keep, and a village that is happiest when you visit.
 6. **Aim further.** The [Village Charter](#the-village-charter) turns all of it into a long arc: your settlement rises from a Clearing to a City, one chapter at a time, while its [neighbours](#neighbours-and-their-requests) ask small favours along the way.
-7. **Look after one tree.** Missions leave care items and ornaments in the village; pick them up and use them on your [Heart Tree](#the-heart-tree-and-mission-finds).
+7. **Cross the water.** Beyond the village lie [islands](#the-archipelago-islands-for-the-things-you-work-on), each standing for a part of your vault. Focus on that part builds the bridge; there is always another island after it.
+8. **Look after one tree.** Missions leave care items and ornaments in the village; pick them up and use them on your [Heart Tree](#the-heart-tree-and-mission-finds).
 
 ## Opening things
 
@@ -307,6 +309,28 @@ Quests are for today; the charter is for the months ahead. Your settlement climb
 - Finishing a chapter ranks the village up: Sunlight, Coins and XP, a new resident, and a **landmark you can only get this way** (Hamlet Signpost, Notice Board, Market Stall, Clock Tower, Town Hall, Founders' Fountain). They are listed under *Builders* in the market, but never for sale.
 - **Nothing is taken away.** Goals count your whole history, streak goals use your *longest* streak (a missed day never undoes one), and a goal you've met stays ticked even if you stow the building later. Ranks are never lost.
 - Played before the charter existed? Your history counts: on the first launch the village climbs every chapter it has already earned, with one celebration for all of them.
+- **The charter does not end at City.** After the last rank the chapters carry on (more hours, more tasks, more requests, more islands and island mastery), and each one signed adds a star to the city: *City ★1*, *City ★2*… Each is a step further than the last, never a leap.
+
+## The archipelago: islands for the things you work on
+
+Your village is the first island. From **level 2** another one comes into view, and it is yours to give a meaning: open the **Isles** tab and decide what it stands for.
+
+| An island can stand for | What counts toward it |
+|---|---|
+| **A tag**, e.g. `#thesis` | Sessions on a task or note carrying the tag (nested tags too: `#thesis/ch2`) |
+| **A folder**, e.g. `Projects/Thesis` | Sessions on a note in that folder or below it |
+| **A hub note**, e.g. a map of content | Sessions on that note, or on any note that links to it |
+| **Any focus** | Every session, at half pace, if you would rather not pick |
+
+The Isles tab suggests subjects from your own vault: where your focus has gone over the last weeks, and which tags and folders hold the most notes.
+
+- **The bridge is built by focus on that subject, and nothing else.** Every minute lays planks (the first bridge takes 75 minutes, each later one a bit more), and a finished task on the subject lays a plank as well. The reward card after a session tells you how far it got, and the timer shows which island the running session is building toward.
+- **Landing.** When the bridge is finished the island is yours: its own 4×4 of land to build on, a biome of its own (three of them, Coral Lagoon, Ember Highlands and Jade Marsh, exist only out there, and come home with you as a ground for the village too), and a Sunlight bonus on every later session spent on its subject.
+- **Mastery never tops out.** Each island keeps counting the minutes you give its subject. Mastery levels bring Sunlight, Coins and XP, a stronger bonus (5% rising to 25%), and more land: an island grows from 4×4 to 8×8 as you return to it. Land on an island is never bought.
+- **The library.** An island also counts the notes its subject holds. Milestones (5, 10, 25, 50, 100… notes) passed after you land are celebrated: writing notes on the things you study literally grows the place.
+- **One at a time, without end.** There is always exactly one island on the horizon. Reach it and the next one is sighted. Bridges, mastery and the charter's later chapters have no last step.
+- **Moving around.** Chips above the village switch between home and your islands, and so does clicking a bridge in the scene. Buildings and trees are placed on whichever island you are looking at; perks and charm count across all of them.
+- **Changing your mind.** An island's subject can be changed, and the island renamed, at any time. Bridge planks and mastery are kept.
 
 ## Neighbours and their requests
 

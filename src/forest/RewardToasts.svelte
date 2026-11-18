@@ -5,6 +5,7 @@ import { backOut } from 'svelte/easing'
 import { pluginInstance } from '../stores'
 import { SPECIES_SVGS, GROWTH_STAGE_SVGS, ICONS, BUILDING_SVGS, VILLAGER_SVGS, TREASURE_SVGS, growthSvg } from '../assets/floraAssets'
 import { getResident } from '../services/Neighbours'
+import { islandIconSvg } from '../render/ArchipelagoMap'
 import type { RewardEvent } from '../types/forest'
 import { writable } from 'svelte/store'
 
@@ -15,7 +16,7 @@ export let hide: (e: RewardEvent) => boolean = () => false
 
 /** Small things get a passing toast; everything else gets a card. */
 const isToast = (e: RewardEvent) => e.kind === 'task' || e.kind === 'break' || e.kind === 'crop' || !!e.minor
-const TOAST_ICONS: Record<string, string> = { task: '✅', break: '🍵', crop: '🧺', treasure: '✨', heart: '🌳' }
+const TOAST_ICONS: Record<string, string> = { task: '✅', break: '🍵', crop: '🧺', treasure: '✨', heart: '🌳', island: '🏝️' }
 
 $: small = $events.filter((e) => isToast(e) && !hide(e)).slice(-3)
 $: card = $events.find((e) => !isToast(e))
@@ -26,7 +27,7 @@ $: card, $events.forEach(schedule)
 
 function schedule(e: RewardEvent) {
     if (timers.has(e.id)) return
-    const ms = isToast(e) ? 3800 : e.kind === 'levelup' || e.kind === 'chest' ? 12000 : e.kind === 'rank' ? 16000 : 9000
+    const ms = isToast(e) ? 3800 : e.kind === 'levelup' || e.kind === 'chest' ? 12000 : e.kind === 'rank' || e.kind === 'island' ? 16000 : 9000
     // Cards wait their turn: the clock only starts once the card is on screen
     if (!isToast(e) && card?.id !== e.id) return
     timers.set(e.id, window.setTimeout(() => dismiss(e.id), ms))
@@ -49,6 +50,7 @@ function art(e: RewardEvent): string {
     if (e.kind === 'treasure') return (e.treasureId && TREASURE_SVGS[e.treasureId]) || ICONS.star
     if (e.kind === 'heart') return (e.speciesId && SPECIES_SVGS[e.speciesId]) || ICONS.sapling
     if (e.kind === 'rank') return (e.buildingId && BUILDING_SVGS[e.buildingId]) || ICONS.charter
+    if (e.kind === 'island') return islandIconSvg(e.biome || 'meadow')
     if (e.kind === 'request') {
         const resident = e.residentId ? getResident(e.residentId) : undefined
         return resident ? VILLAGER_SVGS[resident.variant % VILLAGER_SVGS.length] : ICONS.star
@@ -79,11 +81,12 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
         <div class="pf-card-wrap" transition:fade={{ duration: 180 }}>
             <div class="pf-card {card.kind}" in:scale={{ start: 0.7, duration: 420, easing: backOut }}>
                 {#if card.kind !== 'wither'}<div class="rays"></div>{/if}
-                <div class="art {card.kind === 'harvest' || card.kind === 'early' || card.kind === 'rank' || card.kind === 'heart' || card.kind === 'treasure' ? 'grow' : ''} {card.kind === 'request' ? 'person' : ''} {card.kind === 'treasure' ? 'find' : ''}">{@html art(card)}</div>
+                <div class="art {card.kind === 'harvest' || card.kind === 'early' || card.kind === 'rank' || card.kind === 'heart' || card.kind === 'treasure' || card.kind === 'island' ? 'grow' : ''} {card.kind === 'request' ? 'person' : ''} {card.kind === 'treasure' ? 'find' : ''}">{@html art(card)}</div>
                 {#if card.levelUp}<div class="lvl-num">Level {card.levelUp}</div>{/if}
                 {#if card.rank}<div class="rank-eyebrow">Village Charter</div><div class="rank-name">{card.rank}</div>{/if}
                 {#if card.kind === 'treasure'}<div class="rank-eyebrow">Only from missions</div>{/if}
                 {#if card.kind === 'heart'}<div class="rank-eyebrow heart-eyebrow">Heart Tree</div>{/if}
+                {#if card.kind === 'island'}<div class="rank-eyebrow">The archipelago</div>{/if}
                 <h3>{card.title}</h3>
                 {#if card.subtitle}<p class="sub">{card.subtitle}</p>{/if}
                 {#if card.sunlight || card.coins || card.xp}
@@ -101,7 +104,7 @@ function amounts(l: { sunlight?: number; coins?: number; xp?: number }): string 
                     </ul>
                 {/if}
                 <button class="ok" on:click={() => dismiss(card?.id ?? '')}>
-                    {card.kind === 'wither' ? 'Plant another seed' : card.kind === 'levelup' ? 'Wonderful!' : card.kind === 'rank' ? 'Onward' : card.kind === 'request' ? 'You’re welcome' : 'Lovely'}
+                    {card.kind === 'wither' ? 'Plant another seed' : card.kind === 'levelup' ? 'Wonderful!' : card.kind === 'rank' || card.kind === 'island' ? 'Onward' : card.kind === 'request' ? 'You’re welcome' : 'Lovely'}
                 </button>
             </div>
         </div>

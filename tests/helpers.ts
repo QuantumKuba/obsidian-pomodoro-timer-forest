@@ -4,7 +4,7 @@ import { dateKey, xpForLevel } from '../src/services/Progression'
 import type { GamificationData, PlacedHomesteadItem, RewardEvent } from '../src/types/forest'
 
 /** A ForestEngine on in-memory game state, with no Obsidian behind it. */
-export function makeEngine(setup: (g: GamificationData) => void = () => {}, settings: Record<string, unknown> = {}) {
+export function makeEngine(setup: (g: GamificationData) => void = () => {}, settings: Record<string, unknown> = {}, app: Record<string, unknown> = {}) {
     let g = freshGamificationData()
     g.xp = xpForLevel(4)
     g.sunlight = 5000
@@ -32,7 +32,7 @@ export function makeEngine(setup: (g: GamificationData) => void = () => {}, sett
             ...settings,
         }),
         hasVisibleForestView: () => true,
-        app: {},
+        app,
         manifest: { version: 'test' },
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

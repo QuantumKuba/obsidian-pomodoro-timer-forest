@@ -2,6 +2,7 @@ import type { GamificationData } from '../types/forest'
 import { getSpecies } from '../assets/floraCatalog'
 import { BIOME_CONFIGS, plantedTreeSvg } from '../assets/floraAssets'
 import { renderGrove, renderVillage } from '../render/VillageScene'
+import { islandView } from './Islands'
 import { ACHIEVEMENTS, dateKey, levelProgress, levelTitle, villageCharm, vitalityState } from './Progression'
 
 function esc(s: string): string {
@@ -16,7 +17,7 @@ export function generateStandaloneForestHtml(data: GamificationData, vaultName =
     const stats = data.lifetimeStats
     const today = data.dailyLogs[dateKey()]
 
-    const village = renderVillage(data, { embedCss: true, idPrefix: 'exv' })
+    const village = renderVillage(islandView(data, null), { embedCss: true, idPrefix: 'exv' })
     const grove = today?.trees.length ? renderGrove(today.trees, data.activeBiome, { idPrefix: 'exg' }) : ''
 
     const recent = Object.values(data.dailyLogs)

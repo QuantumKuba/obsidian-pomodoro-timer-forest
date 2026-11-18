@@ -13,6 +13,9 @@ export { gamificationStore }
 export const settings: Writable<Settings> = PomodoroSettings.settings
 export const activePlantStore: Writable<ActiveSessionPlant | null> = writable<ActiveSessionPlant | null>(null)
 
+/** The island the village tab is showing; null for the home village. Not saved: every visit starts at home. */
+export const viewedIsland: Writable<string | null> = writable<string | null>(null)
+
 // Derived helpers
 export const sunlight: Readable<number> = derived(gamificationStore, ($g) => $g.sunlight)
 export const coins: Readable<number> = derived(gamificationStore, ($g) => $g.coins)

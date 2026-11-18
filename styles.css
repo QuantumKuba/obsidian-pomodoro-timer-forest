@@ -94,8 +94,39 @@ If your plugin does not need CSS, delete this file.
 .pf-scene .pf-halo,
 .pf-scene .pf-firefly,
 .pf-scene .pf-butterfly,
-.pf-scene .pf-mist-layer {
+.pf-scene .pf-mist-layer,
+.pf-scene .pf-fall,
+.pf-scene .pf-fall-back,
+.pf-scene .pf-far,
+.pf-scene .pf-cloudsea {
     pointer-events: none;
+}
+
+/* Bridges to neighbouring islands: the whole bridge and the island beyond are one target */
+.pf-scene .pf-link[data-link] {
+    cursor: pointer;
+}
+
+.pf-scene .pf-link[data-link]:hover .pf-islet {
+    filter: brightness(1.1) drop-shadow(0 0 3px rgba(255, 255, 255, 0.7));
+}
+
+.pf-scene .pf-link-label {
+    font-family: var(--font-interface, system-ui, -apple-system, 'Segoe UI', sans-serif);
+    font-size: 9px;
+    font-weight: 600;
+    fill: #fffdf6;
+    stroke: #2b2118;
+    stroke-opacity: 0.6;
+    stroke-width: 2.2px;
+    paint-order: stroke;
+    pointer-events: none;
+}
+
+.pf-scene .pf-spray,
+.pf-scene .pf-float {
+    transform-box: fill-box;
+    transform-origin: center;
 }
 
 /* Villagers and hens that walk around (VillageLife) can be clicked */
@@ -267,6 +298,18 @@ If your plugin does not need CSS, delete this file.
     .pf-scene:not(.pf-still) .pf-mist {
         animation: pf-mist 12s ease-in-out infinite alternate;
     }
+    .pf-scene:not(.pf-still) .pf-float {
+        animation: pf-float 9s ease-in-out infinite alternate;
+    }
+    .pf-scene:not(.pf-still) .pf-billow {
+        animation: pf-mist 14s ease-in-out infinite alternate;
+    }
+    .pf-scene:not(.pf-still) .pf-falling {
+        animation: pf-fall 0.8s linear infinite;
+    }
+    .pf-scene:not(.pf-still) .pf-spray {
+        animation: pf-spray 2.6s ease-out infinite;
+    }
     .pf-scene:not(.pf-still) .pf-hit.pf-target,
     .pf-scene:not(.pf-still) .pf-hit.pf-drop-target {
         animation: pf-pulse 1.4s ease-in-out infinite;
@@ -308,6 +351,10 @@ If your plugin does not need CSS, delete this file.
     .pf-scene:not(.pf-still) .pf-firefly,
     .pf-scene:not(.pf-still) .pf-butterfly,
     .pf-scene:not(.pf-still) .pf-mist,
+    .pf-scene:not(.pf-still) .pf-float,
+    .pf-scene:not(.pf-still) .pf-billow,
+    .pf-scene:not(.pf-still) .pf-falling,
+    .pf-scene:not(.pf-still) .pf-spray,
     .pf-scene:not(.pf-still) .pf-swing,
     .pf-scene:not(.pf-still) .pf-ripe {
         animation-delay: calc(var(--t, 0s) + var(--d, 0s));
@@ -365,6 +412,19 @@ If your plugin does not need CSS, delete this file.
 @keyframes pf-mist {
     from { transform: translateX(-10px); }
     to { transform: translateX(10px); }
+}
+@keyframes pf-float {
+    from { transform: translateY(-1.5px); }
+    to { transform: translateY(2px); }
+}
+/* One dash and one gap (7 + 9) per loop, so the falling water never jumps */
+@keyframes pf-fall {
+    to { stroke-dashoffset: -16; }
+}
+@keyframes pf-spray {
+    0% { transform: scale(0.55); opacity: 0; }
+    30% { opacity: 0.6; }
+    100% { transform: scale(1.5) translateY(3px); opacity: 0; }
 }
 @keyframes pf-bob {
     from { transform: translateY(0); }

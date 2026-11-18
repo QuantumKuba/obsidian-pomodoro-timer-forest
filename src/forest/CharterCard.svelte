@@ -6,8 +6,8 @@ import { CHARTER_RANKS, residentJoining } from '../services/Charter'
 
 $: c = $charter
 $: reachedOn = $gamificationStore.charter?.reachedOn ?? {}
-$: landmark = c.chapter ? charterLandmark(c.rank + 1) : undefined
-$: newcomer = c.chapter ? residentJoining(c.rank + 1) : undefined
+$: landmark = c.legacy === null ? charterLandmark(c.rank + 1) : undefined
+$: newcomer = c.legacy === null ? residentJoining(c.rank + 1) : undefined
 
 function rankTitle(i: number): string {
     const r = CHARTER_RANKS[i]
@@ -21,7 +21,7 @@ function rankTitle(i: number): string {
     <div class="head">
         <span class="crest">{@html ICONS.charter}</span>
         <div class="title">
-            <span class="eyebrow">Village Charter · rank {c.rank + 1} of {CHARTER_RANKS.length}</span>
+            <span class="eyebrow">Village Charter · {c.legacy === null ? `rank ${c.rank + 1} of ${CHARTER_RANKS.length}` : `${c.legacy} star${c.legacy === 1 ? '' : 's'} past the last rank`}</span>
             <strong class="name">{c.rankName}</strong>
         </div>
     </div>
@@ -38,7 +38,7 @@ function rankTitle(i: number): string {
     {#if c.chapter}
         <div class="chapter">
             <div class="ch-head">
-                <span>Chapter {c.rank + 1} · {c.chapter.title}</span>
+                <span>Chapter {c.chapterNumber} · {c.chapter.title}</span>
                 <span class="count">{c.done}/{c.total}</span>
             </div>
             <p class="story">{c.chapter.story}</p>
@@ -59,7 +59,7 @@ function rankTitle(i: number): string {
             <div class="reward">
                 {#if landmark}<span class="r-art">{@html landmark.iconSvg}</span>{/if}
                 <div class="r-body">
-                    <span class="eyebrow">On becoming a {c.nextRankName}</span>
+                    <span class="eyebrow">{c.legacy === null ? `On becoming a ${c.nextRankName}` : `On earning ${c.nextRankName}`}</span>
                     {#if landmark}<strong>{landmark.name}</strong>{/if}
                     <span class="r-sub">
                         +{c.chapter.reward.sunlight}{@html ICONS.sunlight} +{c.chapter.reward.coins}{@html ICONS.coin} +{c.chapter.reward.xp} XP{#if newcomer}

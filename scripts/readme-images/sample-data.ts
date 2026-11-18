@@ -92,7 +92,7 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
         totalFocusMinutes: 4380, totalPomodoros: 171, treesGrown: 168, treesWithered: 9, earlyHarvests: 12,
         tasksCompleted: 142, breaksCompleted: 133, questsCompleted: 61, chestsOpened: 24, cropsHarvested: 37,
         cardsCompleted: 58, cardsOnEstimate: 17, boardsCleared: 2,
-        hyperfocusSessions: 14, hyperfocusMinutes: 840, checkInsAcked: 28, requestsFulfilled: 4,
+        hyperfocusSessions: 14, hyperfocusMinutes: 840, checkInsAcked: 28, requestsFulfilled: 4, islandsReached: 0, islandMinutes: 0,
     }
 
     // A believable last five weeks of activity for the grove heat-map
@@ -157,5 +157,29 @@ export function village(overrides: Partial<GamificationData> = {}): Gamification
         { id: 'pk_sample_quest', itemId: 'spring_water', source: 'quest', note: board.quests[0].title, on: today },
         { id: 'pk_sample_hollis', itemId: 'leaf_mould', source: 'request', residentId: 'hollis', note: 'Harvest 3 crops', on: addDays(today, -1) },
     ]
+
+    // The archipelago: two islands reached (a thesis folder and a reading tag) and a third bridge half built
+    g.islands = [
+        { id: 'isle_1', index: 1, name: '', biome: 'coral_lagoon', focus: { kind: 'folder', value: 'Projects/Thesis' }, bridge: 75, sightedOn: addDays(today, -30), reachedOn: addDays(today, -24), minutes: 742, level: 4, notes: 38, notesMark: 25 },
+        { id: 'isle_2', index: 2, name: '', biome: 'sakura_garden', focus: { kind: 'tag', value: '#reading' }, bridge: 200, sightedOn: addDays(today, -24), reachedOn: addDays(today, -11), minutes: 215, level: 2, notes: 17, notesMark: 10 },
+        { id: 'isle_3', index: 3, name: '', biome: 'ember_highlands', focus: { kind: 'tag', value: '#deep-work' }, bridge: 190, sightedOn: addDays(today, -11), minutes: 0, level: 0, notes: 6, notesMark: 0 },
+    ]
+    g.unlockedBiomes.push('coral_lagoon')
+    g.lifetimeStats.islandsReached = 2
+    g.lifetimeStats.islandMinutes = 1422
+    const isle = (island: string, rows: Row[]): PlacedHomesteadItem[] =>
+        rows.map(([itemType, itemId, gridX, gridY, level = 1, crop], i) => ({
+            id: `${island}_${i}`, itemType, itemId, gridX, gridY, level, island,
+            ...(crop ? { cropId: crop[0], cropGrowth: crop[1] } : {}),
+        }))
+    g.homestead.push(
+        ...isle('isle_1', [
+            ['tree', 'willow', 1, 0, 2], ['tree', 'ancient_oak', 4, 0, 3], ['building', 'lantern', 0, 2, 2], ['building', 'bench', 2, 1, 1],
+            ['building', 'water_stream', 3, 1], ['building', 'water_stream', 3, 2], ['building', 'bridge', 3, 3], ['building', 'water_stream', 3, 4], ['building', 'water_stream', 3, 5],
+            ['building', 'cobblestone_path', 0, 3], ['building', 'cobblestone_path', 1, 3], ['building', 'cobblestone_path', 2, 3], ['building', 'cobblestone_path', 4, 3], ['building', 'cobblestone_path', 5, 3],
+            ['tree', 'sunflower', 1, 4, 1], ['tree', 'bamboo', 5, 1, 2], ['building', 'garden_plot', 4, 5, 1, ['tomato', 60]], ['tree', 'classic_pine', 0, 5, 2], ['building', 'hay_bale', 5, 5],
+        ]),
+        ...isle('isle_2', [['tree', 'sakura', 0, 0, 3], ['tree', 'sakura', 3, 1, 2], ['building', 'lantern', 2, 2, 1], ['tree', 'bonsai', 1, 3, 1], ['tree', 'lavender', 4, 4, 1]]),
+    )
     return { ...g, ...overrides }
 }

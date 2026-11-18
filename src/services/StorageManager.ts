@@ -9,6 +9,7 @@ import { CHARTER_CHAPTERS } from './Charter'
 import { requestReward } from './Neighbours'
 import { getTreasure, isOrnament } from '../assets/treasureCatalog'
 import { cleanSatchel } from './Treasures'
+import { getIsland, isReached, landSizeOf, normalizeIslands } from './Islands'
 
 export const CURRENT_DATA_VERSION = 3
 
@@ -58,6 +59,7 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
     pickups: [],
     heartTree: null,
     chestPity: 0,
+    islands: [],
     tagMappings: [
         { tag: '#code', speciesId: 'classic_pine' },
         { tag: '#dev', speciesId: 'classic_pine' },
@@ -90,6 +92,8 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationData = {
         hyperfocusMinutes: 0,
         checkInsAcked: 0,
         requestsFulfilled: 0,
+        islandsReached: 0,
+        islandMinutes: 0,
     },
     preferences: {
         hardcoreMode: true,
@@ -116,6 +120,7 @@ function normalizeCharter(raw: unknown): CharterState {
         rank: Math.max(0, Math.min(CHARTER_CHAPTERS.length, Math.floor(Number(c.rank) || 0))),
         met: Array.isArray(c.met) ? c.met.filter((id): id is string => typeof id === 'string') : [],
         reachedOn: c.reachedOn && typeof c.reachedOn === 'object' ? { ...c.reachedOn } : {},
+        ...(Number(c.legacy) > 0 ? { legacy: Math.floor(Number(c.legacy)) } : {}),
     }
 }
 
@@ -481,6 +486,7 @@ export default class StorageManager {
             pickups: Array.isArray(raw.pickups) ? raw.pickups.filter(isPickup).map((p) => ({ ...p, on: typeof p.on === 'string' ? p.on : '' })) : [],
             heartTree: null,
             chestPity: Math.max(0, Math.floor(Number(raw.chestPity) || 0)),
+            islands: normalizeIslands(raw.islands),
         }
         // An ornament never arrives twice: one already found is not also waiting to be picked up
         g.pickups = g.pickups.filter((p, i) => !(isOrnament(p.itemId) && (g.ornaments.includes(p.itemId) || g.pickups.findIndex((q) => q.itemId === p.itemId) < i)))
@@ -505,7 +511,10 @@ export default class StorageManager {
         const size = Math.max(5, Math.min(8, g.landSize || 5))
         g.landSize = size
         g.homestead = g.homestead.filter((item) => {
-            if (item.gridX < size && item.gridY < size) return true
+            // The same goes for an island's land, and for anything on an island that is not there or not reached
+            const island = getIsland(g, item.island)
+            const land = item.island ? (island && isReached(island) ? landSizeOf(g, island.id) : 0) : size
+            if (item.gridX < land && item.gridY < land) return true
             const key = `${item.itemType}:${item.itemId}`
             g.inventory[key] = (g.inventory[key] || 0) + 1
             return false

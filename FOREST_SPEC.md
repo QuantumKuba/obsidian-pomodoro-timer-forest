@@ -141,12 +141,13 @@ Perks scale with level: `base + perLevel × (level − 1)`. Upgrade cost: `0.6 �
 
 Land: 6×6 at level 3 (300/30), 7×7 at level 7 (700/70), 8×8 at level 12 (1400/140).
 
-### Biomes (unlocked by level)
+### Biomes (unlocked by level; three more are found on islands)
 - 🌿 **Emerald Meadow** (1): lush green turf with wildflowers.
 - 🌸 **Sakura Grove** (3): pink petals on soft grass.
 - 🍂 **Autumn Valley** (5): amber earth with fallen leaves.
 - ❄️ **Alpine Frost** (8): snowy ground and rocks.
 - 🌌 **Twilight Sanctuary** (12): indigo moss that always glows.
+- 🐚 **Coral Lagoon**, 🌋 **Ember Highlands** (always glows), 🍃 **Jade Marsh**: no level unlocks these. Each comes home with the first island reached in it.
 
 ### Visuals
 The village and the daily grove render as an isometric floating island (`src/render/VillageScene.ts`). The sky follows the real time of day: dawn, day, dusk and night, with sun/moon, stars and drifting clouds. After dusk, lit windows and lanterns cast glows. Windmill sails, the watermill wheel, chimney smoke, flames, water and trees are animated with CSS. All animation stops with *Low animation frame rate* or `prefers-reduced-motion`.
@@ -159,6 +160,29 @@ The renderer stays a pure SVG string; anything that walks is added on top by `sr
 - Villagers (count from vitality and buildings) stroll, visit buildings and ripe plots, and favour the campfire at dusk and night. Hens (1 + coop level) stay within two tiles of the coop. Clicking one makes it hop and speak; villagers comment on today's trees, streak and ripe crops, and cheer on harvests, quests, chests, achievements and level-ups. Their lines only ever encourage.
 - Actor state lives in `VillageLife`, not the markup, so they carry on when the scene re-renders. The loop pauses while the scene is off screen.
 - With motion off, and in HTML snapshots, the renderer draws everyone standing (`standingActors`), sorted into the same draw list.
+
+### The archipelago (`src/services/Islands.ts`)
+
+The home village is island 0. `gamification.islands` holds the others in the order they were sighted; a placed item belongs to one through the optional `PlacedHomesteadItem.island` (left out at home). Everything about an island except its name, focus and progress follows from its `index`, so devices agree without syncing a random choice.
+
+| Rule | Value |
+|---|---|
+| Sighting | The first at level 2 (`ISLAND_SIGHT_LEVEL`); the next as soon as the last one is reached. At most one island is unreached at any time (`frontier`). |
+| Focus (`IslandFocus`) | `tag` (nested tags match), `folder` (notes at or below it), `note` (the note itself, or a note whose resolved links include it), `any` (every session, rate 0.5). Two islands cannot share a focus. |
+| Bridge | `bridgeTarget(n) = min(3000, round25(60n + 20n²))` focus minutes: 75, 200, 350, 550, 800… Only matching minutes count; overflow is not carried. |
+| What counts | Finished sessions and hyperfocus landings (their minutes), early harvests (minutes focused), and each rewarded task (`TASK_WATERING_MINUTES`), all times the focus rate. |
+| Landing | `reachReward(n)`, the island's biome added to `unlockedBiomes`, +10 vitality, `lifetimeStats.islandsReached`. The library baseline is set to the notes already there. |
+| Mastery | Minutes on the subject after landing. Level L at `30·L·(L+1)` minutes (60, 180, 360, 600…), no cap. Each level pays `masteryReward(L)`. |
+| Land | `islandLandSize(level)`: 4×4, +1 at mastery 1, 3, 5 and 8 (max 8×8). Never bought. |
+| Boon | `min(25, 5 + 2·level)`% Sunlight on sessions matching a reached island (strongest one only; halved for `any`). |
+| Library | Notes matching the focus, counted from the metadata cache (`surveyVault`). Milestones 5, 10, 25, 50, 100, 200, 350, 500, 750, 1000, then every 500, pay `libraryReward` once each, only when passed after landing. |
+| Map | Four arms from home: island *n* lies on side `['se','sw','ne','nw'][(n−1) % 4]` at ring `ceil(n/4)`, bridged from island *n*−4 (home for the first four). Biomes cycle through `coral_lagoon, sakura_garden, ember_highlands, autumn_valley, jade_marsh, alpine_frost, twilight_moss, meadow`. |
+
+- **Views.** `islandView(g, id)` returns the game as seen from one island (its items, land size and biome); the scene renderer, `VillageLife` and the village tab work on a view and know nothing of islands. Perks (`perkValue`) and charm read the whole `homestead`, so a building counts wherever it stands. `ForestEngine.placeFromInventory(key, x, y, islandId)` and `moveHomesteadItem` keep items within their island's land.
+- **Suggestions.** `suggestFocuses` ranks tags and folders by focus minutes over the last 60 days of `dailyLogs` (weight 2) plus notes held (up to 200), drops subjects that already have an island, and keeps one of a folder and its subfolders.
+- **Rendering.** `src/render/ArchipelagoMap.ts` draws the overview for the *Isles* tab. In the village scene, `islandLinks(g, id)` feeds the renderer's `links` option: a rope bridge on the island's edge toward each neighbour, planked up to the bridge's progress.
+- **Quest.** With a charted island the daily pool gains `island_focus` ("Give *N* minutes of focus to *island*").
+- **Endless charter.** Past rank 6 `currentChapter` generates `legacyChapter(n)`: hours `200 + 50k`, tasks `300 + 75k`, requests `25 + 10k`, `ceil(k/2)` islands reached and `2k` island mastery levels in all (k = n + 1). Signing one increments `charter.legacy` (shown as *City ★k*); the rank itself stays 6.
 
 ## 5. Smart Tag Auto-Detection Rules
 When a focus session starts, the plugin collects hashtags from the tracked task, its text, and the note (frontmatter + inline tags). The first tag mapped to an unlocked species picks the seed (and counts toward the "#tagged" quest):

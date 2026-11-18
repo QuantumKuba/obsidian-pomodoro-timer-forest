@@ -73,6 +73,10 @@ const TITLES: [number, string][] = [
     [8, 'Village Elder'],
     [12, 'Forest Sage'],
     [16, 'Homestead Legend'],
+    [20, 'Bridge Builder'],
+    [25, 'Warden of the Isles'],
+    [32, 'Archipelago Elder'],
+    [40, 'Keeper of the Sky Sea'],
 ]
 
 export function levelTitle(level: number): string {
@@ -401,12 +405,17 @@ const BOARD_QUESTS: QuestTemplate[] = [
     { kind: 'card_focus', make: () => ({ title: 'Finish a card you focused on', target: 1 }) },
 ]
 
-export function generateQuestBoard(date: string, dailyGoal: number, workLen: number, opts: { boards?: boolean } = {}): DailyQuestBoard {
+/** `island`: the name of a charted island, for players who have one to work toward. */
+export function generateQuestBoard(date: string, dailyGoal: number, workLen: number, opts: { boards?: boolean; island?: string } = {}): DailyQuestBoard {
     const rand = seededRandom(`quests-${date}`)
     // Always one "core" focus quest, then two others drawn from the rest.
     const core = rand() < 0.5 ? QUEST_POOL[0] : QUEST_POOL[1]
     const others = QUEST_POOL.filter((q) => q !== QUEST_POOL[0] && q !== QUEST_POOL[1])
     if (opts.boards) others.push(...BOARD_QUESTS)
+    if (opts.island) {
+        const name = opts.island
+        others.push({ kind: 'island_focus', make: (_goal, len) => ({ title: `Give ${Math.max(15, len)} minutes of focus to ${name}`, target: Math.max(15, len) }) })
+    }
     const picked: QuestTemplate[] = [core]
     while (picked.length < 3 && others.length) {
         picked.push(others.splice(Math.floor(rand() * others.length), 1)[0])
@@ -556,7 +565,30 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     {
         id: 'full_plot', icon: '🗺️', title: 'No Vacancy', description: 'Fill every tile of your village plot.',
         reward: { sunlight: 200, coins: 20, xp: 100 },
-        check: (g) => g.homestead.filter((i) => i.gridX < g.landSize && i.gridY < g.landSize).length >= g.landSize * g.landSize,
+        check: (g) => g.homestead.filter((i) => !i.island && i.gridX < g.landSize && i.gridY < g.landSize).length >= g.landSize * g.landSize,
+    },
+    {
+        id: 'island_1', icon: '🏝️', title: 'Landfall', description: 'Finish a bridge and reach your first island.',
+        reward: { sunlight: 60, coins: 6, xp: 40 }, check: (g) => (s(g).islandsReached || 0) >= 1, progress: (g) => [s(g).islandsReached || 0, 1],
+    },
+    {
+        id: 'islands_3', icon: '🧭', title: 'Archipelago', description: 'Reach 3 islands.',
+        reward: { sunlight: 200, coins: 20, xp: 120 }, check: (g) => (s(g).islandsReached || 0) >= 3, progress: (g) => [s(g).islandsReached || 0, 3],
+    },
+    {
+        id: 'islands_7', icon: '🗺️', title: 'Cartographer', description: 'Reach 7 islands.',
+        reward: { sunlight: 500, coins: 50, xp: 300 }, check: (g) => (s(g).islandsReached || 0) >= 7, progress: (g) => [s(g).islandsReached || 0, 7],
+    },
+    {
+        id: 'mastery_5', icon: '⛰️', title: 'Deep Roots', description: 'Bring one island to mastery 5 by returning to its subject.',
+        reward: { sunlight: 250, coins: 25, xp: 150 },
+        check: (g) => (g.islands || []).some((i) => i.level >= 5), progress: (g) => [Math.min(5, Math.max(0, ...(g.islands || []).map((i) => i.level))), 5],
+    },
+    {
+        id: 'library_100', icon: '📚', title: 'Second Brain', description: 'Grow an island’s library to 100 notes.',
+        reward: { sunlight: 250, coins: 25, xp: 150 },
+        check: (g) => (g.islands || []).some((i) => !!i.reachedOn && i.notes >= 100),
+        progress: (g) => [Math.min(100, Math.max(0, ...(g.islands || []).filter((i) => !!i.reachedOn).map((i) => i.notes))), 100],
     },
     {
         id: 'collector', icon: '📚', title: 'Botanist', description: 'Unlock every flora species.',

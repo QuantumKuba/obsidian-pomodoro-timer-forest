@@ -136,12 +136,32 @@ test('old saves load with an empty charter and no requests; ranks on disk are ke
     assert.ok(later.gamification.requests[0].reward.coins > 0)
 })
 
-test('a complete charter has no chapter left and nothing more to do', () => {
+test('past the last rank the charter goes on: a next chapter, and a star for signing it', () => {
     const t = makeEngine((g) => (g.charter = { rank: CHARTER_CHAPTERS.length, met: [], reachedOn: {} }))
     t.engine.startSession(25)
     t.engine.completeSession(25)
     const status = charterStatus(t.g)
-    assert.equal(status.chapter, null)
     assert.equal(status.rankName, 'City')
-    assert.equal(status.nextRankName, null)
+    assert.equal(status.nextRankName, 'City ★1')
+    assert.equal(status.legacy, 0)
+    assert.equal(status.chapterNumber, CHARTER_CHAPTERS.length + 1)
+    assert.ok(status.goals.length >= 3 && status.done < status.total, 'something left to work toward')
+    assert.ok(!t.events.some((e) => e.kind === 'rank'))
+
+    // Everything the chapter asks for is done: the city earns its first star, and the next chapter is further out
+    const done = makeEngine((g) => {
+        g.charter = { rank: CHARTER_CHAPTERS.length, met: [], reachedOn: {} }
+        g.lifetimeStats = { ...g.lifetimeStats, totalFocusMinutes: 250 * 60, tasksCompleted: 375, requestsFulfilled: 35, islandsReached: 1 }
+        g.islands = [{ id: 'isle_1', index: 1, name: '', biome: 'coral_lagoon', focus: { kind: 'tag', value: '#study' }, bridge: 75, sightedOn: '2026-01-01', reachedOn: '2026-01-05', minutes: 200, level: 2, notes: 0, notesMark: 0 }]
+    })
+    done.engine.ensureToday()
+    assert.equal(done.g.charter.legacy, 1)
+    assert.equal(done.g.charter.rank, CHARTER_CHAPTERS.length, 'the rank itself stays the last one')
+    const card = done.events.find((e) => e.kind === 'rank')
+    assert.equal(card?.rank, 'City ★1')
+    const next = charterStatus(done.g)
+    assert.equal(next.rankName, 'City ★1')
+    assert.equal(next.nextRankName, 'City ★2')
+    assert.ok(next.done < next.total, 'the next chapter asks for more')
+    assert.notDeepEqual(next.goals.map((s) => s.goal.id), status.goals.map((s) => s.goal.id))
 })

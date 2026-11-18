@@ -15,6 +15,8 @@ import {
     SPECIES_SVGS,
     VILLAGER_SVGS,
     TREASURE_SVGS,
+    bridgeDeckRise,
+    bridgeSpanSvg,
     cropSvg,
     ornamentAt,
     pickupSvg,
@@ -26,12 +28,18 @@ import { heartNeed, heartStage, heartTreeItem, tendedToday } from '../services/H
 import { pickupSpots } from '../services/Treasures'
 import { GARDEN_PLOT_ID, cropProgress, getBuilding, getCrop, getSpecies } from '../assets/floraCatalog'
 import { SCENE_CSS } from './sceneCss'
-import { buildGrid, mainArea, type Tile, type VillageGrid } from './villageGrid'
+import { bridgeLayout, buildGrid, isWater, kindAt, mainArea, waterEdges, waterSides, type Tile, type TileSide, type VillageGrid, type WaterSide } from './villageGrid'
 
 const TW = 64 // tile width
 const TH = 32 // tile height
-const CLIFF = 26
 const SKY = 96 // headroom above the island for tall sprites and the sky
+const SEA = 28 // room under the island's lowest rock for the clouds below
+const LINK_PAD = 76 // extra width on both sides when bridges lead to neighbouring islands
+
+/** How far the island's rock hangs below its edge: a bigger island is a deeper one. */
+function islandDepth(size: number): number {
+    return 40 + size * 11
+}
 
 // ---------------------------------------------------------------------------
 // Palettes
@@ -82,6 +90,24 @@ export const BIOME_PALETTES: Record<BiomeType, BiomePalette> = {
         hillsFar: '#3b3f7a', hillsNear: '#2d2f60',
         scatter: ['mushroom', 'grass', 'flowers_b'], petal: '#7df9ff', alwaysGlow: true,
     },
+    coral_lagoon: {
+        tileA: '#f1dfae', tileB: '#e9d39c', tileEdge: '#cdb27a',
+        cliffL: '#c79a6b', cliffR: '#a87c52', strata: '#8c6440',
+        hillsFar: '#9fdcd6', hillsNear: '#63c1bd',
+        scatter: ['grass', 'rock', 'flowers_a', 'bush'], petal: '#ff8f7a',
+    },
+    ember_highlands: {
+        tileA: '#6d5a57', tileB: '#63514f', tileEdge: '#4b3c3b',
+        cliffL: '#4a3836', cliffR: '#382a29', strata: '#281d1c',
+        hillsFar: '#b0705a', hillsNear: '#8a4c3f',
+        scatter: ['rock', 'mushroom', 'grass'], petal: '#ff9a3d', alwaysGlow: true,
+    },
+    jade_marsh: {
+        tileA: '#5fae93', tileB: '#55a288', tileEdge: '#3f866f',
+        cliffL: '#5a6b5c', cliffR: '#465548', strata: '#37443a',
+        hillsFar: '#a8d8c4', hillsNear: '#6fb59c',
+        scatter: ['grass', 'bush', 'mushroom', 'flowers_b'], petal: '#d8f5a2',
+    },
 }
 
 type Phase = 'dawn' | 'day' | 'dusk' | 'night'
@@ -126,6 +152,12 @@ function hash(...n: (number | string)[]): number {
 
 const f = (n: number) => Math.round(n * 10) / 10
 
+/** `a` mixed with `b` (both `#rrggbb`), `t` = 0 all `a`, 1 all `b`. */
+function mix(a: string, b: string, t: number): string {
+    const ch = (c: string, i: number) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16)
+    return '#' + [0, 1, 2].map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16).padStart(2, '0')).join('')
+}
+
 /** Seconds since local midnight — shared phase origin for every animation. */
 function wallClock(): number {
     return (Date.now() / 1000) % 86400
@@ -157,7 +189,7 @@ export interface Layout {
 export function sceneLayout(size: number): Layout {
     const width = size * TW + 48
     const top = SKY
-    const height = top + size * TH + CLIFF + 34
+    const height = top + size * TH + islandDepth(size) + SEA
     return {
         size,
         width,
@@ -179,24 +211,35 @@ export function tileAtPoint(L: Layout, cx: number, cy: number): { x: number; y: 
     return { x, y }
 }
 
+/**
+ * The scene's viewBox. Bridges to neighbouring islands need room at the sides, so a scene with
+ * links is wider: the extra is added left of x = 0 and right of `L.width`, and tile
+ * coordinates (`L.tile`, `tileAtPoint`) stay exactly where they are.
+ */
+export function sceneViewBox(L: Layout, hasLinks = false): string {
+    const pad = hasLinks ? LINK_PAD : 0
+    return `${-pad} 0 ${L.width + pad * 2} ${L.height}`
+}
+
 // ---------------------------------------------------------------------------
 // Layers
 // ---------------------------------------------------------------------------
 
-function skyLayer(L: Layout, sky: Sky, pal: BiomePalette, id: string, date: Date): string {
+function skyLayer(L: Layout, sky: Sky, pal: BiomePalette, id: string, date: Date, pad: number, farIsles: boolean): string {
     const { width: W, top } = L
+    const night = sky.phase === 'night'
     let out = `<defs>
-        <linearGradient id="${id}-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky.top}"/><stop offset="1" stop-color="${sky.bottom}"/></linearGradient>
+        <linearGradient id="${id}-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky.top}"/><stop offset=".62" stop-color="${sky.bottom}"/><stop offset="1" stop-color="${mix(sky.bottom, sky.haze, 0.55)}"/></linearGradient>
         <radialGradient id="${id}-glow"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".85"/><stop offset=".45" stop-color="#ffc56b" stop-opacity=".35"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient>
         <radialGradient id="${id}-sun"><stop offset="0" stop-color="#fffbe6"/><stop offset=".5" stop-color="#ffe89a" stop-opacity=".6"/><stop offset="1" stop-color="#ffe89a" stop-opacity="0"/></radialGradient>
     </defs>
-    <rect class="pf-sky" width="${W}" height="${L.height}" fill="url(#${id}-sky)"/>`
+    <rect class="pf-sky" x="${-pad}" width="${W + pad * 2}" height="${L.height}" fill="url(#${id}-sky)"/>`
 
     // Sun / moon travelling across the sky
     const h = date.getHours() + date.getMinutes() / 60
-    if (sky.phase === 'night') {
+    if (night) {
         for (let i = 0; i < 28; i++) {
-            const sx = hash(id, 'star', i) * W
+            const sx = -pad + hash(id, 'star', i) * (W + pad * 2)
             const sy = hash(id, 'stary', i) * (top + 10)
             out += `<circle class="pf-twinkle" style="--d:-${f(hash(i, 'd') * 3)}s" cx="${f(sx)}" cy="${f(sy)}" r="${f(0.5 + hash(i) * 0.9)}" fill="#fff"/>`
         }
@@ -212,60 +255,253 @@ function skyLayer(L: Layout, sky: Sky, pal: BiomePalette, id: string, date: Date
         out += `<circle cx="${f(sx)}" cy="${f(sy)}" r="26" fill="url(#${id}-sun)"/><circle cx="${f(sx)}" cy="${f(sy)}" r="9" fill="#fff4c2"/>`
     }
 
+    // Other islands far off in the haze: the village is one of many
+    if (farIsles) {
+        const base = top + L.size * TH
+        const k = Math.min(1, 0.4 + L.size * 0.08)
+        const spots: [number, number, number, string][] = [
+            [W * 0.085, top + L.size * TH * 0.14, 15 * k, pal.hillsFar],
+            [W * 0.93, top + L.size * TH * 0.1 - 6, 11 * k, pal.hillsFar],
+            [W * 0.9, base * 0.6 + L.height * 0.4 - 8, 17 * k, pal.hillsNear],
+        ]
+        out += `<g class="pf-far" opacity="${night ? 0.4 : 0.8}">`
+        spots.forEach(([x, y, r, color], i) => {
+            const tone = mix(color, sky.bottom, 0.35)
+            const under = mix(tone, '#4a4f63', 0.4)
+            const tip = r * (1.1 + hash(id, 'fart', i) * 0.5)
+            const lean = (hash(id, 'farl', i) - 0.5) * r * 0.8
+            out += `<g class="pf-float" style="--d:-${f(hash(id, 'fard', i) * 9)}s">
+                <path d="M${f(x - r)} ${f(y)}L${f(x - r * 0.45)} ${f(y + tip * 0.5)}L${f(x + lean)} ${f(y + tip)}L${f(x + r * 0.5)} ${f(y + tip * 0.42)}L${f(x + r)} ${f(y)}Z" fill="${under}"/>
+                <ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(r)}" ry="${f(r * 0.3)}" fill="${tone}"/>
+                <path d="M${f(x - r * 0.3)} ${f(y - 1)}l${f(r * 0.22)} ${f(-r * 0.75)}l${f(r * 0.22)} ${f(r * 0.75)}Z" fill="${mix(tone, '#2f5d46', 0.35)}"/>
+                <circle cx="${f(x + r * 0.32)} " cy="${f(y - r * 0.32)}" r="${f(r * 0.3)}" fill="${mix(tone, '#2f5d46', 0.25)}"/></g>`
+        })
+        out += `</g>`
+    }
+
     // Drifting clouds
-    const clouds = sky.phase === 'night' ? 2 : 4
+    const clouds = night ? 2 : 4
     for (let i = 0; i < clouds; i++) {
         const cy = 14 + hash(id, 'cloud', i) * 44
         const s = 0.7 + hash(i, 'cs') * 0.6
         const dur = 70 + hash(i, 'cd') * 60
-        const op = sky.phase === 'night' ? 0.18 : 0.85
+        const op = night ? 0.18 : 0.85
         out += `<g class="pf-cloud" style="animation-duration:${f(dur)}s;--d:-${f(hash(i, 'cdl') * dur)}s" opacity="${op}">
             <g transform="translate(0 ${f(cy)}) scale(${f(s)})"><ellipse cx="0" cy="0" rx="20" ry="7" fill="#fff"/><ellipse cx="-9" cy="-4" rx="10" ry="7" fill="#fff"/><ellipse cx="7" cy="-6" rx="12" ry="9" fill="#fff"/></g></g>`
     }
 
-    // Distant hills on the horizon
-    const hy = top + L.size * TH * 0.35
-    const hills = (y: number, amp: number, color: string, seed: string) => {
-        let d = `M0 ${f(L.height)} L0 ${f(y)}`
-        const steps = 8
-        for (let i = 1; i <= steps; i++) {
-            const x = (W / steps) * i
-            const py = y - amp * (0.4 + hash(seed, i) * 0.8)
-            d += ` Q${f(x - W / steps / 2)} ${f(py - amp * 0.6)} ${f(x)} ${f(py)}`
+    // A sea of cloud far below: the island floats, there is no ground under it
+    const cloud = mix('#ffffff', sky.haze, night ? 0.75 : 0.22)
+    const full = W + pad * 2
+    out += `<g class="pf-cloudsea" opacity="${night ? 0.55 : 0.9}">`
+    for (const [row, lift, op] of [[0, 30, 0.45], [1, 15, 0.7], [2, 2, 1]] as const) {
+        const n = Math.ceil(full / 46) + 1
+        for (let i = 0; i < n; i++) {
+            const x = -pad + (i + hash(id, 'sea', row, i) * 0.7 - 0.2) * (full / (n - 1))
+            const r = 24 + hash(id, 'sear', row, i) * 20
+            // Only the nearest bank of cloud drifts: the rest is far enough away to seem still
+            const drift = row === 2 ? ` class="pf-billow" style="--d:-${f(hash(id, 'sead', i) * 14)}s"` : ''
+            out += `<ellipse${drift} cx="${f(x)}" cy="${f(L.height - lift + r * 0.32)}" rx="${f(r)}" ry="${f(r * 0.42)}" fill="${cloud}" opacity="${op}"/>`
         }
-        return `<path d="${d} L${W} ${f(L.height)} Z" fill="${color}"/>`
     }
-    out += `<g class="pf-hills" opacity="${sky.phase === 'night' ? 0.45 : 0.9}">${hills(hy - 26, 16, pal.hillsFar, id + 'far')}${hills(hy, 12, pal.hillsNear, id + 'near')}</g>`
-    out += `<rect y="${f(hy + 10)}" width="${W}" height="${f(L.height - hy)}" fill="${sky.haze}" opacity=".7"/>`
+    out += `</g>`
     return out
 }
 
-function islandBase(L: Layout, pal: BiomePalette): string {
+/** The island's silhouette, shared by its body and by anything that hangs off it. */
+interface IslandShape {
+    T: Pt2
+    R: Pt2
+    B: Pt2
+    Lf: Pt2
+    /** The front edge's height at `u` (0 at the left corner, 0.5 at the front corner, 1 at the right). */
+    edgeY: (u: number) => number
+    x: (u: number) => number
+    /** How thick the earth is under the edge at `u`. */
+    earth: (u: number) => number
+}
+type Pt2 = { x: number; y: number }
+
+function islandShape(L: Layout, seed: string): IslandShape {
     const n = L.size
     const T = { x: L.width / 2, y: L.top }
     const R = { x: L.width / 2 + (n * TW) / 2, y: L.top + (n * TH) / 2 }
     const B = { x: L.width / 2, y: L.top + n * TH }
     const Lf = { x: L.width / 2 - (n * TW) / 2, y: L.top + (n * TH) / 2 }
-    let out = `<ellipse cx="${f(B.x)}" cy="${f(B.y + CLIFF + 14)}" rx="${f((n * TW) / 2.4)}" ry="10" fill="#000" opacity=".12"/>`
-    out += `<polygon points="${f(Lf.x)},${f(Lf.y)} ${f(B.x)},${f(B.y)} ${f(B.x)},${f(B.y + CLIFF)} ${f(Lf.x)},${f(Lf.y + CLIFF * 0.7)}" fill="${pal.cliffL}"/>`
-    out += `<polygon points="${f(B.x)},${f(B.y)} ${f(R.x)},${f(R.y)} ${f(R.x)},${f(R.y + CLIFF * 0.7)} ${f(B.x)},${f(B.y + CLIFF)}" fill="${pal.cliffR}"/>`
-    // Soil strata and a grassy lip
-    for (const k of [0.38, 0.7]) {
-        out += `<polyline points="${f(Lf.x)},${f(Lf.y + CLIFF * 0.7 * k)} ${f(B.x)},${f(B.y + CLIFF * k)} ${f(R.x)},${f(R.y + CLIFF * 0.7 * k)}" fill="none" stroke="${pal.strata}" stroke-width="1.2" opacity=".55" stroke-dasharray="6 4"/>`
+    return {
+        T, R, B, Lf,
+        x: (u) => Lf.x + u * n * TW,
+        edgeY: (u) => Lf.y + ((n * TH) / 2) * (1 - Math.abs(2 * u - 1)),
+        earth: (u) => 10 + 13 * Math.pow(Math.sin(Math.PI * u), 0.6) + (hash(seed, 'earth', Math.round(u * 40)) - 0.5) * 3,
     }
-    out += `<polyline points="${f(Lf.x)},${f(Lf.y + 2)} ${f(B.x)},${f(B.y + 3)} ${f(R.x)},${f(R.y + 2)}" fill="none" stroke="${pal.tileEdge}" stroke-width="4" stroke-linejoin="round"/>`
+}
+
+/**
+ * A chunky floating island: a grassy lip, a layer of earth, and rock that tapers in jagged
+ * steps to a point far below. Everything about its outline comes from `seed`, so the same
+ * village always floats on the same rock.
+ */
+function islandBase(L: Layout, pal: BiomePalette, seed: string): string {
+    const n = L.size
+    const S = islandShape(L, seed)
+    const { B, Lf, R, T } = S
+    const depth = islandDepth(n)
+    const rockL = mix(pal.cliffL, '#7b8794', 0.5)
+    const rockR = mix(pal.cliffR, '#4c5563', 0.55)
+    const rockDark = mix(rockR, '#1f2430', 0.45)
+    const pt = (x: number, y: number) => `${f(x)} ${f(y)}`
+
+    // Rock underside: spikes and notches in turn, deepest a little off centre
+    const N = 4 * Math.ceil((n + 3) / 2)
+    const peak = 0.4 + hash(seed, 'peak') * 0.2
+    const profile = (u: number) => Math.pow(Math.sin(Math.PI * u), 1.15) * (0.72 + 0.28 * Math.exp(-Math.pow((u - peak) / 0.16, 2)))
+    const under: (Pt2 & { u: number; spike: boolean })[] = []
+    for (let i = 0; i <= N; i++) {
+        const spike = i % 2 === 0
+        const u = i === 0 || i === N || i === N / 2 ? i / N : (i + (hash(seed, 'ju', i) - 0.5) * 0.5) / N
+        const k = spike ? 0.92 + hash(seed, 'sp', i) * 0.2 : 0.5 + hash(seed, 'no', i) * 0.2
+        const rock = (depth - 24) * profile(u) * k
+        under.push({ u, spike, x: S.x(u), y: S.edgeY(u) + S.earth(u) + rock })
+    }
+    // Keep the lowest point inside the layout whatever the dice say
+    const lowest = Math.max(...under.map((p) => p.y))
+    const limit = B.y + depth
+    if (lowest > limit) for (const p of under) p.y = S.edgeY(p.u) + (p.y - S.edgeY(p.u)) * ((limit - B.y) / (lowest - B.y))
+
+    const mid = N / 2
+    const earthAt = (u: number) => S.edgeY(u) + S.earth(u)
+    const earthLine = (from: number, to: number) => {
+        const pts: string[] = []
+        const step = from < to ? 1 : -1
+        for (let i = from; i !== to + step; i += step) pts.push(pt(S.x(i / N), earthAt(i / N) + (i % 2 ? 1.6 : -1)))
+        return pts
+    }
+    const underLine = (from: number, to: number) => {
+        const pts: string[] = []
+        const step = from < to ? 1 : -1
+        for (let i = from; i !== to + step; i += step) pts.push(pt(under[i].x, under[i].y))
+        return pts
+    }
+
+    let out = ''
+    // Small rocks adrift around the island, each with a cap of turf
+    const adrift: [number, number, number][] = [
+        [0.07, depth * 0.62, 9], [0.93, depth * 0.5, 7], [0.2, depth * 1.02, 5.5], [0.8, depth * 0.95, 8],
+    ]
+    adrift.slice(0, n >= 5 ? 4 : 2).forEach(([u, drop, r], i) => {
+        const x = S.x(u) + (hash(seed, 'ax', i) - 0.5) * 14
+        const y = S.edgeY(u) + drop + (hash(seed, 'ay', i) - 0.5) * 10
+        out += `<g class="pf-float" style="--d:-${f(hash(seed, 'ad', i) * 9)}s">
+            <path d="M${pt(x - r, y)}L${pt(x - r * 0.35, y + r * 0.9)}L${pt(x + r * 0.15, y + r * 1.5)}L${pt(x + r * 0.5, y + r * 0.7)}L${pt(x + r, y)}Z" fill="${rockR}"/>
+            <path d="M${pt(x - r, y)}L${pt(x - r * 0.35, y + r * 0.9)}L${pt(x + r * 0.15, y + r * 1.5)}L${pt(x, y)}Z" fill="${rockL}"/>
+            <path d="M${pt(x - r, y)}L${pt(x, y - r * 0.36)}L${pt(x + r, y)}L${pt(x, y + r * 0.36)}Z" fill="${pal.tileA}" stroke="${pal.tileEdge}" stroke-width="1"/></g>`
+    })
+
+    // Rock, lit on the left face and in shade on the right
+    out += `<path d="M${earthLine(0, mid).join('L')}L${underLine(mid, 0).join('L')}Z" fill="${rockL}"/>`
+    out += `<path d="M${earthLine(mid, N).join('L')}L${underLine(N, mid).join('L')}Z" fill="${rockR}"/>`
+    // Facets: every spike has a lit flank and a crease running up from the notch beside it
+    for (let i = 1; i < N; i++) {
+        const p = under[i]
+        const top = earthAt(p.u)
+        if (p.spike) {
+            const a = under[i - 1]
+            out += `<path d="M${pt(p.x, p.y)}L${pt(a.x, a.y)}L${pt(a.x + (p.x - a.x) * 0.55, top + 2)}Z" fill="#fff" opacity="${i <= mid ? 0.1 : 0.05}"/>`
+            const b = under[i + 1]
+            out += `<path d="M${pt(p.x, p.y)}L${pt(b.x, b.y)}L${pt(p.x + (b.x - p.x) * 0.45, top + 2)}Z" fill="${rockDark}" opacity="${i < mid ? 0.16 : 0.3}"/>`
+        } else {
+            out += `<path d="M${pt(p.x, p.y)}L${pt(p.x + (hash(seed, 'cr', i) - 0.5) * 5, top + (p.y - top) * 0.25)}" stroke="${rockDark}" stroke-width="1" opacity=".4" fill="none"/>`
+        }
+    }
+
+    // Earth over the rock, with strata and a few stones bedded in it
+    const earthR = pal.cliffR
+    out += `<path d="M${pt(Lf.x, Lf.y)}L${pt(B.x, B.y)}L${earthLine(mid, 0).join('L')}Z" fill="${pal.cliffL}"/>`
+    out += `<path d="M${pt(B.x, B.y)}L${pt(R.x, R.y)}L${earthLine(N, mid).join('L')}Z" fill="${earthR}"/>`
+    for (const k of [0.45, 0.74]) {
+        const pts: string[] = []
+        for (let i = 0; i <= N; i++) pts.push(pt(S.x(i / N), S.edgeY(i / N) + S.earth(i / N) * k))
+        out += `<polyline points="${pts.join(' ')}" fill="none" stroke="${pal.strata}" stroke-width="1.2" opacity=".5" stroke-dasharray="7 5"/>`
+    }
+    for (let i = 0; i < n + 2; i++) {
+        const u = 0.08 + hash(seed, 'su', i) * 0.84
+        const y = S.edgeY(u) + S.earth(u) * (0.5 + hash(seed, 'sy', i) * 0.38)
+        const r = 2 + hash(seed, 'sr', i) * 2.4
+        out += `<ellipse cx="${f(S.x(u))}" cy="${f(y)}" rx="${f(r * 1.3)}" ry="${f(r * 0.8)}" fill="${u < 0.5 ? rockL : rockR}" stroke="${pal.strata}" stroke-opacity=".5" stroke-width=".6"/>`
+    }
+    // Roots hang out of the earth; vines trail from the turf
+    for (let i = 0; i < n + 1; i++) {
+        const u = 0.1 + hash(seed, 'ru', i) * 0.8
+        const x = S.x(u)
+        const y = earthAt(u) - 1.5
+        const len = 7 + hash(seed, 'rl', i) * 13
+        const sway = (hash(seed, 'rs', i) - 0.5) * 9
+        out += `<path d="M${pt(x, y)}q${f(sway)} ${f(len * 0.5)} ${f(sway * 0.4)} ${f(len)}" stroke="${mix(pal.strata, '#3b2a1c', 0.4)}" stroke-width="${f(0.8 + hash(seed, 'rw', i) * 0.8)}" fill="none" stroke-linecap="round" opacity=".85"/>`
+    }
+
+    // The turf: a lip that hangs over the earth in uneven scallops
+    const lip = (from: number, to: number, shade: string) => {
+        const steps = Math.max(6, Math.round(Math.abs(to - from) * n * 7))
+        let d = `M${pt(S.x(from), S.edgeY(from) - 0.5)}L${pt(S.x(to), S.edgeY(to) - 0.5)}`
+        for (let i = steps; i > 0; i--) {
+            const u0 = from + ((to - from) * i) / steps
+            const u1 = from + ((to - from) * (i - 1)) / steps
+            const um = (u0 + u1) / 2
+            const hang = 3.2 + hash(seed, 'lip', Math.round(um * 500)) * 4.2
+            if (i === steps) d += `L${pt(S.x(u0), S.edgeY(u0) + 3)}`
+            d += `Q${pt(S.x(um), S.edgeY(um) + hang + 2.6)} ${pt(S.x(u1), S.edgeY(u1) + 3)}`
+        }
+        return `<path d="${d}Z" fill="${shade}"/>`
+    }
+    out += lip(0, 0.5, pal.tileEdge) + lip(0.5, 1, mix(pal.tileEdge, '#1d2a1a', 0.16))
+    for (let i = 0; i < n; i++) {
+        const u = 0.06 + hash(seed, 'vu', i) * 0.88
+        const len = 6 + hash(seed, 'vl', i) * 10
+        const x = S.x(u)
+        const y = S.edgeY(u) + 4
+        out += `<path d="M${pt(x, y)}q${f((hash(seed, 'vs', i) - 0.5) * 5)} ${f(len * 0.6)} 0 ${f(len)}" stroke="${mix(pal.tileEdge, '#1d2a1a', 0.2)}" stroke-width="1.1" fill="none" stroke-linecap="round"/><circle cx="${f(x)}" cy="${f(y + len)}" r="1.3" fill="${pal.tileA}"/>`
+    }
+    // The top, and a bright rim where it catches the light
     out += `<polygon points="${f(T.x)},${f(T.y)} ${f(R.x)},${f(R.y)} ${f(B.x)},${f(B.y)} ${f(Lf.x)},${f(Lf.y)}" fill="${pal.tileA}"/>`
+    out += `<polyline points="${f(Lf.x)},${f(Lf.y)} ${f(B.x)},${f(B.y)} ${f(R.x)},${f(R.y)}" fill="none" stroke="${mix(pal.tileA, '#ffffff', 0.25)}" stroke-width="1" stroke-linejoin="round" opacity=".7"/>`
     return out
 }
 
 type GroundKind = 'path' | 'water' | 'soil'
 
-function groundTile(kind: 'grass' | GroundKind, cx: number, cy: number, pal: BiomePalette, x: number, y: number): string {
-    if (kind === 'water') {
-        return `<g><polygon points="${diamond(cx, cy)}" fill="#3f9fd8"/><polygon points="${diamond(cx, cy + 1.5, TW - 8, TH - 4)}" fill="#5bb8ea"/>
-            <path class="pf-water" d="M${f(cx - 16)} ${f(cy - 2)} q6 -3 12 0 t12 0" stroke="#d6f2ff" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-            <path class="pf-water" style="--d:-1.2s" d="M${f(cx - 4)} ${f(cy + 5)} q5 -2.5 10 0 t10 0" stroke="#d6f2ff" stroke-width="1.2" fill="none" stroke-linecap="round"/></g>`
+/** A tile's four corners and anything between: `u` runs to the lower right, `v` to the lower left (±0.5). */
+function tilePoint(cx: number, cy: number, u: number, v: number): string {
+    return `${f(cx + (u - v) * (TW / 2))},${f(cy + (u + v) * (TH / 2))}`
+}
+
+/** Water joins the water next to it: banks are only drawn against land. */
+function waterTile(cx: number, cy: number, sides: Record<TileSide, WaterSide>, x: number, y: number): string {
+    const bank = 0.085
+    const inset = (side: TileSide) => (sides[side] === 'bank' ? bank : 0)
+    const u0 = -0.5 + inset('nw'), u1 = 0.5 - inset('se'), v0 = -0.5 + inset('ne'), v1 = 0.5 - inset('sw')
+    const p = (u: number, v: number) => tilePoint(cx, cy, u, v)
+    let out = `<g><polygon points="${diamond(cx, cy)}" fill="#2f86c2"/>`
+    out += `<polygon points="${p(u0, v0)} ${p(u1, v0)} ${p(u1, v1)} ${p(u0, v1)}" fill="#5bb8ea"/>`
+    // A paler shallow along each bank
+    const shallow: Record<TileSide, [number, number, number, number]> = {
+        nw: [u0, v0, u0, v1], ne: [u0, v0, u1, v0], se: [u1, v0, u1, v1], sw: [u0, v1, u1, v1],
     }
+    for (const side of ['nw', 'ne', 'se', 'sw'] as TileSide[]) {
+        if (sides[side] !== 'bank') continue
+        const [a, b, c, d] = shallow[side]
+        out += `<polyline points="${p(a, b)} ${p(c, d)}" fill="none" stroke="#a9defa" stroke-width="1.6" stroke-linecap="round" opacity=".75"/>`
+    }
+    const d1 = f(-hash(x, y, 'w1') * 2.4)
+    const d2 = f(-hash(x, y, 'w2') * 2.4)
+    out += `<path class="pf-water" style="--d:${d1}s" d="M${f(cx - 16)} ${f(cy - 2)} q6 -3 12 0 t12 0" stroke="#d6f2ff" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        <path class="pf-water" style="--d:${d2}s" d="M${f(cx - 4)} ${f(cy + 5)} q5 -2.5 10 0 t10 0" stroke="#d6f2ff" stroke-width="1.2" fill="none" stroke-linecap="round"/></g>`
+    return out
+}
+
+const NO_WATER: Record<TileSide, WaterSide> = { nw: 'bank', ne: 'bank', se: 'bank', sw: 'bank' }
+
+function groundTile(kind: 'grass' | GroundKind, cx: number, cy: number, pal: BiomePalette, x: number, y: number, sides: Record<TileSide, WaterSide> = NO_WATER): string {
+    if (kind === 'water') return waterTile(cx, cy, sides, x, y)
     if (kind === 'path') {
         let stones = ''
         for (let i = 0; i < 7; i++) {
@@ -290,6 +526,207 @@ function groundTile(kind: 'grass' | GroundKind, cx: number, cy: number, pal: Bio
         return `<g>${grass}<polygon points="${diamond(cx, cy + 1, TW - 7, TH - 3.5)}" fill="#4a3120"/><polygon points="${diamond(cx, cy, TW - 8, TH - 4)}" fill="#644529"/>${ridges}</g>`
     }
     return grass
+}
+
+// ---------------------------------------------------------------------------
+// Waterfalls and bridges to other islands
+// ---------------------------------------------------------------------------
+
+/** The two ends of each side of a tile, in the tile's own (u, v) coordinates. */
+const SIDE_ENDS: Record<TileSide, [number, number, number, number]> = {
+    nw: [-0.5, 0.5, -0.5, -0.5],
+    ne: [-0.5, -0.5, 0.5, -0.5],
+    se: [0.5, -0.5, 0.5, 0.5],
+    sw: [0.5, 0.5, -0.5, 0.5],
+}
+
+/**
+ * Water that reaches the island's edge pours over it. On the two front edges the whole fall
+ * shows, running down the island's side and thinning to spray; on the back edges it drops out
+ * of sight behind the island, so only the foam at the lip and a little mist give it away.
+ */
+function waterfalls(L: Layout, grid: VillageGrid, id: string): string {
+    const depth = islandDepth(L.size)
+    let out = ''
+    waterEdges(grid).forEach((edge, i) => {
+        const { cx, cy } = L.tile(edge.x, edge.y)
+        const [ua, va, ub, vb] = SIDE_ENDS[edge.side]
+        const at = (t: number) => {
+            const u = ua + (ub - ua) * t
+            const v = va + (vb - va) * t
+            return { x: cx + (u - v) * (TW / 2), y: cy + (u + v) * (TH / 2) }
+        }
+        // Falls side by side run together: only the ends of a stretch of water are held in
+        const [ex, ey] = edge.side === 'nw' || edge.side === 'se' ? [0, 1] : [1, 0]
+        const toA = edge.side === 'nw' || edge.side === 'sw' ? 1 : -1
+        const ta = isWater(grid, edge.x + ex * toA, edge.y + ey * toA) ? 0 : 0.13
+        const tb = isWater(grid, edge.x - ex * toA, edge.y - ey * toA) ? 1 : 0.87
+        const a = at(ta)
+        const b = at(tb)
+        const m = at(0.5)
+        const foam = `<path class="pf-water" style="--d:-${f(hash(id, 'foam', i) * 2.4)}s" d="M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" opacity=".9"/>`
+        if (!edge.front) {
+            const ox = edge.side === 'nw' ? -5 : 5
+            out += `<g class="pf-fall-back">${foam}`
+            for (let k = 0; k < 2; k++) {
+                out += `<circle class="pf-spray" style="--d:-${f(hash(id, 'bs', i, k) * 2.6)}s" cx="${f(m.x + ox + (k - 0.5) * 9)}" cy="${f(m.y - 5 - k * 2)}" r="${f(3.4 + k)}" fill="#ffffff" opacity=".4"/>`
+            }
+            out += `</g>`
+            return
+        }
+        const fall = depth * (0.66 + hash(id, 'fall', edge.x, edge.y) * 0.22)
+        const top = Math.min(a.y, b.y)
+        const gid = `${id}-fall${i}`
+        // The fall narrows a little on its way down, where it has an end of its own
+        const drop = (t: number) => ({ x: at(t).x, y: at(t).y + fall })
+        const a2 = drop(ta ? ta + 0.07 : 0)
+        const b2 = drop(tb < 1 ? tb - 0.07 : 1)
+        out += `<g class="pf-fall"><defs>
+            <linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="0" y1="${f(top)}" x2="0" y2="${f(top + fall + 16)}"><stop offset="0" stop-color="#8fd6f7" stop-opacity=".96"/><stop offset=".3" stop-color="#5bb8ea" stop-opacity=".92"/><stop offset=".72" stop-color="#a9defa" stop-opacity=".6"/><stop offset="1" stop-color="#eaf8ff" stop-opacity="0"/></linearGradient>
+            <linearGradient id="${gid}s" gradientUnits="userSpaceOnUse" x1="0" y1="${f(top)}" x2="0" y2="${f(top + fall + 16)}"><stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".7" stop-color="#ffffff" stop-opacity=".55"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>`
+        out += `<path d="M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}L${f(b2.x)} ${f(b2.y)}L${f(a2.x)} ${f(a2.y)}Z" fill="url(#${gid})"/>`
+        for (let k = 0; k < 4; k++) {
+            const t = 0.16 + k * 0.23 + (hash(id, 'st', i, k) - 0.5) * 0.08
+            const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+            const q = { x: a2.x + (b2.x - a2.x) * t, y: a2.y + (b2.y - a2.y) * t }
+            out += `<path class="pf-falling" style="--d:-${f(hash(id, 'sd', i, k) * 1.2)}s" d="M${f(p.x)} ${f(p.y + 1)}L${f(q.x)} ${f(q.y)}" stroke="url(#${gid}s)" stroke-width="${f(1.1 + hash(id, 'sw', i, k) * 0.8)}" stroke-dasharray="7 9" stroke-linecap="round" fill="none"/>`
+        }
+        out += foam
+        for (let k = 0; k < 3; k++) {
+            out += `<circle class="pf-spray" style="--d:-${f(hash(id, 'sp', i, k) * 2.6)}s" cx="${f((a2.x + b2.x) / 2 + (k - 1) * 8)}" cy="${f((a2.y + b2.y) / 2 + 4 + (k % 2) * 4)}" r="${f(5 + hash(id, 'spr', i, k) * 3)}" fill="#ffffff" opacity=".42"/>`
+        }
+        out += `</g>`
+    })
+    return out
+}
+
+/** A bridge leaving this island toward a neighbouring one. */
+export interface SceneLink {
+    /** The island edge it leaves from, as seen on screen: 'nw' = upper-left (x = 0), 'ne' = upper-right (y = 0), 'se' = lower-right (x = size-1), 'sw' = lower-left (y = size-1). */
+    side: 'nw' | 'ne' | 'se' | 'sw'
+    /** 0..1: how much of the bridge is built. 1 = finished and walkable-looking. */
+    progress: number
+    /** The neighbour's biome, for the little island at the far end. */
+    biome: BiomeType
+    label?: string
+    /** Emitted as `data-link="<key>"` on the group, so the UI can make it clickable. */
+    key?: string
+}
+
+/** The tree a far island is known by. */
+const ISLET_TREE: Record<BiomeType, string> = {
+    meadow: 'ancient_oak', sakura_garden: 'sakura', autumn_valley: 'autumn_maple', alpine_frost: 'classic_pine',
+    twilight_moss: 'willow', coral_lagoon: 'bamboo', ember_highlands: 'autumn_maple', jade_marsh: 'willow',
+}
+
+const LINK_DIR: Record<SceneLink['side'], [number, number]> = { nw: [-1, -1], ne: [1, -1], se: [1, 1], sw: [-1, 1] }
+
+/** A small island of its own, seen across the gap. `(x, y)` is the centre of its top. */
+function islet(x: number, y: number, biome: BiomeType, seed: string): string {
+    const pal = BIOME_PALETTES[biome] || BIOME_PALETTES.meadow
+    const w = 30
+    const h = 15
+    const rockL = mix(pal.cliffL, '#7b8794', 0.5)
+    const rockR = mix(pal.cliffR, '#4c5563', 0.55)
+    const tip = 30 + hash(seed, 'tip') * 10
+    const lean = (hash(seed, 'lean') - 0.5) * 12
+    const p = (dx: number, dy: number) => `${f(x + dx)} ${f(y + dy)}`
+    let out = `<path d="M${p(-w, 0)}L${p(-w * 0.62, 13)}L${p(-w * 0.3, 11)}L${p(lean - 4, tip * 0.8)}L${p(lean, tip)}L${p(0, h)}Z" fill="${rockL}"/>`
+    out += `<path d="M${p(w, 0)}L${p(w * 0.66, 12)}L${p(w * 0.36, 9)}L${p(lean + 7, tip * 0.62)}L${p(lean, tip)}L${p(0, h)}Z" fill="${rockR}"/>`
+    out += `<path d="M${p(-w, 0)}L${p(0, h)}L${p(0, h + 8)}L${p(-w * 0.5, h * 0.5 + 9)}L${p(-w, 5)}Z" fill="${pal.cliffL}"/>`
+    out += `<path d="M${p(w, 0)}L${p(0, h)}L${p(0, h + 8)}L${p(w * 0.5, h * 0.5 + 9)}L${p(w, 5)}Z" fill="${pal.cliffR}"/>`
+    out += `<path d="M${p(-w, 0)}L${p(0, h)}L${p(w, 0)}L${p(w, 3.4)}Q${p(w * 0.5, h * 0.5 + 6)} ${p(0, h + 3.6)}Q${p(-w * 0.5, h * 0.5 + 6)} ${p(-w, 3.4)}Z" fill="${pal.tileEdge}"/>`
+    out += `<path d="M${p(-w, 0)}L${p(0, -h)}L${p(w, 0)}L${p(0, h)}Z" fill="${pal.tileA}" stroke="${mix(pal.tileA, '#ffffff', 0.25)}" stroke-width=".8"/>`
+    out += `<path d="M${p(-w * 0.5, 0)}L${p(0, -h * 0.5)}L${p(w * 0.5, 0)}L${p(0, h * 0.5)}Z" fill="${pal.tileB}"/>`
+    const tree = SPECIES_SVGS[ISLET_TREE[biome]] || SPECIES_SVGS.classic_pine
+    out += placeSprite(SPECIES_SVGS.classic_pine, x + 13, y - 3, 0.3)
+    out += placeSprite(tree, x - 5, y + 3, 0.44 * speciesScale(ISLET_TREE[biome]) + 0.02)
+    if (DECOR_SVGS.rock) out += placeSprite(DECOR_SVGS.rock, x + 9, y + 7, 0.5, 14, 16)
+    return out
+}
+
+/**
+ * Rope bridges out to the neighbouring islands. A bridge is laid plank by plank from this
+ * island's edge; what is still to build shows as a guide rope. Returns the links behind the
+ * island (leaving its two back edges) and those in front of it.
+ */
+function linkLayer(L: Layout, links: SceneLink[], id: string): { back: string; front: string } {
+    const n = L.size
+    const layers = { back: '', front: '' }
+    const perSide = new Map<string, number>()
+    for (const link of links) perSide.set(link.side, (perSide.get(link.side) || 0) + 1)
+    const seen = new Map<string, number>()
+    for (const link of links) {
+        const k = seen.get(link.side) || 0
+        seen.set(link.side, k + 1)
+        // Spread several bridges along the same edge
+        const along = (n - 1) * ((k + 1) / ((perSide.get(link.side) || 1) + 1))
+        const from =
+            link.side === 'nw' ? L.tile(-0.5, along) : link.side === 'ne' ? L.tile(along, -0.5) : link.side === 'se' ? L.tile(n - 0.5, along) : L.tile(along, n - 0.5)
+        const [sx, sy] = LINK_DIR[link.side]
+        const reach = 3.05
+        const M = { x: from.cx, y: from.cy }
+        const A = { x: M.x + sx * reach * (TW / 2) + sx * 20, y: M.y + sy * reach * (TH / 2) + sy * 10 }
+        const E = { x: A.x - sx * 20, y: A.y - sy * 10 }
+        const progress = Math.max(0, Math.min(1, link.progress || 0))
+        const sag = 10
+        const at = (t: number) => ({ x: M.x + (E.x - M.x) * t, y: M.y + (E.y - M.y) * t + sag * 4 * t * (1 - t) })
+        // Planks lie across the bridge, along the island's other axis
+        const wx = -sx * 5.6
+        const wy = sy * 2.8
+        const steps = 16
+        const built = Math.round(progress * steps)
+        const curve = (t0: number, t1: number, dx: number, dy: number) => {
+            const pts: string[] = []
+            for (let i = 0; i <= 12; i++) {
+                const p = at(t0 + ((t1 - t0) * i) / 12)
+                pts.push(`${f(p.x + dx)} ${f(p.y + dy)}`)
+            }
+            return `M${pts.join('L')}`
+        }
+        const label = link.label ? (link.label.length > 20 ? link.label.slice(0, 19) + '…' : link.label) : ''
+        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+        let g = `<g class="pf-link${progress >= 1 ? ' pf-link-open' : ''}"${link.key ? ` data-link="${esc(link.key).replace(/"/g, '&quot;')}"` : ''}>`
+        g += `<g class="pf-islet"${progress <= 0 ? ' opacity=".82"' : ''}>${islet(A.x, A.y, link.biome, `${id}-${link.side}-${k}`)}</g>`
+        // What is still to build: a guide rope across the gap
+        if (progress < 1) {
+            g += `<path d="${curve(built / steps, 1, 0, 0)}" stroke="#f3e6c8" stroke-width="1.1" stroke-dasharray="3 4" stroke-linecap="round" fill="none" opacity=".85"/>`
+        }
+        if (built > 0) {
+            const t1 = built / steps
+            // far hand rope, planks, near hand rope
+            const farSign = wy < 0 ? 1 : -1
+            const rope = (sign: number) =>
+                `<path d="${curve(0, t1, wx * sign, wy * sign - 7)}" stroke="#5b4027" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".5"/><path d="${curve(0, t1, wx * sign, wy * sign - 7)}" stroke="#c9a56a" stroke-width="1.2" fill="none" stroke-linecap="round"/>`
+            const hangers = (sign: number) => {
+                let s = ''
+                for (let i = 0; i <= built; i += 2) {
+                    const p = at(i / steps)
+                    s += `<path d="M${f(p.x + wx * sign)} ${f(p.y + wy * sign)}v-7" stroke="#8a6a44" stroke-width=".9"/>`
+                }
+                return s
+            }
+            g += hangers(farSign) + rope(farSign)
+            for (let i = 0; i < built; i++) {
+                const p = at((i + 0.5) / steps)
+                const d = `M${f(p.x - wx)} ${f(p.y - wy)}L${f(p.x + wx)} ${f(p.y + wy)}`
+                g += `<path d="${d}" stroke="#5b4027" stroke-width="5.2" stroke-linecap="round" opacity=".45"/><path d="${d}" stroke="${i % 2 ? '#c8925a' : '#b98250'}" stroke-width="3.8" stroke-linecap="round"/>`
+            }
+            g += hangers(-farSign) + rope(-farSign)
+        }
+        // Posts where the bridge is tied off
+        const post = (p: { x: number; y: number }) =>
+            [-1, 1].map((sign) => `<path d="M${f(p.x + wx * sign)} ${f(p.y + wy * sign + 1)}v-10" stroke="#5b4027" stroke-width="3.6" stroke-linecap="round" opacity=".5"/><path d="M${f(p.x + wx * sign)} ${f(p.y + wy * sign + 1)}v-10" stroke="#a06e40" stroke-width="2.4" stroke-linecap="round"/>`).join('')
+        g += post(M)
+        if (progress >= 1) g += post(E)
+        if (label) g += `<text class="pf-link-label" x="${f(A.x)}" y="${f(A.y + 50)}" text-anchor="middle">${esc(label)}</text>`
+        // One generous target for the pointer: the bridge and the island it leads to
+        g += `<path class="pf-link-hit" d="M${f(M.x)} ${f(M.y)}L${f(A.x)} ${f(A.y)}" stroke="transparent" stroke-width="22" stroke-linecap="round" fill="none"/><ellipse class="pf-link-hit" cx="${f(A.x)}" cy="${f(A.y + 6)}" rx="34" ry="30" fill="transparent"/>`
+        g += `</g>`
+        layers[sy < 0 ? 'back' : 'front'] += g
+    }
+    return layers
 }
 
 // ---------------------------------------------------------------------------
@@ -319,6 +756,8 @@ export interface SceneActor {
     svg: string
     className: string
     flip?: boolean
+    /** Height above the ground, e.g. standing on a bridge's deck. */
+    lift?: number
 }
 
 export interface SceneOptions {
@@ -326,6 +765,12 @@ export interface SceneOptions {
     biome: BiomeType
     items: SceneItem[]
     ground?: Map<string, GroundKind>
+    /** What stands where, so water joins up, pours over the island's edge, and bridges line up. */
+    grid?: VillageGrid
+    /** Bridges out to neighbouring islands. With any, the scene is wider (see sceneViewBox). */
+    links?: SceneLink[]
+    /** Shapes the rock under the island. The same seed always gives the same island. */
+    seed?: string
     date?: Date
     vitality?: number
     /** Drawn between the items, so an actor behind a tree is hidden by it. */
@@ -357,19 +802,22 @@ export function renderIsoScene(opts: SceneOptions): string {
     // Animation phases are anchored to the wall clock (--t), so a re-rendered scene
     // continues exactly where the previous one was instead of restarting.
     const clock = wallClock()
-    let svg = `<svg class="pf-scene pf-${sky.phase} pf-mood-${mood}${opts.still ? ' pf-still' : ''} ${opts.className || ''}" style="--t:-${f(clock)}s" viewBox="0 0 ${L.width} ${L.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">`
+    const links = opts.links || []
+    const pad = links.length ? LINK_PAD : 0
+    const bridges = linkLayer(L, links, id)
+    let svg = `<svg class="pf-scene pf-${sky.phase} pf-mood-${mood}${opts.still ? ' pf-still' : ''} ${opts.className || ''}" style="--t:-${f(clock)}s" viewBox="${sceneViewBox(L, links.length > 0)}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">`
     if (opts.embedCss) svg += `<style>${SCENE_CSS}</style>`
-    svg += opts.showSky === false ? `<defs><radialGradient id="${id}-glow"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".85"/><stop offset=".45" stop-color="#ffc56b" stop-opacity=".35"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient></defs>` : skyLayer(L, sky, pal, id, date)
-    svg += islandBase(L, pal)
+    svg += opts.showSky === false ? `<defs><radialGradient id="${id}-glow"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".85"/><stop offset=".45" stop-color="#ffc56b" stop-opacity=".35"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient></defs>` : skyLayer(L, sky, pal, id, date, pad, links.length === 0)
+    const saturate = mood === 'dormant' ? 0.55 : mood === 'sleepy' ? 0.8 : 1
+    svg += `<g class="pf-island"${saturate < 1 ? ` style="filter:saturate(${saturate})"` : ''}>${bridges.back}${islandBase(L, pal, opts.seed || `isle${L.size}`)}</g>`
 
     // Ground tiles + scatter
-    const saturate = mood === 'dormant' ? 0.55 : mood === 'sleepy' ? 0.8 : 1
     svg += `<g class="pf-ground" style="filter:saturate(${saturate})">`
     for (let y = 0; y < L.size; y++) {
         for (let x = 0; x < L.size; x++) {
             const { cx, cy } = L.tile(x, y)
             const kind = ground.get(`${x},${y}`) || 'grass'
-            svg += groundTile(kind, cx, cy, pal, x, y)
+            svg += groundTile(kind, cx, cy, pal, x, y, kind === 'water' && opts.grid ? waterSides(opts.grid, x, y) : undefined)
             if (kind === 'grass' && !occupied.has(`${x},${y}`)) {
                 const count = mood === 'thriving' ? 3 : mood === 'healthy' ? 2 : 1
                 for (let i = 0; i < count; i++) {
@@ -390,6 +838,7 @@ export function renderIsoScene(opts: SceneOptions): string {
             }
         }
     }
+    if (opts.grid) svg += waterfalls(L, opts.grid, id)
     svg += `</g>`
 
     // Clickable tile layer (under the sprites, so clicking a sprite selects the object)
@@ -418,7 +867,7 @@ export function renderIsoScene(opts: SceneOptions): string {
     for (const { depth, item, actor } of drawn) {
         if (actor) {
             const { cx, cy } = L.tile(actor.x, actor.y)
-            svg += `<g class="pf-actor ${actor.className}" data-depth="${f(depth)}" transform="translate(${f(cx)} ${f(cy)})"><g class="pf-actor-body"${actor.flip ? ' transform="scale(-1 1)"' : ''}>${actor.svg}</g></g>`
+            svg += `<g class="pf-actor ${actor.className}" data-depth="${f(depth)}" transform="translate(${f(cx)} ${f(cy - (actor.lift || 0))})"><g class="pf-actor-body"${actor.flip ? ' transform="scale(-1 1)"' : ''}>${actor.svg}</g></g>`
             continue
         }
         if (!item) continue
@@ -449,6 +898,7 @@ export function renderIsoScene(opts: SceneOptions): string {
         }
     }
     svg += `</g>`
+    if (bridges.front) svg += `<g class="pf-links">${bridges.front}</g>`
 
     const openTiles = opts.open || allTiles(L.size).filter((t) => !occupied.has(`${t.x},${t.y}`))
     const walkable = openTiles.map((t) => L.tile(t.x, t.y))
@@ -468,7 +918,7 @@ export function renderIsoScene(opts: SceneOptions): string {
 
     // Night shading + warm light halos
     if (sky.shade > 0 && opts.showSky !== false) {
-        svg += `<rect class="pf-shade" width="${L.width}" height="${L.height}" fill="#0a1030" opacity="${sky.shade}"/>`
+        svg += `<rect class="pf-shade" x="${-pad}" width="${L.width + pad * 2}" height="${L.height}" fill="#0a1030" opacity="${sky.shade}"/>`
     }
     if (sky.lights || pal.alwaysGlow) svg += `<g class="pf-lights">${lights.join('')}</g>`
 
@@ -564,11 +1014,20 @@ function allTiles(size: number): Tile[] {
 // Villagers and animals
 // ---------------------------------------------------------------------------
 
+/**
+ * The village's one yardstick is a villager: 22 units from sole to hat at VILLAGER_SCALE.
+ * Every `sceneScale` in the catalog is set against it (a scarecrow a head taller, a bench at
+ * hip height, a cabin a little under three villagers), so nothing is sized by eye alone.
+ */
+export const VILLAGER_SCALE = 1
+export const VILLAGER_HEIGHT = 22 * VILLAGER_SCALE
+const HEN_SCALE = 0.8
+
 /** An actor's sprite with its feet at the origin, ready to be moved with a translate. */
 export function actorSprite(kind: 'villager' | 'hen', variant: number): string {
     return kind === 'hen'
-        ? placeSprite(HEN_SVGS[variant % HEN_SVGS.length], 0, 0, 0.8, 11, 12, 12)
-        : placeSprite(VILLAGER_SVGS[variant % VILLAGER_SVGS.length], 0, 0, 0.8, 23, 16, 24)
+        ? placeSprite(HEN_SVGS[variant % HEN_SVGS.length], 0, 0, HEN_SCALE, 11, 12, 12)
+        : placeSprite(VILLAGER_SVGS[variant % VILLAGER_SVGS.length], 0, 0, VILLAGER_SCALE, 23, 16, 24)
 }
 
 /** Villagers come out as the village gets livelier and gains buildings. */
@@ -608,9 +1067,12 @@ function standingActors(g: GamificationData, grid: VillageGrid, seed: string, da
             const key = `${tile.x},${tile.y}`
             if (taken.has(key)) continue
             taken.add(key)
+            // On a bridge they stand mid-deck, where VillageLife would have them walk
+            const onBridge = kindAt(grid, tile.x, tile.y) === 'bridge'
             actors.push({
-                x: tile.x + (hash(seed, kind, n, 'ox') - 0.5) * 0.3,
-                y: tile.y + (hash(seed, kind, n, 'oy') - 0.5) * 0.3,
+                x: tile.x + (onBridge ? 0 : (hash(seed, kind, n, 'ox') - 0.5) * 0.3),
+                y: tile.y + (onBridge ? 0 : (hash(seed, kind, n, 'oy') - 0.5) * 0.3),
+                lift: onBridge ? bridgeDeckRise(bridgeLayout(grid, tile.x, tile.y).span, 0.5) : 0,
                 svg: actorSprite(kind, n),
                 className: kind === 'hen' ? 'pf-hen' : 'pf-villager',
                 flip: hash(seed, kind, n, 'flip') > 0.5,
@@ -637,6 +1099,19 @@ export function speciesScale(id: string): number {
     return getSpecies(id)?.sceneScale ?? 1
 }
 
+/** A freshly planted tree, and how much each level it is nurtured adds. */
+const TREE_SCALE = 1.08
+const TREE_LEVEL_STEP = 0.1
+
+/**
+ * How large a placed item is drawn (1 = its sprite at tile size). Trees grow with their level
+ * and, for the Heart Tree, with its stage; everything else has one size from the catalog.
+ */
+export function homesteadItemScale(item: Pick<PlacedHomesteadItem, 'itemType' | 'itemId' | 'level'>, heartScale = 1): number {
+    if (item.itemType === 'tree') return (TREE_SCALE + TREE_LEVEL_STEP * (Math.max(1, item.level) - 1)) * speciesScale(item.itemId) * heartScale
+    return getBuilding(item.itemId)?.sceneScale ?? 1
+}
+
 function speciesSprite(id: string): string {
     return SPECIES_SVGS[id] || SPECIES_SVGS.classic_pine
 }
@@ -644,6 +1119,9 @@ function speciesSprite(id: string): string {
 export function homesteadItemSprite(item: Pick<PlacedHomesteadItem, 'itemType' | 'itemId'>): string {
     return item.itemType === 'tree' ? speciesSprite(item.itemId) : BUILDING_SVGS[item.itemId] || BUILDING_SVGS.cabin
 }
+
+/** A find is a hand-sized thing; its glow keeps it easy to spot. */
+const PICKUP_SCALE = 0.85
 
 export interface VillageRenderOptions {
     interactive?: boolean
@@ -658,14 +1136,24 @@ export interface VillageRenderOptions {
     liveActors?: boolean
     /** Draw the finds waiting to be picked up (interactive village only). */
     pickups?: boolean
+    /** Bridges out to neighbouring islands (see SceneLink). */
+    links?: SceneLink[]
+    /** Shapes the rock under the island; give each island its own. */
+    seed?: string
+    /** The island to draw (an `Island.id`); the home village when left out. */
+    island?: string | null
 }
 
-export function renderVillage(g: GamificationData, opts: VillageRenderOptions = {}): string {
-    const { liveActors, pickups, ...sceneOpts } = opts
+export function renderVillage(data: GamificationData, opts: VillageRenderOptions = {}): string {
+    const { liveActors, pickups, island = null, ...sceneOpts } = opts
+    // A scene shows one island. Given the whole game rather than one island's view of it
+    // (services/Islands.islandView), only what stands on that island is drawn.
+    const g = data.homestead.some((i) => (i.island || null) !== island) ? { ...data, homestead: data.homestead.filter((i) => (i.island || null) === island) } : data
     const ground = new Map<string, GroundKind>()
     const items: SceneItem[] = []
     const heartId = heartTreeItem(g)?.id
     const today = dateKey(opts.date || new Date())
+    const grid = buildGrid(g.homestead, g.landSize)
     for (const item of g.homestead) {
         if (item.gridX >= g.landSize || item.gridY >= g.landSize) continue
         const key = `${item.gridX},${item.gridY}`
@@ -680,6 +1168,10 @@ export function renderVillage(g: GamificationData, opts: VillageRenderOptions = 
                 items.push({ x: item.gridX, y: item.gridY, svg: '<svg viewBox="0 0 64 64"></svg>', scale: 1, key: item.id })
                 continue
             }
+            // A bridge points the way the land lies: from bank to bank, in line with its neighbours
+            const span = bridgeLayout(grid, item.gridX, item.gridY)
+            items.push({ x: item.gridX, y: item.gridY, svg: bridgeSpanSvg(span.axis, span.span), scale: 1, key: item.id })
+            continue
         }
         if (item.itemType === 'building' && item.itemId === GARDEN_PLOT_ID) {
             const progress = cropProgress(item)
@@ -694,7 +1186,7 @@ export function renderVillage(g: GamificationData, opts: VillageRenderOptions = 
             x: item.gridX,
             y: item.gridY,
             svg: homesteadItemSprite(item),
-            scale: isTree ? (0.95 + 0.12 * (item.level - 1)) * speciesScale(item.itemId) * (stage?.scale ?? 1) : getBuilding(item.itemId)?.category === 'decoration' ? 0.95 : 1.2,
+            scale: homesteadItemScale(item, stage?.scale ?? 1),
             key: item.id,
             level: isTree ? undefined : item.level,
             light: LIGHT_SOURCES[item.itemId],
@@ -712,17 +1204,17 @@ export function renderVillage(g: GamificationData, opts: VillageRenderOptions = 
     }
     if (pickups) {
         for (const spot of pickupSpots(g)) {
-            items.push({ x: spot.x, y: spot.y, svg: pickupSvg(spot.pickup.itemId), scale: 1, pickup: spot.pickup.id })
+            items.push({ x: spot.x, y: spot.y, svg: pickupSvg(spot.pickup.itemId), scale: PICKUP_SCALE, pickup: spot.pickup.id })
         }
     }
 
-    const grid = buildGrid(g.homestead, g.landSize)
     const seed = opts.idPrefix || 'pf'
     return renderIsoScene({
         size: g.landSize,
         biome: g.activeBiome,
         items,
         ground,
+        grid,
         vitality: g.vitality,
         actors: liveActors ? [] : standingActors(g, grid, seed, (opts.date || new Date()).getDate()),
         open: mainArea(grid),

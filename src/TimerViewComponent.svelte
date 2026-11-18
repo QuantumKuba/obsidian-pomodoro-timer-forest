@@ -8,6 +8,7 @@ import ForestComponent from './forest/ForestComponent.svelte'
 import HudBar from './forest/HudBar.svelte'
 import RewardToasts from './forest/RewardToasts.svelte'
 import { gamificationStore, activePlantStore, pluginInstance, settings, todayLog, questBoard } from './stores'
+import { islandName } from './services/Islands'
 import { FLORA_SPECIES, getSpecies } from './assets/floraCatalog'
 import { SPECIES_SVGS, growthSvg } from './assets/floraAssets'
 import type { AmbientSoundType } from './services/SoundManager'
@@ -69,14 +70,18 @@ $: if ($timer) {
 
 $: timeDisplay = isHyperfocus ? $timer.elapsedHuman : $timer.remained.human
 
+// The island this session is building toward, when its task or note belongs to one
+$: toward = plant && !isBreak ? pluginInstance?.forestEngine?.sessionIslands?.()[0] : undefined
+$: towardLabel = toward ? ` · ${toward.reachedOn ? '🏝️' : '🪵'} ${islandName(toward)}` : ''
+
 $: stageLabel =
     stage === 'break'
         ? 'Rest · stretch, sip, breathe'
         : isHyperfocus
-          ? `${species.name} · ${stage} (${wallClock})`
+          ? `${species.name} · ${stage} (${wallClock})${towardLabel}`
           : stage === 'idle'
             ? `${species.name} · tap to change`
-            : { seed: 'Seed planted', sprout: 'Sprouting', sapling: 'Sapling', mature: 'Almost grown', withered: '' }[stage]
+            : { seed: 'Seed planted', sprout: 'Sprouting', sapling: 'Sapling', mature: 'Almost grown', withered: '' }[stage] + towardLabel
 
 // The focused task was checked off mid-session: offer to end it early
 let dismissedAt: number | null = null

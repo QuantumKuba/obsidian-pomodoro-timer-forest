@@ -11,12 +11,13 @@
  */
 import type { GamificationData, PlacedHomesteadItem } from '../types/forest'
 import { getBuilding, getCrop, isRipePlot } from '../assets/floraCatalog'
+import { bridgeDeckRise } from '../assets/floraAssets'
 import { dateKey } from '../services/Progression'
 import { RESIDENTS, residentsPresent, type Resident } from '../services/Neighbours'
 import { NEEDS, heartNeed, heartStageIndex, heartTreeItem, tendedToday } from '../services/HeartTree'
 import { getTreasure } from '../assets/treasureCatalog'
-import { actorSprite, findCoop, henCount, henRange, sceneLayout, skyFor, villagerCount, type Layout } from './VillageScene'
-import { buildGrid, findPath, isWalkable, mainArea, nearestWalkable, neighbours, reachableFrom, type Tile, type VillageGrid } from './villageGrid'
+import { VILLAGER_HEIGHT, actorSprite, findCoop, henCount, henRange, sceneLayout, skyFor, villagerCount, type Layout } from './VillageScene'
+import { bridgeLayout, buildGrid, findPath, isWalkable, kindAt, mainArea, nearestWalkable, neighbours, reachableFrom, type Tile, type VillageGrid } from './villageGrid'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 /** Seconds one hop takes. */
@@ -55,7 +56,7 @@ const pick = <T>(list: T[]): T => list[Math.floor(Math.random() * list.length)]
 
 /** A little envelope over a resident who has a request pinned up. */
 const REQUEST_MARK =
-    `<g xmlns="${SVG_NS}" class="pf-request" transform="translate(0 -23)"><g class="pf-request-bob">` +
+    `<g xmlns="${SVG_NS}" class="pf-request" transform="translate(0 -${VILLAGER_HEIGHT + 6})"><g class="pf-request-bob">` +
     '<circle r="3.6" fill="#fff8ec" stroke="#d9576b" stroke-width=".7"/>' +
     '<rect x="-2.1" y="-1.4" width="4.2" height="2.9" rx=".4" fill="#ffffff" stroke="#b5473a" stroke-width=".45"/>' +
     '<path d="M-2.1 -1.3L0 .3L2.1 -1.3" fill="none" stroke="#b5473a" stroke-width=".45" stroke-linejoin="round"/></g></g>'
@@ -175,14 +176,14 @@ export default class VillageLife {
     public sparkle(tile: Tile, art: string, text: string): void {
         if (!this.layer || !this.frame) return
         const { cx, cy } = this.L.tile(tile.x, tile.y)
-        const scale = this.frame.clientWidth / this.L.width
+        const at = this.onFrame(cx, cy - 8)
         const el = this.layer.createDiv({ cls: 'pf-pop pf-find' })
         const icon = el.createSpan({ cls: 'pf-find-art' })
         const svg = new DOMParser().parseFromString(art, 'image/svg+xml').documentElement
         if (svg.nodeName === 'svg') icon.appendChild(this.win.document.importNode(svg, true))
         el.createSpan({ text })
-        el.style.left = `${cx * scale}px`
-        el.style.top = `${(cy - 8) * scale}px`
+        el.style.left = `${at.left}px`
+        el.style.top = `${at.top}px`
         this.win.setTimeout(() => el.remove(), 1700)
     }
 
@@ -190,12 +191,23 @@ export default class VillageLife {
     public pop(tile: Tile, text: string): void {
         if (!this.layer || !this.frame) return
         const { cx, cy } = this.L.tile(tile.x, tile.y)
-        const scale = this.frame.clientWidth / this.L.width
+        const at = this.onFrame(cx, cy - 12)
         const el = this.layer.createDiv({ cls: 'pf-pop', text })
         el.createSpan({ cls: 'pf-pop-coin' })
-        el.style.left = `${cx * scale}px`
-        el.style.top = `${(cy - 12) * scale}px`
+        el.style.left = `${at.left}px`
+        el.style.top = `${at.top}px`
         this.win.setTimeout(() => el.remove(), 1500)
+    }
+
+    /**
+     * Where a point of the scene lies on the frame, in CSS pixels. Read from the scene's own
+     * viewBox: a village with bridges to other islands is drawn wider than its layout.
+     */
+    private onFrame(cx: number, cy: number): { left: number; top: number } {
+        const box = this.svg?.viewBox?.baseVal
+        const width = box?.width || this.L.width
+        const scale = (this.frame?.clientWidth ?? 0) / width
+        return { left: (cx - (box?.x ?? 0)) * scale, top: (cy - (box?.y ?? 0)) * scale }
     }
 
     // -----------------------------------------------------------------------
@@ -402,14 +414,23 @@ export default class VillageLife {
         el.setAttribute('transform', `translate(${cx.toFixed(1)} ${cy.toFixed(1)})`)
 
         const walking = actor.route.length > 0 && actor.hop <= 0 && !actor.speech
-        const lift = actor.hop > 0 ? Math.abs(Math.sin((actor.hop / HOP) * Math.PI)) * 4 : walking ? Math.abs(Math.sin(actor.stride)) * 0.7 : 0
+        // On a bridge the planks are underfoot, not the water: walk up and over with the deck
+        const tile = { x: Math.round(actor.x), y: Math.round(actor.y) }
+        const onBridge = kindAt(this.grid, tile.x, tile.y) === 'bridge'
+        let deck = 0
+        if (onBridge) {
+            const span = bridgeLayout(this.grid, tile.x, tile.y)
+            deck = bridgeDeckRise(span.span, (span.axis === 'x' ? actor.x - tile.x : actor.y - tile.y) + 0.5)
+        }
+        const lift = deck + (actor.hop > 0 ? Math.abs(Math.sin((actor.hop / HOP) * Math.PI)) * 4 : walking ? Math.abs(Math.sin(actor.stride)) * 0.7 : 0)
         body.setAttribute('transform', `translate(0 ${(-lift).toFixed(2)}) scale(${actor.face} 1)`)
         if (walking !== actor.walking) {
             actor.walking = walking
             el.classList.toggle('pf-walking', walking)
         }
 
-        const depth = actor.x + actor.y + 0.01
+        // ...and in front of the whole bridge, railings and all, from the first step onto it
+        const depth = Math.max(actor.x + actor.y, onBridge ? tile.x + tile.y : 0) + 0.01
         const before = this.slots.find((slot) => slot.depth > depth)?.el ?? null
         if (before !== actor.before || el.parentNode !== this.objects) {
             this.objects.insertBefore(el, before)
@@ -540,12 +561,13 @@ export default class VillageLife {
         const speaking = this.actors.filter((a) => a.speech)
         if (!speaking.length || !this.frame) return
         const width = this.frame.clientWidth
-        const scale = width / this.L.width
         for (const actor of speaking) {
             const { cx, cy } = this.L.tile(actor.x, actor.y)
             const margin = Math.min(80, width / 2)
-            const left = Math.max(margin, Math.min(width - margin, cx * scale))
-            const top = (cy - (actor.kind === 'hen' ? 11 : 21)) * scale
+            // Just over the speaker's head: a villager stands VILLAGER_HEIGHT tall
+            const at = this.onFrame(cx, cy - (actor.kind === 'hen' ? 11 : VILLAGER_HEIGHT + 4))
+            const left = Math.max(margin, Math.min(width - margin, at.left))
+            const top = at.top
             actor.speech!.el.style.transform = `translate(${left.toFixed(1)}px, ${top.toFixed(1)}px) translate(-50%, -100%)`
         }
     }

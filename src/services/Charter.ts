@@ -10,6 +10,7 @@
 import type { GamificationData } from '../types/forest'
 import { villageCharm, type BaseReward } from './Progression'
 import { MAX_HEARTS, RESIDENTS, hearts } from './Neighbours'
+import { reachedIslands } from './Islands'
 
 export interface CharterRank {
     name: string
@@ -60,7 +61,7 @@ const requests = (id: string, n: number): CharterGoal => ({
     id, label: `Fulfil ${n} neighbours’ requests`, progress: (g) => [stats(g).requestsFulfilled || 0, n],
 })
 const placed = (g: GamificationData, itemType: 'tree' | 'building', itemId?: string) =>
-    g.homestead.filter((i) => i.itemType === itemType && (!itemId || i.itemId === itemId) && i.gridX < g.landSize && i.gridY < g.landSize).length
+    g.homestead.filter((i) => i.itemType === itemType && (!itemId || i.itemId === itemId) && (!!i.island || (i.gridX < g.landSize && i.gridY < g.landSize))).length
 
 export const CHARTER_CHAPTERS: CharterChapter[] = [
     {
@@ -142,6 +143,59 @@ export const CHARTER_CHAPTERS: CharterChapter[] = [
     },
 ]
 
+// ---------------------------------------------------------------------------
+// After the last rank: the charter goes on
+// ---------------------------------------------------------------------------
+
+const LEGACY_CHAPTERS: { title: string; story: string }[] = [
+    { title: 'Roads over the water', story: 'The city is built. Now it reaches outward, one bridge at a time.' },
+    { title: 'A name across the sea', story: 'Other shores know your city by the work that comes out of it.' },
+    { title: 'The long season', story: 'No rush left in it: the same steady days, and more of them.' },
+    { title: 'Keepers of the map', story: 'Every island on it stands for something you chose to get good at.' },
+]
+
+/**
+ * The chapter that follows the `n` already signed past the last rank (from 0). Its goals are
+ * the same lifetime totals as before, a step further each time, plus the archipelago: there is
+ * always a next chapter, and each one is as reachable as the last.
+ */
+export function legacyChapter(n: number): CharterChapter {
+    const k = n + 1
+    const text = LEGACY_CHAPTERS[n % LEGACY_CHAPTERS.length]
+    const isles = Math.ceil(k / 2)
+    return {
+        title: text.title,
+        story: text.story,
+        goals: [
+            hours(`legacy${k}_hours`, 200 + 50 * k),
+            tasks(`legacy${k}_tasks`, 300 + 75 * k),
+            requests(`legacy${k}_requests`, 25 + 10 * k),
+            { id: `legacy${k}_isles`, label: `Reach ${isles} island${isles === 1 ? '' : 's'} by bridge`, progress: (g) => [reachedIslands(g).length, isles] },
+            {
+                id: `legacy${k}_mastery`, label: `Hold ${2 * k} levels of island mastery in all`,
+                progress: (g) => [reachedIslands(g).reduce((sum, i) => sum + i.level, 0), 2 * k],
+            },
+        ],
+        reward: { sunlight: Math.min(1500, 700 + 50 * k), coins: Math.min(150, 80 + 5 * k), xp: Math.min(800, 350 + 25 * k) },
+    }
+}
+
+/** Chapters signed past the last rank. */
+export function charterLegacy(g: Pick<GamificationData, 'charter'>): number {
+    return Math.max(0, Math.floor(g.charter?.legacy || 0))
+}
+
+/** The last rank with its stars: "City", "City ★2". */
+export function legacyRankName(stars: number): string {
+    const city = CHARTER_RANKS[CHARTER_RANKS.length - 1].name
+    return stars > 0 ? `${city} ★${stars}` : city
+}
+
+/** The chapter being worked on. There always is one. */
+export function currentChapter(g: GamificationData): CharterChapter {
+    return CHARTER_CHAPTERS[charterRank(g)] ?? legacyChapter(charterLegacy(g))
+}
+
 export interface GoalStatus {
     goal: CharterGoal
     current: number
@@ -152,9 +206,13 @@ export interface GoalStatus {
 export interface CharterStatus {
     rank: number
     rankName: string
-    /** The chapter being worked on; null once the charter is complete. */
-    chapter: CharterChapter | null
-    nextRankName: string | null
+    /** The chapter being worked on. Past the last rank the chapters carry on (`legacy`). */
+    chapter: CharterChapter
+    nextRankName: string
+    /** Past the last rank: the stars earned so far. Null while the ranks are still being climbed. */
+    legacy: number | null
+    /** The chapter's number, counting on past the last rank. */
+    chapterNumber: number
     goals: GoalStatus[]
     done: number
     total: number
@@ -173,13 +231,17 @@ export function goalStatus(g: GamificationData, goal: CharterGoal): GoalStatus {
 
 export function charterStatus(g: GamificationData): CharterStatus {
     const rank = charterRank(g)
-    const chapter = CHARTER_CHAPTERS[rank] ?? null
-    const goals = chapter ? chapter.goals.map((goal) => goalStatus(g, goal)) : []
+    const ranked = rank < CHARTER_CHAPTERS.length
+    const stars = charterLegacy(g)
+    const chapter = currentChapter(g)
+    const goals = chapter.goals.map((goal) => goalStatus(g, goal))
     return {
         rank,
-        rankName: CHARTER_RANKS[rank].name,
+        rankName: ranked ? CHARTER_RANKS[rank].name : legacyRankName(stars),
         chapter,
-        nextRankName: chapter ? CHARTER_RANKS[rank + 1].name : null,
+        nextRankName: ranked ? CHARTER_RANKS[rank + 1].name : legacyRankName(stars + 1),
+        legacy: ranked ? null : stars,
+        chapterNumber: rank + (ranked ? 0 : stars) + 1,
         goals,
         done: goals.filter((s) => s.done).length,
         total: goals.length,
@@ -189,7 +251,7 @@ export function charterStatus(g: GamificationData): CharterStatus {
 /** Every goal of the current chapter is met: the village is ready to rank up. */
 export function chapterComplete(g: GamificationData): boolean {
     const status = charterStatus(g)
-    return !!status.chapter && status.done === status.total
+    return status.done === status.total
 }
 
 /** The resident who moves in when the village reaches `rank`, if any. */

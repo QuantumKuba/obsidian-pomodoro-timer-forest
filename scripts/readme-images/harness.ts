@@ -11,7 +11,7 @@ import { addDays, today } from '../../src/tasks/dates'
 import { settings } from '../../src/stores'
 import STYLES_CSS from '../../styles.css'
 import ForestComponent from '../../src/forest/ForestComponent.svelte'
-import { activePlantStore, gamificationStore, setPlugin } from '../../src/stores'
+import { activePlantStore, gamificationStore, setPlugin, viewedIsland } from '../../src/stores'
 import { getBuilding } from '../../src/assets/floraCatalog'
 import { upgradeCost, xpForLevel } from '../../src/services/Progression'
 import type { PlacedHomesteadItem, RewardEvent } from '../../src/types/forest'
@@ -38,6 +38,16 @@ const g = mid
       })
     : village()
 gamificationStore.set(g)
+// ?islands=none: before the first sighting; ?islands=sighted: one island waiting to be charted
+if (q.get('islands') === 'none') gamificationStore.update((d) => ({ ...d, xp: 60, islands: [], homestead: d.homestead.filter((i) => !i.island) }))
+if (q.get('islands') === 'sighted') {
+    gamificationStore.update((d) => ({
+        ...d, homestead: d.homestead.filter((i) => !i.island),
+        islands: [{ id: 'isle_1', index: 1, name: '', biome: 'coral_lagoon', focus: null, bridge: 0, sightedOn: '', minutes: 0, level: 0, notes: 0, notesMark: 0 }],
+    }))
+}
+// ?isle=isle_1 opens the village tab on that island
+if (q.get('isle')) viewedIsland.set(q.get('isle'))
 
 const rewardEvents = writable<RewardEvent[]>([])
 setPlugin({
@@ -53,6 +63,17 @@ setPlugin({
         tendHeartTree() { return true },
         toggleOrnament() { return true },
         collectPickups() { return [] },
+        refreshIslandLibraries() {},
+        vaultIndex() { return { tags: ['#thesis', '#reading', '#deep-work', '#health'], folders: ['Projects', 'Projects/Thesis', 'Journal', 'Areas/Health'] } },
+        suggestIslandFocus() {
+            return [
+                { focus: { kind: 'tag', value: '#deep-work' }, label: '#deep-work', minutes: 310, notes: 6 },
+                { focus: { kind: 'folder', value: 'Areas/Health' }, label: 'Areas/Health', minutes: 95, notes: 41 },
+                { focus: { kind: 'tag', value: '#language' }, label: '#language', minutes: 0, notes: 23 },
+            ]
+        },
+        chartIsland() { return true },
+        renameIsland() {},
         confettiEngine: { attach() {}, detach() {}, destroy() {} },
         getUpgradeInfo(item: PlacedHomesteadItem) {
             if (item.itemType === 'tree') return { sunlight: 40 * item.level, coins: 4 * item.level, maxed: item.level >= 3 }

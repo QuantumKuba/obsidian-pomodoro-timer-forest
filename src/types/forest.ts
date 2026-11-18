@@ -2,7 +2,10 @@ import type { Settings } from '../Settings'
 
 export type GrowthStage = 'seed' | 'sprout' | 'sapling' | 'mature' | 'withered'
 
-export type BiomeType = 'meadow' | 'sakura_garden' | 'autumn_valley' | 'alpine_frost' | 'twilight_moss'
+export type BiomeType =
+    | 'meadow' | 'sakura_garden' | 'autumn_valley' | 'alpine_frost' | 'twilight_moss'
+    // Found only by reaching an island in the archipelago (see services/Islands.ts)
+    | 'coral_lagoon' | 'ember_highlands' | 'jade_marsh'
 
 export interface TagFloraMapping {
     tag: string
@@ -64,6 +67,8 @@ export interface HomesteadBuilding {
     iconSvg: string
     /** Never sold: granted by the Village Charter when the village reaches this rank. */
     charterRank?: number
+    /** Size in the village scene, measured against a villager (see homesteadItemScale); 1 when left out. */
+    sceneScale?: number
 }
 
 /** Something to grow in a garden plot. Crops grow with focus minutes and never wither. */
@@ -104,6 +109,8 @@ export interface PlacedHomesteadItem {
     /** Garden plots only: what is growing, and the focus minutes it has grown so far. */
     cropId?: string
     cropGrowth?: number
+    /** The island it stands on (an `Island.id`); left out on the home island. */
+    island?: string
 }
 
 export interface DailyForestLog {
@@ -160,7 +167,46 @@ export interface BoardMemory {
     clearedOn?: string
 }
 
+/**
+ * What an island stands for: the part of the vault whose focus builds its bridge and, once
+ * reached, its mastery.
+ *  - `tag`: sessions on a task or note carrying the tag (nested tags count: `#study/maths` for `#study`)
+ *  - `folder`: sessions on a note inside the folder, or below it
+ *  - `note`: sessions on that note, or on a note that links to it (a hub / map of content)
+ *  - `any`: every session counts, at half pace, so nobody is locked out
+ */
+export type IslandFocus =
+    | { kind: 'tag'; value: string }
+    | { kind: 'folder'; value: string }
+    | { kind: 'note'; value: string }
+    | { kind: 'any' }
+
+/** An island of the archipelago beyond the home village. Nothing about it is ever lost. */
+export interface Island {
+    id: string
+    /** Order of sighting, from 1: decides its bridge, its biome and where it lies on the map. */
+    index: number
+    /** The player's own name for it; empty until given, and then a name is made from its focus. */
+    name: string
+    biome: BiomeType
+    /** Null while uncharted: sighted, but not yet given a meaning. */
+    focus: IslandFocus | null
+    /** Focus minutes laid into its bridge so far. */
+    bridge: number
+    sightedOn: string
+    /** The day the bridge was finished; unset while it is being built. */
+    reachedOn?: string
+    /** Focus minutes on its subject since it was reached: its mastery. Never goes down. */
+    minutes: number
+    /** Mastery levels already celebrated. */
+    level: number
+    /** Notes found for its focus at the last look, and the largest milestone already celebrated. */
+    notes: number
+    notesMark: number
+}
+
 export type QuestKind =
+    | 'island_focus'
     | 'sessions'
     | 'minutes'
     | 'tasks'
@@ -221,6 +267,8 @@ export interface CharterState {
     met: string[]
     /** The day each rank was reached, by rank. */
     reachedOn: Record<string, string>
+    /** Chapters signed after the last rank: the city's stars. The charter never runs out. */
+    legacy?: number
 }
 
 /** What the Heart Tree asks for on a given day. Met with a care item from the satchel. */
@@ -305,6 +353,8 @@ export interface GamificationData {
     heartTree: HeartTreeState | null
     /** Daily chests opened since the last one with an ornament in it. */
     chestPity: number
+    /** The archipelago, in the order the islands were sighted. */
+    islands: Island[]
     tagMappings: TagFloraMapping[]
     ambientSound: 'none' | 'rain' | 'forest_stream' | 'breeze'
     ambientVolume: number
@@ -329,6 +379,9 @@ export interface GamificationData {
         checkInsAcked: number
         /** Neighbours' requests fulfilled. */
         requestsFulfilled: number
+        /** Islands reached by a finished bridge, and focus minutes laid into bridges and mastery. */
+        islandsReached: number
+        islandMinutes: number
     }
     preferences: {
         hardcoreMode: boolean // withers tree if aborted
@@ -392,7 +445,7 @@ export interface RewardEvent {
     id: string
     kind:
         | 'harvest' | 'early' | 'wither' | 'task' | 'break' | 'crop' | 'quest' | 'chest' | 'achievement' | 'levelup' | 'rank' | 'request'
-        | 'treasure' | 'heart'
+        | 'treasure' | 'heart' | 'island'
     title: string
     subtitle?: string
     speciesId?: string
@@ -408,6 +461,9 @@ export interface RewardEvent {
     residentId?: string
     /** `treasure`: the find to show. */
     treasureId?: string
+    /** `island`: the island it is about, and its biome for the art. */
+    islandId?: string
+    biome?: BiomeType
     /** A passing toast rather than a card. */
     minor?: boolean
     /** `<board path>::<card key>` when the event is about a card on a board. */

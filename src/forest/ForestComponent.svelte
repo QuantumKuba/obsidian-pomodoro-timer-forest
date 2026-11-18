@@ -8,11 +8,13 @@ import VillageTab from './VillageTab.svelte'
 import GroveTab from './GroveTab.svelte'
 import MarketTab from './MarketTab.svelte'
 import JourneyTab from './JourneyTab.svelte'
+import IslesTab from './IslesTab.svelte'
+import { frontier } from '../services/Islands'
 
 /** Full-page workspace tab (true) or the compact sidebar panel under the timer (false). */
 export let full = false
 
-type Tab = 'village' | 'grove' | 'market' | 'journey'
+type Tab = 'village' | 'grove' | 'isles' | 'market' | 'journey'
 export let activeTab: Tab = 'village'
 
 let village: VillageTab
@@ -21,6 +23,7 @@ $: g = $gamificationStore
 $: toPlace = Object.values(g.inventory).reduce((a, b) => a + (b > 0 ? b : 0), 0)
 $: ripeCrops = g.homestead.filter(isRipePlot).length
 $: finds = g.pickups?.length ?? 0
+$: horizon = frontier(g)
 $: questsLeft = $questBoard ? $questBoard.quests.filter((q) => !q.claimed).length : 0
 $: chestReady = !!$questBoard && questsLeft === 0 && !$questBoard.chestClaimed
 $: affordable =
@@ -57,22 +60,27 @@ function greeting(): string {
 
     <nav class="tabs">
         <button class:active={activeTab === 'village'} on:click={() => (activeTab = 'village')}>
-            🏡 Village{#if ripeCrops}<span class="badge gold" title="Crops are ready to harvest">🧺</span>{:else if finds}<span class="badge gold" title="Finds are waiting to be picked up">✨</span>{:else if toPlace}<span class="badge">{toPlace}</span>{/if}
+            <span class="ico">🏡</span>Village{#if ripeCrops}<span class="badge gold" title="Crops are ready to harvest">🧺</span>{:else if finds}<span class="badge gold" title="Finds are waiting to be picked up">✨</span>{:else if toPlace}<span class="badge">{toPlace}</span>{/if}
         </button>
-        <button class:active={activeTab === 'grove'} on:click={() => (activeTab = 'grove')}>🌲 Grove</button>
+        <button class:active={activeTab === 'grove'} on:click={() => (activeTab = 'grove')}><span class="ico">🌲</span>Grove</button>
+        <button class:active={activeTab === 'isles'} on:click={() => (activeTab = 'isles')}>
+            <span class="ico">🧭</span>Isles{#if horizon && !horizon.focus}<span class="badge gold" title="An island is waiting to be charted">?</span>{/if}
+        </button>
         <button class:active={activeTab === 'market'} on:click={() => (activeTab = 'market')}>
-            🛒 Market{#if affordable}<span class="dot" title="Something new is affordable"></span>{/if}
+            <span class="ico">🛒</span>Market{#if affordable}<span class="dot" title="Something new is affordable"></span>{/if}
         </button>
         <button class:active={activeTab === 'journey'} on:click={() => (activeTab = 'journey')}>
-            📯 Journey{#if chestReady}<span class="badge gold">!</span>{:else if questsLeft}<span class="badge soft">{questsLeft}</span>{/if}
+            <span class="ico">📯</span>Journey{#if chestReady}<span class="badge gold">!</span>{:else if questsLeft}<span class="badge soft">{questsLeft}</span>{/if}
         </button>
     </nav>
 
     <div class="content">
         {#if activeTab === 'village'}
-            <VillageTab bind:this={village} {full} on:market={() => (activeTab = 'market')} on:journey={() => (activeTab = 'journey')} />
+            <VillageTab bind:this={village} {full} on:market={() => (activeTab = 'market')} on:journey={() => (activeTab = 'journey')} on:isles={() => (activeTab = 'isles')} />
         {:else if activeTab === 'grove'}
             <GroveTab {full} />
+        {:else if activeTab === 'isles'}
+            <IslesTab {full} on:visit={() => (activeTab = 'village')} />
         {:else if activeTab === 'market'}
             <MarketTab {full} on:place={placeFromMarket} />
         {:else}
@@ -131,6 +139,8 @@ function greeting(): string {
     border-radius: 9px;
     cursor: pointer;
 }
+/* Five tabs do not fit a narrow side panel with their pictures: there the words are enough */
+.pf-forest:not(.full) .ico { display: none; }
 .tabs button:hover { color: var(--text-normal); }
 .tabs button.active {
     color: var(--text-normal);

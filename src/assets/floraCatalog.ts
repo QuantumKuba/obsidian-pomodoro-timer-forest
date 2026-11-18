@@ -27,7 +27,7 @@ export const FLORA_SPECIES: FloraSpecies[] = [
         iconSvg: SPECIES_SVGS.sunflower,
         color: '#FBC02D',
         charm: 2,
-        sceneScale: 0.62,
+        sceneScale: 0.54,
     },
     {
         id: 'ancient_oak',
@@ -54,7 +54,7 @@ export const FLORA_SPECIES: FloraSpecies[] = [
         iconSvg: SPECIES_SVGS.lavender,
         color: '#7E57C2',
         charm: 2,
-        sceneScale: 0.62,
+        sceneScale: 0.46,
     },
     {
         id: 'autumn_maple',
@@ -107,6 +107,7 @@ export const FLORA_SPECIES: FloraSpecies[] = [
         iconSvg: SPECIES_SVGS.bamboo,
         color: '#4CAF50',
         charm: 3,
+        sceneScale: 0.74,
     },
     {
         id: 'bonsai',
@@ -120,6 +121,7 @@ export const FLORA_SPECIES: FloraSpecies[] = [
         iconSvg: SPECIES_SVGS.bonsai,
         color: '#2E7D32',
         charm: 5,
+        sceneScale: 0.5,
     },
     {
         id: 'mushroom_circle',
@@ -133,6 +135,7 @@ export const FLORA_SPECIES: FloraSpecies[] = [
         iconSvg: SPECIES_SVGS.mushroom_circle,
         color: '#00E5FF',
         charm: 6,
+        sceneScale: 0.7,
     },
     {
         id: 'golden_tree',
@@ -163,6 +166,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 3,
         perk: { kind: 'vitality_keep_pct', base: 20, perLevel: 10 },
         iconSvg: BUILDING_SVGS.campfire,
+        sceneScale: 0.8,
     },
     {
         id: 'cobblestone_path',
@@ -190,6 +194,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 2,
         perk: { kind: 'night_sunlight_pct', base: 10, perLevel: 5 },
         iconSvg: BUILDING_SVGS.lantern,
+        sceneScale: 0.74,
     },
     {
         id: 'bench',
@@ -204,6 +209,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 2,
         perk: { kind: 'task_coins', base: 1, perLevel: 1 },
         iconSvg: BUILDING_SVGS.bench,
+        sceneScale: 0.66,
     },
     {
         id: 'water_stream',
@@ -244,6 +250,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         maxLevel: 1,
         charm: 1,
         iconSvg: BUILDING_SVGS.hay_bale,
+        sceneScale: 0.7,
     },
     {
         id: 'stone_well',
@@ -258,6 +265,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 3,
         perk: { kind: 'coins_pct', base: 10, perLevel: 5 },
         iconSvg: BUILDING_SVGS.stone_well,
+        sceneScale: 0.92,
     },
     {
         id: 'bridge',
@@ -285,6 +293,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 2,
         perk: { kind: 'crop_growth_pct', base: 15, perLevel: 10 },
         iconSvg: BUILDING_SVGS.scarecrow,
+        sceneScale: 0.66,
     },
     {
         id: 'chicken_coop',
@@ -299,6 +308,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 5,
         perk: { kind: 'first_tree_coins', base: 3, perLevel: 2 },
         iconSvg: BUILDING_SVGS.chicken_coop,
+        sceneScale: 0.85,
     },
     {
         id: 'gazebo',
@@ -313,6 +323,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 5,
         perk: { kind: 'break_sunlight', base: 5, perLevel: 3 },
         iconSvg: BUILDING_SVGS.gazebo,
+        sceneScale: 1.15,
     },
     {
         id: 'cabin',
@@ -327,6 +338,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 6,
         perk: { kind: 'sunlight_pct', base: 10, perLevel: 5 },
         iconSvg: BUILDING_SVGS.cabin,
+        sceneScale: 1.22,
     },
     {
         id: 'torii_gate',
@@ -341,6 +353,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 6,
         perk: { kind: 'quest_bonus_pct', base: 20, perLevel: 10 },
         iconSvg: BUILDING_SVGS.torii_gate,
+        sceneScale: 1.15,
     },
     {
         id: 'watermill',
@@ -355,6 +368,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 7,
         perk: { kind: 'streak_shield', base: 1, perLevel: 1 },
         iconSvg: BUILDING_SVGS.watermill,
+        sceneScale: 1.2,
     },
     {
         id: 'greenhouse',
@@ -369,6 +383,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 8,
         perk: { kind: 'xp_pct', base: 15, perLevel: 10 },
         iconSvg: BUILDING_SVGS.greenhouse,
+        sceneScale: 1.25,
     },
     {
         id: 'windmill',
@@ -383,6 +398,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 8,
         perk: { kind: 'long_session_sunlight_pct', base: 20, perLevel: 10 },
         iconSvg: BUILDING_SVGS.windmill,
+        sceneScale: 1.4,
     },
     // Landmarks of the Village Charter: never sold, each one granted when the village reaches a rank
     {
@@ -397,6 +413,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         maxLevel: 1,
         charm: 4,
         iconSvg: BUILDING_SVGS.hamlet_signpost,
+        sceneScale: 0.76,
         charterRank: 1,
     },
     {
@@ -412,6 +429,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         charm: 5,
         perk: { kind: 'request_slots', base: 1, perLevel: 0 },
         iconSvg: BUILDING_SVGS.notice_board,
+        sceneScale: 0.92,
         charterRank: 2,
     },
     {
@@ -426,6 +444,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         maxLevel: 1,
         charm: 7,
         iconSvg: BUILDING_SVGS.market_stall,
+        sceneScale: 1.1,
         charterRank: 3,
     },
     {
@@ -440,6 +459,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         maxLevel: 1,
         charm: 10,
         iconSvg: BUILDING_SVGS.clock_tower,
+        sceneScale: 1.5,
         charterRank: 4,
     },
     {
@@ -454,6 +474,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         maxLevel: 1,
         charm: 12,
         iconSvg: BUILDING_SVGS.town_hall,
+        sceneScale: 1.3,
         charterRank: 5,
     },
     {
@@ -468,6 +489,7 @@ export const HOMESTEAD_BUILDINGS: HomesteadBuilding[] = [
         maxLevel: 1,
         charm: 15,
         iconSvg: BUILDING_SVGS.founders_fountain,
+        sceneScale: 1.08,
         charterRank: 6,
     },
 ]
@@ -545,13 +567,17 @@ export function isRipePlot(item: PlacedHomesteadItem): boolean {
     return item.itemType === 'building' && item.itemId === GARDEN_PLOT_ID && cropProgress(item) >= 1
 }
 
-export const BIOME_UNLOCK_LEVELS: Record<BiomeType, number> = {
+/** Biomes earned by village level. The rest (ISLAND_BIOMES) are found in the archipelago. */
+export const BIOME_UNLOCK_LEVELS: Partial<Record<BiomeType, number>> = {
     meadow: 1,
     sakura_garden: 3,
     autumn_valley: 5,
     alpine_frost: 8,
     twilight_moss: 12,
 }
+
+/** Biomes no level unlocks: each comes home with the first island reached in it. */
+export const ISLAND_BIOMES: BiomeType[] = ['coral_lagoon', 'ember_highlands', 'jade_marsh']
 
 /** Buying land grows the square village plot one row/column at a time. */
 export const LAND_EXPANSIONS: { size: number; unlockLevel: number; sunlightCost: number; coinsCost: number }[] = [

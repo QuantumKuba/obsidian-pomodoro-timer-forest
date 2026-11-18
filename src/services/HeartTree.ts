@@ -77,7 +77,8 @@ export function nextHeartStage(bond: number): HeartStage | null {
 export function heartTreeItem(g: Pick<GamificationData, 'heartTree' | 'homestead' | 'landSize'>): PlacedHomesteadItem | undefined {
     const id = g.heartTree?.itemId
     if (!id) return undefined
-    return g.homestead.find((i) => i.id === id && i.itemType === 'tree' && i.gridX < g.landSize && i.gridY < g.landSize)
+    // On an island it is always within the land (an island only ever grows); at home the plot is checked
+    return g.homestead.find((i) => i.id === id && i.itemType === 'tree' && (!!i.island || (i.gridX < g.landSize && i.gridY < g.landSize)))
 }
 
 export function tendedToday(g: Pick<GamificationData, 'heartTree'>, today: string): boolean {

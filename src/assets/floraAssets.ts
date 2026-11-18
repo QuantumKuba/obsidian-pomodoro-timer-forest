@@ -643,6 +643,64 @@ function bridge(): string {
     return svg(s)
 }
 
+export type BridgeSpanKind = 'single' | 'start' | 'mid' | 'end'
+
+/** How high the deck stands over the water `t` (0..1) of the way along a bridge tile, in scene units. */
+export function bridgeDeckRise(span: BridgeSpanKind, t: number): number {
+    const RISE = 5.5
+    const k = Math.max(0, Math.min(1, t))
+    return span === 'mid' ? RISE : span === 'single' ? RISE * Math.sin(Math.PI * k) : RISE * Math.sin((Math.PI / 2) * (span === 'start' ? k : 1 - k))
+}
+
+/**
+ * The footbridge as it stands in the village: laid along one axis of its tile so its two ends
+ * meet the banks. Drawn over the tile itself (centre at 32,53, the sides' midpoints at
+ * 16,45 / 48,45 / 48,61 / 16,61), so place it at scale 1.
+ *
+ * `x` runs from the upper-left side to the lower-right one, `y` from the upper-right side to
+ * the lower-left one. In a straight run of bridges the ends ramp up and the middle stays level.
+ */
+export function bridgeSpanSvg(axis: 'x' | 'y', span: BridgeSpanKind = 'single'): string {
+    const HALF = 0.25, RAIL = 7.5
+    const lift = (t: number) => bridgeDeckRise(span, t)
+    /** `t` 0..1 along the deck, `c` across it (−HALF far side … +HALF near side), `up` above the planks. */
+    const at = (t: number, c: number, up = 0, flat = false): Pt => {
+        const [u, v] = axis === 'x' ? [t - 0.5, c] : [c, t - 0.5]
+        return [r1(32 + (u - v) * 32), r1(53 + (u + v) * 16 - (flat ? 0 : lift(t)) - up)]
+    }
+    const ts = Array.from({ length: 11 }, (_, i) => i / 10)
+    const pts = (c: number, up = 0, flat = false) => ts.map((t) => at(t, c, up, flat).join(' '))
+    const line = (c: number, up = 0) => `M${pts(c, up).join('L')}`
+    const startsHere = span === 'single' || span === 'start'
+    const endsHere = span === 'single' || span === 'end'
+    const posts = [...(startsHere ? [0.05] : []), 0.5, ...(endsHere ? [0.95] : [])]
+
+    // shadow on the water, and the piles holding the deck up
+    let s = `<path d="M${pts(-HALF + 0.03, -2.5, true).join('L')}L${pts(HALF + 0.03, -2.5, true).reverse().join('L')}Z" fill="#0d2b45" opacity=".22"/>`
+    for (const t of span === 'single' ? [0.32, 0.68] : [0.25, 0.75]) {
+        const top = at(t, HALF), foot = at(t, HALF, -3, true)
+        if (foot[1] - top[1] > 3.4) s += LN(`M${top[0]} ${top[1] + 2}L${foot[0]} ${foot[1]}`, WOOD[0], 2)
+    }
+    // far railing
+    for (const t of posts) { const b = at(t, -HALF), a = at(t, -HALF, RAIL); s += OLN(`M${b[0]} ${b[1]}L${a[0]} ${a[1]}`, '#7a4e2a', 1.5) }
+    s += OLN(line(-HALF, RAIL - 0.4), '#8a5a30', 1.5)
+    // deck and planks
+    s += P(`M${pts(-HALF).join('L')}L${pts(HALF).reverse().join('L')}Z`, WOOD[2])
+    for (let t = 0.05; t < 1; t += 0.1) { const a = at(t, -HALF), b = at(t, HALF); s += LN(`M${a[0]} ${a[1]}L${b[0]} ${b[1]}`, '#a8733f', 0.6) }
+    // the near edge of the deck
+    const near = ts.map((t) => at(t, HALF))
+    s += P(`M${near.map((p) => p.join(' ')).join('L')}L${near.map((p) => `${p[0]} ${r1(p[1] + 3)}`).reverse().join('L')}Z`, '#7a4e2a')
+    s += LN(line(HALF, -0.5), '#d9a86c', 0.7)
+    // near railing, with capped posts where the bridge ends
+    for (const t of posts) {
+        const b = at(t, HALF), a = at(t, HALF, RAIL + 0.6), ends = t < 0.1 || t > 0.9
+        s += OLN(`M${b[0]} ${b[1] + 1.5}L${a[0]} ${a[1]}`, WOOD[1], ends ? 2.5 : 1.9)
+        if (ends) s += C(a[0], a[1] - 0.6, 1.6, WOOD[2], OL)
+    }
+    s += OLN(line(HALF, RAIL), WOOD[1], 1.8) + LN(line(HALF, RAIL * 0.5), '#8a5a30', 0.9)
+    return svg(s)
+}
+
 function greenhouse(): string {
     let s = shadow(23, 5)
     s += P('M11 53L39 53L39 57L11 57Z', '#b5654a') + P('M39 53L51 47L51 51L39 57Z', '#8e4a36') + LN('M11 55L39 55M18 53L18 55M25 55L25 57M32 53L32 55', '#8e4a36', 0.5)
@@ -995,6 +1053,30 @@ export const BIOME_CONFIGS: Record<string, { id: string; name: string; backgroun
         border: '#2b244d',
         cellBg: 'rgba(34, 30, 56, 0.7)',
         description: 'Mystical deep indigo soil with bioluminescent flora.',
+    },
+    coral_lagoon: {
+        id: 'coral_lagoon',
+        name: 'Coral Lagoon',
+        background: '#2b2618',
+        border: '#4d4428',
+        cellBg: 'rgba(56, 50, 32, 0.7)',
+        description: 'Warm sand and sea-bright air. Found on an island.',
+    },
+    ember_highlands: {
+        id: 'ember_highlands',
+        name: 'Ember Highlands',
+        background: '#241a19',
+        border: '#4a302c',
+        cellBg: 'rgba(52, 36, 34, 0.7)',
+        description: 'Dark basalt that glows with drifting embers. Found on an island.',
+    },
+    jade_marsh: {
+        id: 'jade_marsh',
+        name: 'Jade Marsh',
+        background: '#16261f',
+        border: '#2a4a3c',
+        cellBg: 'rgba(30, 52, 43, 0.7)',
+        description: 'Cool jade turf under a soft mist. Found on an island.',
     },
 }
 
