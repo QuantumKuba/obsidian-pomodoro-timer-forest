@@ -6,13 +6,15 @@
  * harness scenes (marketing.ts).
  */
 import * as fs from 'fs'
-import { renderVillage } from '../../src/render/VillageScene'
+import { renderVillage, skyFor } from '../../src/render/VillageScene'
 import { SCENE_CSS } from '../../src/render/sceneCss'
 import { BIOME_CONFIGS, GROWTH_STAGE_SVGS, SPECIES_SVGS, growthSvg } from '../../src/assets/floraAssets'
-import { BIOME_UNLOCK_LEVELS, CROPS, FLORA_SPECIES, HOMESTEAD_BUILDINGS } from '../../src/assets/floraCatalog'
+import { BIOME_UNLOCK_LEVELS, CROPS, ISLAND_BIOMES, FLORA_SPECIES, HOMESTEAD_BUILDINGS } from '../../src/assets/floraCatalog'
 import type { BiomeType, GamificationData } from '../../src/types/forest'
+import { renderArchipelago } from '../../src/render/ArchipelagoMap'
+import { bridgeProgress, islandBoonPct, islandLinks, islandView } from '../../src/services/Islands'
 import { village } from './sample-data'
-import { T, page } from './theme'
+import { FONT, T, page } from './theme'
 import { perkTag, stars } from './perk-tags'
 
 const out = process.argv[2]
@@ -94,32 +96,95 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
         `, `<style>${SCENE_CSS}</style>${html}`))
 }
 
-// ---------------------------------------------------------------- biomes: five grounds, side by side
+// ---------------------------------------------------------------- biomes: eight grounds, five earned by level and three found on islands
 {
     type R = [string, string, number, number, number?]
+    // A river through the middle, falling off the front-right edge once
     const mini: R[] = [
-        ['tree', 'sakura', 0, 0, 3], ['tree', 'classic_pine', 3, 0, 2], ['tree', 'autumn_maple', 4, 1, 3], ['building', 'cabin', 1, 1, 3],
-        ['building', 'cobblestone_path', 2, 1], ['building', 'cobblestone_path', 2, 2], ['building', 'cobblestone_path', 2, 3],
-        ['building', 'stone_well', 3, 2, 2], ['building', 'campfire', 1, 3, 2], ['building', 'lantern', 3, 3, 2],
-        ['tree', 'lavender', 0, 3, 2], ['building', 'water_stream', 0, 4], ['building', 'water_stream', 1, 4], ['building', 'bridge', 2, 4],
-        ['building', 'water_stream', 3, 4], ['building', 'water_stream', 4, 4], ['tree', 'ancient_oak', 4, 3, 2], ['tree', 'sunflower', 0, 1, 1],
+        ['tree', 'sakura', 0, 0, 3], ['tree', 'classic_pine', 2, 0, 2], ['tree', 'autumn_maple', 4, 0, 3], ['tree', 'lavender', 0, 1, 2],
+        ['building', 'cabin', 1, 1, 3], ['building', 'cobblestone_path', 2, 1], ['building', 'stone_well', 3, 1, 2],
+        ['building', 'water_stream', 0, 2], ['building', 'water_stream', 1, 2], ['building', 'bridge', 2, 2], ['building', 'water_stream', 3, 2], ['building', 'water_stream', 4, 2],
+        ['building', 'cobblestone_path', 2, 3], ['building', 'campfire', 1, 3, 2], ['building', 'lantern', 3, 3, 2], ['tree', 'sunflower', 0, 3, 1], ['tree', 'willow', 4, 3, 2],
+        ['tree', 'ancient_oak', 0, 4, 2], ['building', 'bench', 2, 4, 1], ['tree', 'classic_pine', 4, 4, 2],
     ]
     const base = village()
-    const biomes = Object.keys(BIOME_UNLOCK_LEVELS) as BiomeType[]
+    const biomes = [...(Object.keys(BIOME_UNLOCK_LEVELS) as BiomeType[]), ...ISLAND_BIOMES]
     const cells = biomes.map((b, i) => {
-        const g: GamificationData = { ...base, landSize: 5, activeBiome: b, vitality: 90, homestead: mini.map(([t, id, x, y, l], k) => ({ id: `m${k}`, itemType: t as any, itemId: id, gridX: x, gridY: y, level: l ?? 1 })) }
+        const g: GamificationData = { ...base, islands: [], landSize: 5, activeBiome: b, vitality: 90, homestead: mini.map(([t, id, x, y, l], k) => ({ id: `m${k}`, itemType: t as any, itemId: id, gridX: x, gridY: y, level: l ?? 1 })) }
         const date = b === 'twilight_moss' ? at(20) : at(13)
-        const svg = crop(renderVillage(g, { date, idPrefix: `bm${i}`, still: true }), 0, 22, 368, 290)
-        return `<div class="mk-tile cell"><div class="art">${svg}</div><div class="cap"><b>${BIOME_CONFIGS[b].name}</b><span class="mk-pill">Lv ${BIOME_UNLOCK_LEVELS[b]}</span></div></div>`
+        const svg = renderVillage(g, { date, idPrefix: `bm${i}`, still: true, seed: `bm${b}` })
+            .replace(/viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/, (_, x, y, w, h) => `viewBox="${+x + w * 0.02} ${+y + h * 0.03} ${w * 0.96} ${h * 0.86}"`)
+            .replace('xMidYMid meet', 'xMidYMid slice')
+        const lv = BIOME_UNLOCK_LEVELS[b]
+        return `<div class="mk-tile cell"><div class="art">${svg}</div><div class="cap"><b>${BIOME_CONFIGS[b].name}</b>${lv ? `<span class="mk-pill">Lv ${lv}</span>` : '<span class="mk-pill sea">Island find</span>'}</div></div>`
     }).join('')
-    write('biomes', page(1600, 434, `
+    write('biomes', page(1600, 814, `
         body{padding:${T.margin}px}
-        .row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:22px}
+        .row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px}
         .cell{overflow:hidden;padding:0}
-        .art svg{display:block;width:100%;height:auto;aspect-ratio:368/290}
+        .art svg{display:block;width:100%;height:auto;aspect-ratio:4/3}
         .cap{display:flex;align-items:center;justify-content:space-between;padding:11px 14px 13px}
         .cap b{font-size:16px;font-weight:700}
-        `, `<style>${SCENE_CSS}</style><div class="mk-eyebrow">Five biomes</div><div class="mk-title">Switch the ground under your village</div><div class="row">${cells}</div>`))
+        .mk-pill.sea{background:#dff1f3;color:#1f7a86}
+        `, `<style>${SCENE_CSS}</style><div class="mk-eyebrow">Eight biomes</div><div class="mk-title">Switch the ground under your village</div><div class="row">${cells}</div>`))
+}
+
+// ---------------------------------------------------------------- islands: the archipelago, and how an island is earned
+{
+    const g = village()
+    const map = renderArchipelago(g, { date: at(12), idPrefix: 'arc', selected: 'isle_3' })
+    const sky = skyFor(at(12))
+    const thesis = g.islands!.find((i) => i.id === 'isle_1')!
+    const deep = g.islands!.find((i) => i.id === 'isle_3')!
+    const b = bridgeProgress(deep)
+    const view = islandView(g, 'isle_1')
+    // Tight on the island itself: most of the scene's sky is cut away
+    const isle = renderVillage(view, { date: at(12), idPrefix: 'isl', still: true, island: 'isle_1', seed: 'isle_1' })
+        .replace(/viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/, (_, x, y, w, h) => `viewBox="${+x + w * 0.05} ${+y + h * 0.15} ${w * 0.9} ${h * 0.68}"`)
+        .replace('xMidYMid meet', 'xMidYMid slice')
+    const icon = (d: string) => `<svg viewBox="0 0 24 24"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+    const tagI = icon('M3 12V4h8l9 9-8 8-9-9zM7.5 7.5h.01')
+    const folderI = icon('M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z')
+    const noteI = icon('M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5')
+    const planks = Math.round(b.ratio * 28)
+    const bar = Array.from({ length: 28 }, (_, i) => `<i class="${i < planks ? 'on' : ''}"></i>`).join('')
+    write('islands', page(1600, 640, `
+        body{padding:${T.margin}px}
+        .row{display:grid;grid-template-columns:1fr 520px;gap:16px;margin-top:22px;height:500px}
+        .map{border-radius:${T.radius}px;overflow:hidden;background:linear-gradient(${sky.top},${sky.bottom});box-shadow:0 6px 18px rgba(60,45,20,.08);position:relative}
+        .map svg{display:block;width:100%;height:100%}
+        .pf-map-name{font:750 9px ${FONT};fill:#fff;paint-order:stroke;stroke:rgba(12,24,48,.5);stroke-width:1.7px;stroke-linejoin:round}
+        .pf-map-sub{font:600 7px ${FONT};fill:#eef6ff;paint-order:stroke;stroke:rgba(12,24,48,.45);stroke-width:1.4px;stroke-linejoin:round}
+        .col{display:flex;flex-direction:column;gap:12px;min-height:0}
+        .st{padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+        .st h4,.land h4{margin:0;display:flex;align-items:center;gap:10px;font-size:18px;font-weight:750}
+        .st h4 .n,.land h4 .n{flex:none;width:26px;height:26px;border-radius:50%;background:${T.green};color:#fff;font-size:13.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+        .st p,.land p{margin:0;font-size:14.5px;line-height:1.4;color:${T.muted}}
+        .chips{display:flex;gap:8px;flex-wrap:wrap}
+        .chip{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:650;padding:6px 12px 6px 10px;border-radius:9px;background:#f3eee4;border:1px solid ${T.line};color:#3d3a33;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+        .chip svg{width:15px;height:15px;color:#8a7a5c}
+        .chip.tag{background:#efeafe;border-color:#ddd3fb;color:#5b3fd0}.chip.tag svg{color:#7c5cff}
+        .bridge{display:flex;align-items:center;gap:12px}
+        .bar{flex:1;display:flex;gap:2px;height:14px;padding:2px;border-radius:5px;background:#ece5d8}
+        .bar i{flex:1;border-radius:2px;background:transparent}.bar i.on{background:linear-gradient(#d9a465,#b07a3c)}
+        .bridge b{font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap}.bridge b span{color:${T.muted};font-weight:600}
+        .land{flex:1;min-height:0;padding:0;overflow:hidden;display:grid;grid-template-columns:1fr 200px}
+        .land .pic{min-height:0;background:linear-gradient(#86c8ef,#d8f0fc)}
+        .land .pic svg{display:block;width:100%;height:100%}
+        .land .tx{padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+        .facts{display:flex;flex-direction:column;gap:6px;margin-top:auto}
+        .facts div{display:flex;justify-content:space-between;font-size:13.5px;color:${T.muted};border-top:1px solid ${T.line};padding-top:6px}
+        .facts b{color:${T.ink}}
+        `, `<style>${SCENE_CSS}</style><div class="mk-eyebrow">The archipelago</div><div class="mk-title">Give each project its own island</div>
+        <div class="row"><div class="map">${map}</div><div class="col">
+            <div class="mk-tile st"><h4><span class="n">1</span>Choose what it stands for</h4>
+                <div class="chips"><span class="chip tag">${tagI}#thesis</span><span class="chip">${folderI}Projects/Thesis</span><span class="chip">${noteI}[[Reading hub]]</span></div></div>
+            <div class="mk-tile st"><h4><span class="n">2</span>Focus on it to build the bridge</h4>
+                <div class="bridge"><div class="bar">${bar}</div><b>${Math.floor(b.laid)} <span>/ ${b.target} min</span></b></div></div>
+            <div class="mk-tile land"><div class="pic">${isle}</div><div class="tx"><h4><span class="n">3</span>Land, then keep growing</h4>
+                <p>New ground, a biome of its own, and a Sunlight bonus whenever you work on it.</p>
+                <div class="facts"><div><span>Mastery</span><b>${thesis.level}</b></div><div><span>Bonus</span><b>+${islandBoonPct(thesis.level)}%</b></div><div><span>Notes</span><b>${thesis.notes}</b></div></div></div></div>
+        </div></div>`))
 }
 
 // ---------------------------------------------------------------- frames for village-day.gif: one day, dawn to night
@@ -132,5 +197,48 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
         write(`village-day-${String(i).padStart(2, '0')}`, page(560, 392, `svg{display:block;width:560px;height:392px}`, `<style>${SCENE_CSS}</style>${svg}`))
     })
     fs.writeFileSync(`${out}/village-day.json`, JSON.stringify(frames.length))
+}
+// ---------------------------------------------------------------- frames for bridge.gif: focus lays the bridge, the island is reached, the next one appears
+{
+    const g = village()
+    const sky = skyFor(at(12))
+    const deep = g.islands!.find((i) => i.id === 'isle_3')!
+    const target = bridgeProgress({ ...deep, bridge: 0 }).target
+    const steps = 22
+    const states: GamificationData[] = []
+    for (let k = 0; k <= steps; k++) {
+        const laid = Math.round((target * k) / steps)
+        states.push({ ...g, islands: g.islands!.map((i) => (i.id === 'isle_3' ? { ...i, bridge: laid } : i)) })
+    }
+    // Landed: the island takes on its colours, and the next one comes into view
+    const landed: GamificationData = {
+        ...g,
+        islands: [
+            ...g.islands!.map((i) => (i.id === 'isle_3' ? { ...i, bridge: target, reachedOn: i.sightedOn, level: 1, minutes: 30 } : i)),
+            { id: 'isle_4', index: 4, name: '', biome: 'jade_marsh', focus: null, bridge: 0, sightedOn: '', minutes: 0, level: 0, notes: 0, notesMark: 0 },
+        ],
+    }
+    states.push(landed)
+    // One camera for every frame (the last one's, which also holds the new island) and one seed, so the clouds stay put
+    const viewBox = renderArchipelago(landed, { date: at(12), idPrefix: 'br' }).match(/viewBox="[^"]+"/)![0]
+    states.forEach((st, i) => {
+        const svg = renderArchipelago(st, { date: at(12), idPrefix: 'br', selected: 'isle_3' }).replace(/viewBox="[^"]+"/, viewBox)
+        write(`bridge-${String(i).padStart(2, '0')}`, page(640, 400, `
+            body{background:linear-gradient(${sky.top},${sky.bottom})}
+            svg{display:block;width:640px;height:400px}
+            .pf-map-name{font:750 10.5px ${FONT};fill:#fff;paint-order:stroke;stroke:rgba(12,24,48,.5);stroke-width:2px;stroke-linejoin:round}
+            .pf-map-sub{font:600 8px ${FONT};fill:#eef6ff;paint-order:stroke;stroke:rgba(12,24,48,.45);stroke-width:1.6px;stroke-linejoin:round}
+            .pf-map-q{font:800 11px ${FONT};fill:#b5741a}
+            `, svg, 'transparent'))
+    })
+    fs.writeFileSync(`${out}/bridge.json`, JSON.stringify(states.length))
+}
+// ---------------------------------------------------------------- island-scene: one reached island on its own, with the bridge home
+{
+    const g = village()
+    const svg = renderVillage(islandView(g, 'isle_1'), { date: at(12), idPrefix: 'is', still: true, island: 'isle_1', seed: 'isle_1', links: islandLinks(g, 'isle_1') })
+        .replace(/viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/, (_, x, y, w, h) => `viewBox="${+x + w * 0.02} ${+y + h * 0.02} ${w * 0.96} ${h * 0.84}"`)
+        .replace('xMidYMid meet', 'xMidYMid slice')
+    write('island-scene', page(640, 400, `svg{display:block;width:640px;height:400px}`, `<style>${SCENE_CSS}</style>${svg}`))
 }
 console.log('composed')

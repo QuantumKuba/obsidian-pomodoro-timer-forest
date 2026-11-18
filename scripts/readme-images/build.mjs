@@ -66,6 +66,8 @@ composed('growth')
 composed('collection')
 composed('day-cycle', 1.25)
 composed('biomes')
+composed('islands')
+composed('island-scene', 1.25)
 
 // Narrow panels: the sidebar width people actually use, cropped to the interesting part
 ui('panel-sidebar', 'scene=sidebar', 356, 900, { clip: downTo('svg.pf-scene', 14) })
@@ -79,6 +81,9 @@ ui('panel-tasks', 'scene=tasks&pins=2', 356, 1000, { clip: downTo('.panel', 12) 
 ui('panel-tasks-edit', 'scene=tasks&press=.edit&nth=1&focus=1&tracking=1', 356, 1300, { clip: downTo('.group', 12, 0), settle: 1500 })
 ui('homestead-full', 'scene=homestead&select=cabin', 1360, 900, { pad: 0, extra: 'body{height:900px;overflow:hidden}', clip: around('.pf-forest > *', 28) })
 ui('homestead-heart-tree', 'scene=homestead&select=heart', 1360, 900, { pad: 0, extra: 'body{height:900px;overflow:hidden}', clip: around('.pf-forest > *', 28) })
+ui('isles-full', 'scene=homestead&tab=isles', 1360, 1100, { pad: 0, extra: 'body{height:1100px;overflow:hidden}', clip: around('.pf-forest > *', 28) })
+ui('island-thesis', 'scene=homestead&isle=isle_1', 1360, 900, { pad: 0, extra: 'body{height:900px;overflow:hidden}', clip: around('.pf-forest > *', 28) })
+ui('panel-isles', 'scene=forest&tab=isles', 356, 2000, { clip: downTo('.pf-forest > *', 14) })
 const boardPage = { pad: 0, extra: '#wrap,#app{height:100vh} body{overflow:hidden} .add-lane{display:none}', clip: downTo('.pf-lane', 24) }
 ui('board', 'scene=board&burst=1', 1520, 720, boardPage)
 ui('board-light', 'scene=board&theme=light', 1520, 720, boardPage)
@@ -92,6 +97,11 @@ const anims = [
     {
         name: 'timer-growth', fps: 12, hold: 14, scale: 2,
         frames: Array.from({ length: 40 }, (_, i) => ({ url: `dial.html?scene=dial&ratio=${Math.min(0.999, i / 39)}`, w: 300, h: 300, settle: 600 })),
+    },
+    {
+        name: 'bridge', fps: 10, hold: 22, scale: 1.25,
+        frames: Array.from({ length: JSON.parse(fs.readFileSync(path.join(build, 'bridge.json'), 'utf8')) }, (_, i) =>
+            ({ url: `bridge-${String(i).padStart(2, '0')}.html`, w: 640, h: 400, budget: 0, settle: 50 })),
     },
     {
         name: 'village-day', fps: 8, hold: 6, scale: 1.25,

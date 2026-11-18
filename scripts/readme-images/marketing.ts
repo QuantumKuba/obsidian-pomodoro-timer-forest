@@ -8,7 +8,8 @@
 import { readable } from 'svelte/store'
 import TimerViewComponent from '../../src/TimerViewComponent.svelte'
 import { activePlantStore } from '../../src/stores'
-import { renderVillage } from '../../src/render/VillageScene'
+import { renderVillage, skyFor } from '../../src/render/VillageScene'
+import { islandLinks } from '../../src/services/Islands'
 import { ICONS, SPECIES_SVGS, VILLAGER_SVGS } from '../../src/assets/floraAssets'
 import { charterLandmark, getBuilding } from '../../src/assets/floraCatalog'
 import { CHARTER_RANKS } from '../../src/services/Charter'
@@ -56,27 +57,28 @@ export function mountMarketing(scene: string, q: URLSearchParams, g: Gamificatio
     }
 
     if (scene === 'hero') {
-        const W = 1600, H = 720
+        const W = 1600, H = 716
         const at = new Date(); at.setHours(12, 0, 0, 0)
-        style(base(W, H, 'linear-gradient(#7cc2ee,#d6efff)') + DIAL_CARD + `
-            .scene{position:absolute;right:-40px;top:-6px;width:1010px;-webkit-mask-image:linear-gradient(to right,transparent 0,#000 22%)}
+        const sky = skyFor(at)
+        style(base(W, H, `linear-gradient(${sky.top},${sky.bottom})`) + DIAL_CARD + `
+            .scene{position:absolute;right:-30px;top:-14px;width:1020px;-webkit-mask-image:linear-gradient(to right,transparent 0,#000 16%)}
             .scene svg{display:block;width:100%;height:auto}
-            .copy{position:absolute;left:84px;top:118px;width:620px}
+            .copy{position:absolute;left:84px;top:72px;width:620px}
             .kicker{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:6px 14px 6px 10px;border-radius:99px;background:rgba(255,255,255,.72);color:${T.green}}
             .kicker svg{width:18px;height:18px}
             h1{font-size:78px;line-height:.98;margin:22px 0 18px;letter-spacing:-.03em;color:#0f2b3d;font-weight:800}
             h1 em{font-style:normal;color:${T.green}}
             p{font-size:25px;line-height:1.4;margin:0;color:#24506b}
-            .dialcard{position:absolute;left:84px;top:408px;width:264px;height:264px}
+            .dialcard{position:absolute;left:84px;top:404px;width:264px;height:264px}
             .dialcard .dial{zoom:1.05}
-            .note{position:absolute;left:372px;top:452px;display:flex;flex-direction:column;gap:10px}
+            .note{position:absolute;left:372px;top:448px;display:flex;flex-direction:column;gap:10px}
             .chip{display:inline-flex;align-items:center;gap:7px;font-size:19px;font-weight:750;padding:8px 15px 8px 13px;border-radius:99px;background:rgba(255,255,255,.88);box-shadow:0 6px 16px rgba(20,60,90,.12);width:max-content}
             .chip:nth-child(2){margin-left:22px}.chip:nth-child(3){margin-left:44px}
             .chip svg{width:20px;height:20px}
             .chip.sun{color:#c7600a}.chip.coin{color:#97620c}.chip.xp{color:#6d4fd6}
             `)
-        app.innerHTML = `<div class="scene">${renderVillage(g, { date: at, idPrefix: 'hero' })}</div>
-            <div class="copy"><span class="kicker">${ICONS.sapling}Obsidian plugin</span><h1>Pomodoro Timer<br><em>Forest</em></h1><p>Focus grows trees. Trees build your village.</p></div>
+        app.innerHTML = `<div class="scene">${renderVillage(g, { date: at, idPrefix: 'hero', links: islandLinks(g, null) })}</div>
+            <div class="copy"><span class="kicker">${ICONS.sapling}Obsidian plugin</span><h1>Pomodoro Timer<br><em>Forest</em></h1><p>Focus grows trees. Trees build your village.<br>Your projects become islands.</p></div>
             <div class="dialcard" id="dial"></div>
             <div class="note"><span class="chip sun">${ICONS.sunlight}+84</span><span class="chip coin">${ICONS.coin}+7</span><span class="chip xp">+74 XP</span></div>`
         mountDial(document.getElementById('dial')!, 0.62)

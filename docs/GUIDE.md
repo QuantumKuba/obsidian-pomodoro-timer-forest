@@ -1,6 +1,6 @@
 # Forest & Homestead: user guide
 
-A short guide to how the game layer of **Pomodoro Timer Forest** works. For the exact numbers and data schema see the [technical spec](../FOREST_SPEC.md). Installation is in the [README's quick start](../README.md#quick-start), and the classic timer features (task tracking, logging, Dataview, CSS variables) have their own page: [Timer, tasks and logging](TIMER.md).
+A short guide to how the game layer of **Pomodoro Timer Forest** works. For the exact numbers and data schema see the [technical spec](../FOREST_SPEC.md). Installation is in the [README](../README.md#install), and the classic timer features (task tracking, logging, Dataview, CSS variables) have their own page: [Timer, tasks and logging](TIMER.md).
 
 - [The loop in one minute](#the-loop-in-one-minute)
 - [Opening things](#opening-things)
@@ -61,9 +61,13 @@ A short guide to how the game layer of **Pomodoro Timer Forest** works. For the 
 | Start / pause, reset, switch work/break | Commands *Start / pause timer*, *Reset timer*, *Switch timer mode (work / break)*, or click the timer |
 | Hyperfocus | Commands *Start hyperfocus session*, *Land hyperfocus session*, or click the status bar icon |
 
-Both the sidebar panel and the full page have four tabs: **Village**, **Grove**, **Market** and **Journey**.
+Both the sidebar panel and the full page have five tabs: **Village**, **Grove**, **Isles**, **Market** and **Journey**.
 
 ## Growing trees
+
+<p align="center">
+  <img src="images/growth.png" alt="A cherry blossom at each growth stage, seed to fully grown, and the withered stump you get if you give up" width="100%">
+</p>
 
 - Click the plant in the timer (while idle) to choose which seed to grow. Only species you have unlocked are listed.
 - The plant moves through **seed → sprout → sapling → fully grown** at 0 / 25 / 50 / 75 % of the session, and the ring around it fills up.
@@ -235,7 +239,15 @@ Everything you do earns XP. Levels unlock species, buildings, biomes and more la
 
 The full table lives in the [spec](../FOREST_SPEC.md#3-flora-catalog).
 
+<p align="center">
+  <img src="images/panel-levelup.png" alt="The level-up card: the Celestial Gold Tree and 8×8 land unlocked at level 14" width="300">
+</p>
+
 ## Building your village
+
+<p align="center">
+  <img src="images/panel-market.png" alt="The market in the sidebar: buildings with their prices and perks" width="300">
+</p>
 
 - **Inventory.** Every finished session gives you a sapling of the species you grew. Buildings you buy also go to your inventory. Open the *Village* tab, pick an item, then tap an empty tile.
 - **Sell spare saplings.** Have more than you can plant? Press **Sell** on a sapling in the inventory to trade one for a few Coins. Shift-click sells the whole stack.
@@ -315,6 +327,10 @@ Quests are for today; the charter is for the months ahead. Your settlement climb
 
 Your village is the first island. From **level 2** another one comes into view, and it is yours to give a meaning: open the **Isles** tab and decide what it stands for.
 
+<p align="center">
+  <img src="images/isles-full.png" alt="The Isles tab: a map of the home village and three islands joined by rope bridges, with the bridge to Deep Work Isle 190 of 350 minutes along" width="100%">
+</p>
+
 | An island can stand for | What counts toward it |
 |---|---|
 | **A tag**, e.g. `#thesis` | Sessions on a task or note carrying the tag (nested tags too: `#thesis/ch2`) |
@@ -330,6 +346,11 @@ The Isles tab suggests subjects from your own vault: where your focus has gone o
 - **The library.** An island also counts the notes its subject holds. Milestones (5, 10, 25, 50, 100… notes) passed after you land are celebrated: writing notes on the things you study literally grows the place.
 - **One at a time, without end.** There is always exactly one island on the horizon. Reach it and the next one is sighted. Bridges, mastery and the charter's later chapters have no last step.
 - **Moving around.** Chips above the village switch between home and your islands, and so does clicking a bridge in the scene. Buildings and trees are placed on whichever island you are looking at; perks and charm count across all of them.
+
+<p align="center">
+  <img src="images/island-thesis.png" alt="Thesis Isle, a Coral Lagoon island with a willow, a stream and a footbridge, joined to home by a rope bridge" width="100%">
+</p>
+
 - **Changing your mind.** An island's subject can be changed, and the island renamed, at any time. Bridge planks and mastery are kept.
 
 ## Neighbours and their requests
@@ -344,6 +365,10 @@ Four residents live in the village, one more with each early rank: **Hollis** th
 The *Neighbours* section of the *Journey* tab shows everyone, their hearts and what they're asking for.
 
 ## The Heart Tree and mission finds
+
+<p align="center">
+  <img src="images/homestead-heart-tree.png" alt="The village with the Heart Tree selected: a larger Ancient Oak hung with ribbons, a birdhouse and a firefly jar, with finds glinting nearby" width="100%">
+</p>
 
 Some things can't be bought: **care items** and **ornaments** only come from missions. Each one turns up in the village, and you look after one tree of your choosing with them, your **Heart Tree**.
 
@@ -384,6 +409,10 @@ There are twelve, each with its own source: one per charter chapter (Carved Hear
 
 ## Daily quests and achievements
 
+<p align="center">
+  <img src="images/panel-journey.png" alt="The Journey tab: today's quests, the daily chest and achievements" width="300">
+</p>
+
 Each morning the *Journey* tab shows **three quests**, picked by date. They are things like *Focus for 75 minutes*, *Check off 3 tasks*, *Take a proper break*, *Focus on a specific task* or *Tend your village*. Once you use [boards](#kanban-boards), *Finish 2 cards on a board* and *Finish a card you focused on* join them. Each finished quest also leaves a care item for your [Heart Tree](#the-heart-tree-and-mission-finds). Finish all three to open the **daily chest**.
 
 There are **27 achievements** (first tree, streaks, focus hours, tasks, finished cards, estimates on target, a cleared board, breaks, harvests, full plot, a Rooted Heart Tree, half the ornaments, and more), each with a reward and a progress bar.
@@ -412,6 +441,10 @@ When a session starts, the plugin looks at the tags on the task you are tracking
 Mappings are stored in the plugin's `data.json` under `gamification.tagMappings` if you want to change them.
 
 ## The Grove journal
+
+<p align="center">
+  <img src="images/panel-grove.png" alt="The Grove journal: today's trees on a small island and a four-week activity map" width="300">
+</p>
 
 The *Grove* tab shows the trees you grew on any day as a small island. Use the arrows to browse past days, click a tree to see its task and note, then click the card to open the note. A four-week activity map at the bottom jumps you to any day.
 
