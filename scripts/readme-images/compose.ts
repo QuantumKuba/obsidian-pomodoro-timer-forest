@@ -20,8 +20,6 @@ import { perkTag, stars } from './perk-tags'
 const out = process.argv[2]
 const at = (h: number, m = 0) => { const d = new Date(); d.setHours(h, m, 0, 0); return d }
 const write = (name: string, html: string) => fs.writeFileSync(`${out}/${name}.html`, html)
-/** Crop a scene SVG to part of its viewBox (in scene units). */
-const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.replace(/viewBox="[^"]+"/, `viewBox="${x} ${y} ${w} ${h}"`)
 
 // ---------------------------------------------------------------- growth: one tree, four stages, and what giving up costs
 {
@@ -86,7 +84,9 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
 {
     const g = village()
     const cells: [string, string, Date][] = [['Dawn', '06:30', at(6, 30)], ['Day', '12:00', at(12)], ['Dusk', '19:00', at(19)], ['Night', '23:00', at(23)]]
-    const html = cells.map(([t, clock, d], i) => `<div class="cell">${crop(renderVillage(g, { date: d, idPrefix: `dc${i}`, still: true }), 0, 6, 560, 392)}<div class="tag"><b>${t}</b><span>${clock}</span></div></div>`).join('')
+    // As the full-page village shows it: the bridges and the islands they lead to stay in frame
+    const links = islandLinks(g, null)
+    const html = cells.map(([t, clock, d], i) => `<div class="cell">${renderVillage(g, { date: d, idPrefix: `dc${i}`, still: true, links }).replace('xMidYMid meet', 'xMidYMid slice')}<div class="tag"><b>${t}</b><span>${clock}</span></div></div>`).join('')
     write('day-cycle', page(1320, 1000, `
         body{padding:${T.margin}px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
         .cell{position:relative;border-radius:${T.radius}px;overflow:hidden;height:452px;box-shadow:0 6px 18px rgba(60,45,20,.08)}
@@ -190,13 +190,16 @@ const crop = (svg: string, x: number, y: number, w: number, h: number) => svg.re
 // ---------------------------------------------------------------- frames for village-day.gif: one day, dawn to night
 {
     const g = village()
+    // The whole scene with its bridges, as the full-page village shows it
+    const links = islandLinks(g, null)
+    const [, , DAY_W, DAY_H] = renderVillage(g, { still: true, links }).match(/viewBox="([^"]+)"/)![1].split(' ').map(Number)
     const frames: number[] = []
     for (let m = 5 * 60; m <= 23 * 60 + 30; m += 30) frames.push(m)
     frames.forEach((m, i) => {
-        const svg = crop(renderVillage(g, { date: at(Math.floor(m / 60), m % 60), idPrefix: `vd${i}`, still: true }), 0, 6, 560, 392)
-        write(`village-day-${String(i).padStart(2, '0')}`, page(560, 392, `svg{display:block;width:560px;height:392px}`, `<style>${SCENE_CSS}</style>${svg}`))
+        const svg = renderVillage(g, { date: at(Math.floor(m / 60), m % 60), idPrefix: `vd${i}`, still: true, links })
+        write(`village-day-${String(i).padStart(2, '0')}`, page(DAY_W, DAY_H, `svg{display:block;width:${DAY_W}px;height:${DAY_H}px}`, `<style>${SCENE_CSS}</style>${svg}`))
     })
-    fs.writeFileSync(`${out}/village-day.json`, JSON.stringify(frames.length))
+    fs.writeFileSync(`${out}/village-day.json`, JSON.stringify({ frames: frames.length, w: DAY_W, h: DAY_H }))
 }
 // ---------------------------------------------------------------- frames for bridge.gif: focus lays the bridge, the island is reached, the next one appears
 {

@@ -22,7 +22,7 @@ A Pomodoro timer for Obsidian where every session grows a tree, and every tree g
 It's made for brains that tune out a plain countdown and give up on apps that punish a bad week. Progress is something you can see, rewards land the moment a session ends, and nothing you build is ever taken away.
 
 <p align="center">
-  <img src="docs/images/how-it-works.png" alt="How it works: focus on a task, harvest a tree with Sunlight, Coins and XP, build your village, and upgrade buildings whose perks boost every session" width="100%">
+  <img src="docs/images/how-it-works.png" alt="How it works: focus on a task, harvest a tree with Sunlight, Coins and XP, build your village, upgrade buildings whose perks boost every session, and bridge out to new islands" width="100%">
 </p>
 
 ## Watch it grow
@@ -66,7 +66,7 @@ Spend Sunlight and Coins on buildings with real perks, plant the saplings you ha
 
 <table>
   <tr>
-    <td width="62%" valign="top"><img src="docs/images/village-day.gif" alt="The same village passing from dawn through day and dusk to night"></td>
+    <td width="62%" valign="top"><img src="docs/images/village-day.gif" alt="The village and the islands bridged to it, passing from dawn through day and dusk to night"></td>
     <td width="38%" valign="top"><img src="docs/images/panel-heart-tree.png" alt="The Heart Tree card: stage and bond, today's need with a Tend button, the satchel of care items and the ornament collection"></td>
   </tr>
   <tr>

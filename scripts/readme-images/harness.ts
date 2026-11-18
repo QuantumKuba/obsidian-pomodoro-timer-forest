@@ -19,7 +19,7 @@ import type { PlacedHomesteadItem, RewardEvent } from '../../src/types/forest'
 import { SCENE_CSS } from '../../src/render/sceneCss'
 import { village } from './sample-data'
 import { mountBoard } from './board-scene'
-import { MARKETING_SCENES, mountMarketing } from './marketing'
+import { MARKETING_SCENES, NO_TASKS, NO_TRACKER, mountMarketing } from './marketing'
 
 // main.ts injects this once for every view in the real plugin
 document.head.appendChild(Object.assign(document.createElement('style'), { textContent: SCENE_CSS }))
@@ -147,7 +147,7 @@ if (MARKETING_SCENES.includes(scene)) {
     const idle = scene !== 'sidebar'
     new TimerViewComponent({
         target: app,
-        props: { timer: cloneTimer(idle ? 0 : ratio * 25 * 60000, !idle, !idle) as any, tasks: {} as any, tracker: {} as any, render: () => {} },
+        props: { timer: cloneTimer(idle ? 0 : ratio * 25 * 60000, !idle, !idle) as any, tasks: NO_TASKS, tracker: NO_TRACKER, render: () => {} },
     })
 } else if (scene === 'tasks') {
     mountTasks()

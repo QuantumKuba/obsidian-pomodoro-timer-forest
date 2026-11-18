@@ -3,7 +3,7 @@
  *   node scripts/readme-images/build.mjs            all images
  *   node scripts/readme-images/build.mjs board      only names containing "board"
  * Needs Google Chrome (set CHROME=/path/to/chrome to override) and Node 22+.
- * The two animations (timer-growth.gif, village-day.gif) also need ffmpeg; without it
+ * The three animations (timer-growth.gif, bridge.gif, village-day.gif) also need ffmpeg; without it
  * they are skipped.
  */
 import esbuild from 'esbuild'
@@ -94,6 +94,7 @@ ui('board-phone', 'scene=board&mobile=1', 390, 900, boardPage)
 
 // Animations: frames shot one by one, then stitched by ffmpeg
 uiPage('dial', { pad: 0 })
+const day = JSON.parse(fs.readFileSync(path.join(build, 'village-day.json'), 'utf8'))
 const anims = [
     {
         name: 'timer-growth', fps: 12, hold: 14, scale: 2,
@@ -105,9 +106,9 @@ const anims = [
             ({ url: `bridge-${String(i).padStart(2, '0')}.html`, w: 640, h: 400, budget: 0, settle: 50 })),
     },
     {
-        name: 'village-day', fps: 8, hold: 6, scale: 1.25,
-        frames: Array.from({ length: JSON.parse(fs.readFileSync(path.join(build, 'village-day.json'), 'utf8')) }, (_, i) =>
-            ({ url: `village-day-${String(i).padStart(2, '0')}.html`, w: 560, h: 392, budget: 0, settle: 50 })),
+        name: 'village-day', fps: 8, hold: 6, scale: 1,
+        frames: Array.from({ length: day.frames }, (_, i) =>
+            ({ url: `village-day-${String(i).padStart(2, '0')}.html`, w: day.w, h: day.h, budget: 0, settle: 50 })),
     },
 ]
 

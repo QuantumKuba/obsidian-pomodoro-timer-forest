@@ -9,6 +9,7 @@ import { readable } from 'svelte/store'
 import TimerViewComponent from '../../src/TimerViewComponent.svelte'
 import { activePlantStore } from '../../src/stores'
 import { renderVillage, skyFor } from '../../src/render/VillageScene'
+import { renderArchipelago } from '../../src/render/ArchipelagoMap'
 import { islandLinks } from '../../src/services/Islands'
 import { ICONS, SPECIES_SVGS, VILLAGER_SVGS } from '../../src/assets/floraAssets'
 import { charterLandmark, getBuilding } from '../../src/assets/floraCatalog'
@@ -22,6 +23,9 @@ import { perkTag, stars } from './perk-tags'
 export const MARKETING_SCENES = ['hero', 'loop', 'charter', 'dial']
 
 const COUNT = 25 * 60_000
+/** The timer reads both as stores; the marketing scenes have no task list and no task in focus. */
+export const NO_TASKS = readable({ groups: [], list: [] }) as any
+export const NO_TRACKER = readable({}) as any
 const stageFor = (r: number) => (r >= 0.75 ? 'mature' : r >= 0.5 ? 'sapling' : r >= 0.25 ? 'sprout' : 'seed')
 
 /** Mounts the real timer component and lifts its dial into `slot`. */
@@ -34,7 +38,7 @@ function mountDial(slot: HTMLElement, ratio: number, speciesId = 'sakura') {
     const holder = document.createElement('div')
     holder.style.cssText = 'position:absolute;left:-9999px;top:0;width:356px'
     document.body.appendChild(holder)
-    new TimerViewComponent({ target: holder, props: { timer: timer as any, tasks: {} as any, tracker: {} as any, render: () => {} } })
+    new TimerViewComponent({ target: holder, props: { timer: timer as any, tasks: NO_TASKS, tracker: NO_TRACKER, render: () => {} } })
     slot.appendChild(holder.querySelector('.dial')!)
 }
 
@@ -162,34 +166,40 @@ export function mountMarketing(scene: string, q: URLSearchParams, g: Gamificatio
         const isle: GamificationData = { ...g, landSize: 4, vitality: 92, homestead: mini.map(([t, id, x, y, l], k) => ({ id: `l${k}`, itemType: t as any, itemId: id, gridX: x, gridY: y, level: l ?? 1 })) }
         const svg = renderVillage(isle, { date: at, idPrefix: 'loop', still: true }).replace(/viewBox="([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)"/, (_, x, y, w, h) => `viewBox="${x} 30 ${w} ${Number(h) - 44}"`)
         const cabin = getBuilding('cabin')!
+        // The archipelago map, tight on home and the bridge being built toward the next island
+        const map = renderArchipelago(g, { date: at, idPrefix: 'loopmap', selected: 'isle_3' })
+            .replace(/viewBox="[^"]+"/, 'viewBox="-64 -116 262 279"').replace('xMidYMid meet', 'xMidYMid slice')
         const chev = `<svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="#b9ad97" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
         const step = (n: number, name: string, line: string, art: string, cls = '') =>
             `<div class="mk-tile step ${cls}"><div class="art">${art}</div><div class="cap"><span class="n">${n}</span><div><b>${name}</b><span>${line}</span></div></div></div>`
         style(base(W, H, T.paper) + DIAL_CARD + `
             body{padding:${T.margin}px}
-            .row{display:flex;align-items:stretch;gap:8px;margin-top:22px}
-            .step{flex:1;display:flex;flex-direction:column;padding:12px}
+            .row{display:flex;align-items:stretch;gap:6px;margin-top:22px}
+            .step{flex:1 1 0;min-width:0;display:flex;flex-direction:column;padding:10px}
             .art{height:262px;border-radius:12px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
             .focus .art{background:#1e1e1e}
-            .focus .dial{zoom:1.02}
+            .focus .dial{zoom:.93}
             .grow .art,.perk .art{background:radial-gradient(ellipse 60% 45% at 50% 70%,#e3efd6,transparent 72%)}
-            .grow .tree{width:190px;height:190px;margin-top:-34px}.grow .tree svg{width:100%;height:100%}
-            .loot{position:absolute;bottom:16px;left:0;right:0;display:flex;justify-content:center;gap:6px}
-            .loot span{display:inline-flex;align-items:center;gap:4px;font-size:15px;font-weight:750;padding:5px 11px;border-radius:99px;background:#fff;border:1px solid ${T.line}}
-            .loot svg{width:16px;height:16px}
+            .grow .tree{width:180px;height:180px;margin-top:-34px}.grow .tree svg{width:100%;height:100%}
+            .loot{position:absolute;bottom:16px;left:0;right:0;display:flex;justify-content:center;gap:5px}
+            .loot span{display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:750;padding:5px 9px;border-radius:99px;background:#fff;border:1px solid ${T.line}}
+            .loot svg{width:15px;height:15px}
             .loot .sun{color:#d9730d}.loot .coin{color:#a86d10}.loot .xp{color:#6d4fd6}
             .build .art{background:linear-gradient(#86c8ef,#d4eefc)}
-            .build .art svg{width:108%;height:auto;margin-top:6px}
+            .build .art svg{width:112%;height:auto;margin-top:6px}
             .perk .ic{width:150px;height:150px;margin-top:-40px}.perk .ic svg{width:100%;height:100%}
             .perk .badge{position:absolute;bottom:16px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:6px}
             .perk .tag{display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;padding:6px 13px;border-radius:99px;background:#fff;border:1px solid ${T.line};color:#5b4a2a}
             .perk .tag svg{width:16px;height:16px}
+            .explore .art svg{display:block;width:100%;height:100%}
+            .pf-map-name{font:750 10.5px ${FONT};fill:#fff;paint-order:stroke;stroke:rgba(12,24,48,.5);stroke-width:2px;stroke-linejoin:round}
+            .pf-map-sub{font:600 8px ${FONT};fill:#eef6ff;paint-order:stroke;stroke:rgba(12,24,48,.45);stroke-width:1.6px;stroke-linejoin:round}
             .stars{font-size:15px;letter-spacing:2px;color:#e0a526}
-            .cap{display:flex;align-items:center;gap:12px;padding:14px 6px 4px}
-            .cap .n{flex:none;width:30px;height:30px;border-radius:50%;background:${T.green};color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center}
+            .cap{display:flex;align-items:center;gap:10px;padding:14px 4px 4px}
+            .cap .n{flex:none;width:28px;height:28px;border-radius:50%;background:${T.green};color:#fff;font-weight:800;font-size:14.5px;display:flex;align-items:center;justify-content:center}
             .cap b{display:block;font-size:19px;font-weight:750}
-            .cap span{font-size:14.5px;color:${T.muted}}
-            .chev{width:24px;height:24px;flex:none;align-self:center;margin-top:-50px}
+            .cap span{font-size:14px;color:${T.muted};white-space:nowrap}
+            .chev{width:22px;height:22px;flex:none;align-self:center;margin-top:-50px}
             .back{display:flex;align-items:center;gap:8px;position:absolute;right:${T.margin}px;top:${T.margin + 6}px;font-size:14px;font-weight:650;color:${T.muted}}
             .back svg{width:18px;height:18px}
             `)
@@ -198,9 +208,10 @@ export function mountMarketing(scene: string, q: URLSearchParams, g: Gamificatio
             <div class="back">${loop}Every session feeds the next</div>
             <div class="row">
             ${step(1, 'Focus', 'Start a session on a task', '<div class="dialcard-free" id="dial"></div>', 'focus')}${chev}
-            ${step(2, 'Harvest', 'A finished session grows a tree', `<div class="tree">${SPECIES_SVGS.sakura}</div><div class="loot"><span class="sun">+84 ${ICONS.sunlight}</span><span class="coin">+7 ${ICONS.coin}</span><span class="xp">+74 XP</span></div>`, 'grow')}${chev}
+            ${step(2, 'Harvest', 'Every session grows a tree', `<div class="tree">${SPECIES_SVGS.sakura}</div><div class="loot"><span class="sun">+84 ${ICONS.sunlight}</span><span class="coin">+7 ${ICONS.coin}</span><span class="xp">+74 XP</span></div>`, 'grow')}${chev}
             ${step(3, 'Build', 'Plant trees, raise buildings', svg, 'build')}${chev}
-            ${step(4, 'Level up', 'Perks boost every session', `<div class="ic">${cabin.iconSvg}</div><div class="badge">${stars(cabin.maxLevel)}<span class="tag">${perkTag(cabin)}</span></div>`, 'perk')}
+            ${step(4, 'Level up', 'Perks boost every session', `<div class="ic">${cabin.iconSvg}</div><div class="badge">${stars(cabin.maxLevel)}<span class="tag">${perkTag(cabin)}</span></div>`, 'perk')}${chev}
+            ${step(5, 'Explore', 'Bridge out to new islands', map, 'explore')}
             </div>`
         mountDial(document.getElementById('dial')!, 0.62)
     }
