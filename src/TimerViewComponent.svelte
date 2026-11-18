@@ -72,16 +72,20 @@ $: timeDisplay = isHyperfocus ? $timer.elapsedHuman : $timer.remained.human
 
 // The island this session is building toward, when its task or note belongs to one
 $: toward = plant && !isBreak ? pluginInstance?.forestEngine?.sessionIslands?.()[0] : undefined
-$: towardLabel = toward ? ` · ${toward.reachedOn ? '🏝️' : '🪵'} ${islandName(toward)}` : ''
+$: towardText = toward ? `${toward.reachedOn ? '🏝️' : '🪵'} ${islandName(toward)}` : ''
 
-$: stageLabel =
+// Two short lines (title + hint) instead of one long one: the caption sits
+// near the bottom of the round dial, where there is little horizontal room.
+$: [stageTitle, stageHint] =
     stage === 'break'
-        ? 'Rest · stretch, sip, breathe'
+        ? ['Rest', 'stretch, sip, breathe']
         : isHyperfocus
-          ? `${species.name} · ${stage} (${wallClock})${towardLabel}`
+          ? [species.name, [`${stage} · ${wallClock}`, towardText].filter(Boolean).join(' · ')]
           : stage === 'idle'
-            ? `${species.name} · tap to change`
-            : { seed: 'Seed planted', sprout: 'Sprouting', sapling: 'Sapling', mature: 'Almost grown', withered: '' }[stage] + towardLabel
+            ? [species.name, 'tap to change']
+            : [{ seed: 'Seed planted', sprout: 'Sprouting', sapling: 'Sapling', mature: 'Almost grown', withered: '' }[stage] ?? '', towardText]
+
+$: stageLabel = stageHint ? `${stageTitle} · ${stageHint}` : stageTitle
 
 // The focused task was checked off mid-session: offer to end it early
 let dismissedAt: number | null = null
@@ -236,7 +240,10 @@ function onAmbient(e: Event) {
                 </div>
 
                 <button class="time" on:click={onMainButton} title={$timer.running ? 'Pause' : 'Start'}>{timeDisplay}</button>
-                <span class="stage-label">{stageLabel}</span>
+                <span class="stage-label" title={stageLabel}>
+                    <span class="stage-title">{stageTitle}</span>
+                    {#if stageHint}<span class="stage-hint">{stageHint}</span>{/if}
+                </span>
             </div>
 
             {#if showSpeciesPicker && !$timer.inSession}
@@ -534,12 +541,28 @@ function onAmbient(e: Event) {
     cursor: pointer;
 }
 .stage-label {
-    font-size: 0.66rem;
-    color: var(--text-muted);
-    max-width: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 136px;
+    line-height: 1.25;
+    text-align: center;
+}
+.stage-title,
+.stage-hint {
+    max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.stage-title {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.stage-hint {
+    font-size: 0.6rem;
+    color: var(--text-faint);
 }
 
 /* Seed picker */

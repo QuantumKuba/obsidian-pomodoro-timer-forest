@@ -152,6 +152,21 @@ function hash(...n: (number | string)[]): number {
 
 const f = (n: number) => Math.round(n * 10) / 10
 
+/* A day butterfly, about 10 x 8 units, centred on its body. The wings are the right-hand
+   pair with their hinge on x = 0, so they can be mirrored and fold in about the body. */
+const FOREWING = 'M.4-.3C.9-3.2 3.6-4.6 4.9-3.6C5.6-2.8 4.4-.7.4 0Z'
+const HINDWING = 'M.4-.1C3.2 0 4 1.6 3.3 2.7C2.7 3.6.9 2.9.4.6Z'
+const BUTTERFLY_BODY =
+    '<path d="M-.2-2.5Q-.6-3.8-1.4-4.3M.2-2.5Q.6-3.8 1.4-4.3" fill="none" stroke="#3b2c27" stroke-width=".25" stroke-linecap="round"/>'
+    + '<ellipse cx="0" cy=".4" rx=".55" ry="2.3" fill="#3b2c27"/><circle cx="0" cy="-2.1" r=".65" fill="#3b2c27"/>'
+/** [forewing, hindwing, edge]: marigold, rose, lavender and a cabbage white. */
+const BUTTERFLY_COLORS: [string, string, string][] = [
+    ['#ffcf5c', '#f2a93b', '#8a5a1c'],
+    ['#f6a5c0', '#e07a9e', '#7d3b55'],
+    ['#c9b8e6', '#9c86cc', '#4f3f73'],
+    ['#fbfaf3', '#e6e0cc', '#7a7466'],
+]
+
 /** `a` mixed with `b` (both `#rrggbb`), `t` = 0 all `a`, 1 all `b`. */
 function mix(a: string, b: string, t: number): string {
     const ch = (c: string, i: number) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16)
@@ -720,7 +735,9 @@ function linkLayer(L: Layout, links: SceneLink[], id: string): { back: string; f
             [-1, 1].map((sign) => `<path d="M${f(p.x + wx * sign)} ${f(p.y + wy * sign + 1)}v-10" stroke="#5b4027" stroke-width="3.6" stroke-linecap="round" opacity=".5"/><path d="M${f(p.x + wx * sign)} ${f(p.y + wy * sign + 1)}v-10" stroke="#a06e40" stroke-width="2.4" stroke-linecap="round"/>`).join('')
         g += post(M)
         if (progress >= 1) g += post(E)
-        if (label) g += `<text class="pf-link-label" x="${f(A.x)}" y="${f(A.y + 50)}" text-anchor="middle">${esc(label)}</text>`
+        // Islets behind the island are drawn under it, so a label below one would be covered
+        // by whatever stands on the island's back edge: put theirs above the islet, in open sky.
+        if (label) g += `<text class="pf-link-label" x="${f(A.x)}" y="${f(sy < 0 ? A.y - 40 : A.y + 50)}" text-anchor="middle">${esc(label)}</text>`
         // One generous target for the pointer: the bridge and the island it leads to
         g += `<path class="pf-link-hit" d="M${f(M.x)} ${f(M.y)}L${f(A.x)} ${f(A.y)}" stroke="transparent" stroke-width="22" stroke-linecap="round" fill="none"/><ellipse class="pf-link-hit" cx="${f(A.x)}" cy="${f(A.y + 6)}" rx="34" ry="30" fill="transparent"/>`
         g += `</g>`
@@ -932,9 +949,14 @@ export function renderIsoScene(opts: SceneOptions): string {
     } else if (sky.phase === 'day' && mood === 'thriving') {
         for (let i = 0; i < 4; i++) {
             const p = walkable.length ? walkable[Math.floor(hash(id, 'bf', i) * walkable.length)] : L.tile(0, 0)
-            const color = ['#ffd54f', '#f48fb1', '#b39ddb', '#ffffff'][i]
-            svg += `<g class="pf-butterfly" style="--d:-${f(hash(i, 'bfd') * 8)}s"><g transform="translate(${f(p.cx)} ${f(p.cy - 16)})">
-                <ellipse class="pf-wing" cx="-2" cy="0" rx="2.2" ry="1.6" fill="${color}"/><ellipse class="pf-wing" cx="2" cy="0" rx="2.2" ry="1.6" fill="${color}"/></g></g>`
+            const [fore, hind, edge] = BUTTERFLY_COLORS[i]
+            const tilt = (hash(i, 'bft') - 0.5) * 24
+            // One wing, drawn to the right of the body with its hinge at x = 0; the left
+            // wing is the same wing mirrored. Each flaps by folding in towards the body
+            // (scaleX about the hinge, see .pf-wing), so the pair never comes apart.
+            const wing = `<g class="pf-wing" stroke="${edge}" stroke-width=".25" stroke-linejoin="round"><path d="${HINDWING}" fill="${hind}"/><path d="${FOREWING}" fill="${fore}"/></g>`
+            svg += `<g class="pf-butterfly" style="--d:-${f(hash(i, 'bfd') * 8)}s"><g transform="translate(${f(p.cx)} ${f(p.cy - 16)}) rotate(${f(tilt)})">`
+                + `${wing}<g transform="scale(-1 1)">${wing}</g>${BUTTERFLY_BODY}</g></g>`
         }
     }
     svg += `</svg>`

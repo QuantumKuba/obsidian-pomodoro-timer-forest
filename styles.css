@@ -160,10 +160,16 @@ If your plugin does not need CSS, delete this file.
     transform-box: view-box;
 }
 
-.pf-scene .pf-smoke,
-.pf-scene .pf-wing {
+.pf-scene .pf-smoke {
     transform-box: fill-box;
     transform-origin: center;
+}
+
+/* Butterfly wings fold in about the body: their hinge is the origin of the butterfly's
+   own coordinates (VillageScene.ts), so they scale about 0 0 rather than their own centre. */
+.pf-scene .pf-wing {
+    transform-box: view-box;
+    transform-origin: 0 0;
 }
 
 .pf-scene.pf-mood-dormant .pf-smoke,

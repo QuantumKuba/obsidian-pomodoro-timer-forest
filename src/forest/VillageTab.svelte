@@ -374,7 +374,8 @@ function onPointerMove(e: PointerEvent) {
         drag.targetTile = tile
         if (tile) {
             const isOrigin = tile.x === drag.originX && tile.y === drag.originY
-            const isFree = !g.homestead.some((i) => i.id !== drag.item.id && i.gridX === tile.x && i.gridY === tile.y)
+            const movingId = drag.item.id
+            const isFree = !g.homestead.some((i) => i.id !== movingId && i.gridX === tile.x && i.gridY === tile.y)
             drag.isValidTarget = isOrigin || isFree
         } else {
             drag.isValidTarget = false
@@ -1471,13 +1472,19 @@ $: isHeart = !!selected && selected.itemType === 'tree' && g.heartTree?.itemId =
     font-weight: 800;
     color: var(--text-muted);
 }
+/* Up to two lines, so "Cherry Blossom" or "Stone Lantern" reads whole in a narrow cell */
 .inv-name {
-    font-size: 0.62rem;
-    color: var(--text-muted);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     max-width: 100%;
-    white-space: nowrap;
+    min-height: 2.4em;
     overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 0.62rem;
+    line-height: 1.2;
+    text-align: center;
+    overflow-wrap: break-word;
+    color: var(--text-muted);
 }
 .land {
     display: flex;
