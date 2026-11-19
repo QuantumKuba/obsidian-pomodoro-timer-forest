@@ -8,7 +8,7 @@ import Logger, { type LogContext } from 'Logger'
 import DEFAULT_NOTIFICATION from 'Notification'
 import type { Unsubscriber } from 'svelte/motion'
 import type { TaskItem } from 'Tasks'
-import { nextStep, taskLabel, taskTags } from 'tasks/hierarchy'
+import { focusTags, nextStep, taskLabel } from 'tasks/hierarchy'
 import {
     earlyHarvestMinMinutes,
     pomodoroEquivalents,
@@ -329,7 +329,7 @@ export default class Timer implements Readable<TimerStore> {
             this.plugin.forestEngine?.completeSession(ctx.duration, {
                 taskText: taskLabel(ctx.task),
                 notePath: ctx.task.path,
-                tags: taskTags(ctx.task),
+                tags: focusTags(ctx.task),
             })
         } else {
             this.plugin.forestEngine?.completeBreak()
@@ -361,7 +361,7 @@ export default class Timer implements Readable<TimerStore> {
                         capMin,
                         taskLabel(task),
                         task?.path || file?.path,
-                        taskTags(task),
+                        focusTags(task),
                         true,
                     )
                 } else {
@@ -374,7 +374,7 @@ export default class Timer implements Readable<TimerStore> {
                             s.workLen,
                             taskLabel(task),
                             task?.path || file?.path,
-                            taskTags(task),
+                            focusTags(task),
                             false,
                         )
                     }
@@ -489,7 +489,7 @@ export default class Timer implements Readable<TimerStore> {
                         {
                             taskText: taskLabel(ctx.task),
                             notePath: ctx.task.path,
-                            tags: taskTags(ctx.task),
+                            tags: focusTags(ctx.task),
                         },
                         {
                             pomodoros: poms,
@@ -580,7 +580,7 @@ export default class Timer implements Readable<TimerStore> {
                 capMin,
                 taskLabel(task),
                 task?.path || file?.path,
-                taskTags(task),
+                focusTags(task),
                 true,
             )
 
@@ -662,7 +662,7 @@ export default class Timer implements Readable<TimerStore> {
             {
                 taskText: taskLabel(ctx.task),
                 notePath: ctx.task.path,
-                tags: taskTags(ctx.task),
+                tags: focusTags(ctx.task),
             },
             {
                 pomodoros: poms,
@@ -768,7 +768,7 @@ export default class Timer implements Readable<TimerStore> {
             this.plugin.forestEngine?.harvestEarly(ctx.elapsed / 60000, ctx.duration, {
                 taskText: taskLabel(ctx.task),
                 notePath: ctx.task.path,
-                tags: taskTags(ctx.task),
+                tags: focusTags(ctx.task),
             })
         }
         this.finishDoneTask(ctx, halfway, harvest).catch((err) =>

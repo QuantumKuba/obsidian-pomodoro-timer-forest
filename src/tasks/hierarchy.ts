@@ -124,6 +124,24 @@ export function taskTags(task: { tags?: string[]; inheritedTags?: string[] } | u
     return unique([...(task.inheritedTags ?? []), ...(task.tags ?? [])])
 }
 
+/**
+ * Tags to pass into a focus session: the task's own branch tags first (so they pick the tree
+ * species when mapped), followed by inherited parent/board tags so the overarching topic is
+ * always credited too.
+ */
+export function focusTags(task: { tags?: string[]; inheritedTags?: string[] } | undefined): string[] {
+    if (!task) return []
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const raw of [...(task.tags ?? []), ...(task.inheritedTags ?? [])]) {
+        const key = raw.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push(raw)
+    }
+    return out
+}
+
 /** How the task reads in a log or a notice: `Parent › Subtask`. */
 export function taskLabel(
     task: { name?: string; text?: string; ancestors?: string[] } | undefined,

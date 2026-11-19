@@ -139,6 +139,8 @@ export interface FinishedCard extends Omit<CardCompletion, 'today'> {
     key: string
     /** The card's text, as plain as possible. */
     label: string
+    /** Card tags together with the board's dedicated tags. */
+    tags?: string[]
 }
 
 /** A card as the board watcher sees it, for the board's memory. */
@@ -922,6 +924,7 @@ export default class ForestEngine {
                 log.tasksCompleted = (log.tasksCompleted || 0) + 1
                 g.vitality = Math.min(100, g.vitality + 2)
                 this.growCrops(g, TASK_WATERING_MINUTES)
+                this.progressIslands(g, TASK_WATERING_MINUTES, this.sessionContext(card.path, this.contextTags(card.path, card.label, card.tags)), today)
                 const title = card.label.length > 60 ? `${card.label.slice(0, 57)}…` : card.label
                 this.emit({ kind: 'task', title, subtitle: card.board, ref: rewardKey, ...earned, lines })
                 this.progressQuests(g, 'tasks', 1)

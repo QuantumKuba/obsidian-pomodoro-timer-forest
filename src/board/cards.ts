@@ -139,6 +139,8 @@ export function cardToTask(file: TFile, doc: BoardDoc, card: BoardCard, format: 
         expected: card.meta.expected,
         actual: card.meta.actual,
         tags: card.meta.tags,
+        ...(doc.tags.length ? { inheritedTags: [...doc.tags] } : {}),
+        ...(doc.project ? { project: doc.project } : {}),
         line: card.start,
         lane: doc.lanes[card.lane]?.title,
     }

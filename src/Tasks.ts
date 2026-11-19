@@ -36,6 +36,8 @@ export type TaskItem = {
     line: number
     /** The lane of a card on a Kanban board. */
     lane?: string
+    /** The overarching project of a dedicated Kanban board. */
+    project?: string
 } & Partial<TaskNesting>
 
 /** The tasks of one note, as listed in the task panel. */
@@ -318,5 +320,20 @@ export function resolveTasks(
         }
     }
 
-    return nestTasks(Object.values(cache), parents)
+    const nested = nestTasks(Object.values(cache), parents)
+    if (board && (board.tags.length > 0 || board.project)) {
+        for (const t of nested) {
+            if (board.tags.length > 0) {
+                const seen = new Set(t.inheritedTags.map((x) => x.toLowerCase()))
+                for (const bt of board.tags) {
+                    if (!seen.has(bt.toLowerCase())) {
+                        seen.add(bt.toLowerCase())
+                        t.inheritedTags.push(bt)
+                    }
+                }
+            }
+            if (board.project) t.project = board.project
+        }
+    }
+    return nested
 }

@@ -18,6 +18,7 @@ type CardState = {
     actual: number
     expected: number
     due: string
+    tags: string[]
 }
 
 type Snapshot = {
@@ -128,6 +129,7 @@ export default class BoardWatcher {
                     actual: card.meta.actual,
                     expected: card.meta.expected,
                     due: cardDueDate(card.meta, doc.settings?.data),
+                    tags: [...new Set([...card.meta.tags, ...doc.tags])],
                 })
             }
         }
@@ -193,6 +195,7 @@ export default class BoardWatcher {
                 actual: card.actual,
                 expected: card.expected,
                 due: card.due,
+                tags: card.tags,
                 focused: inSession && !!tracked && card.blockId === tracked,
                 withinWip: next.withinWip,
             })
