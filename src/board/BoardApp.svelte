@@ -15,6 +15,9 @@ import Icon from '../tasks/Icon.svelte'
 import { coins, gamificationStore, levelInfo, settings, streak, todayLog } from '../stores'
 import { ICONS } from '../assets/floraAssets'
 import { BOARD_MILESTONES } from '../services/Progression'
+import { islandName, focusRate } from '../services/Islands'
+import { getSpecies } from '../assets/floraCatalog'
+import { normalizeTag, rankTagSuggestions, type TagSuggestion } from './tags'
 import type { RewardEvent } from '../types/forest'
 
 export let view: BoardView
@@ -30,7 +33,16 @@ let lanesEl: HTMLDivElement
 let tabsEl: HTMLElement
 let query = ''
 let searchEl: HTMLInputElement
+let searchFocused = false
+let searchSuggestIdx = 0
 let showStats = false
+let showDedicate = false
+let projectDraft = ''
+let dedicateTags: string[] = []
+let dedicateTagInput = ''
+let dedicateTagEl: HTMLInputElement
+let dedicatePool: TagSuggestion[] = []
+let dedicateSuggestIdx = 0
 let editingKey: string | null = null
 let addingLane = false
 let laneDraft = ''
@@ -65,6 +77,19 @@ onMount(() => {
 $: path = $note.path
 $: memory = $gamificationStore.boards?.[path]
 $: lanes = $doc.lanes
+$: boardTags = $doc.tags
+$: boardProject = $doc.project
+$: dedicated = !!boardProject || boardTags.length > 0
+$: matchingIslands = ($gamificationStore.islands ?? []).filter((isl) => isl.focus && focusRate(isl.focus, { tags: boardTags, notePath: path }) > 0)
+$: boardSpecies = (() => {
+    const unlocked = $gamificationStore.unlockedSpecies ?? []
+    const maps = $gamificationStore.tagMappings ?? []
+    for (const bt of boardTags) {
+        const m = maps.find((x) => x.tag.toLowerCase() === bt.toLowerCase() && unlocked.includes(x.speciesId))
+        if (m) return getSpecies(m.speciesId) ?? null
+    }
+    return null
+})()
 $: roles = lanes.map((l) => laneRole(l, memory?.laneRoles))
 $: boardSettings = $doc.settings?.data
 $: collapsedList = Array.isArray(boardSettings?.['list-collapse']) ? (boardSettings?.['list-collapse'] as boolean[]) : []
@@ -86,9 +111,55 @@ $: shipped = memory?.shipped ?? 0
 $: nextMilestone = BOARD_MILESTONES.find((m) => m > shipped) ?? null
 
 $: needle = query.trim().toLowerCase()
+$: activeTagFilter = needle.startsWith('#') ? query.trim() : ''
 $: matches = needle
     ? (c: BoardCard) => c.text.toLowerCase().includes(needle) || c.meta.tags.some((t) => t.toLowerCase().includes(needle))
     : null
+$: matchedCount = matches ? lanes.reduce((n, l) => n + l.cards.filter(matches).length, 0) : total
+
+$: boardCardTags = (() => {
+    const map = new Map<string, { tag: string; count: number; branch: boolean }>()
+    const bases = boardTags.map((t) => t.toLowerCase())
+    for (const lane of lanes) {
+        for (const c of lane.cards) {
+            for (const t of c.meta.tags) {
+                const key = t.toLowerCase()
+                const cur = map.get(key)
+                if (cur) cur.count++
+                else map.set(key, { tag: t, count: 1, branch: bases.some((b) => key.startsWith(`${b}/`)) })
+            }
+        }
+    }
+    return [...map.values()].sort((a, b) => Number(b.branch) - Number(a.branch) || b.count - a.count || a.tag.localeCompare(b.tag))
+})()
+
+$: searchSuggestions = (() => {
+    if (!searchFocused || !query.trim().startsWith('#')) return [] as string[]
+    const q = query.trim().toLowerCase()
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const item of [...boardCardTags.map((x) => x.tag), ...boardTags]) {
+        const l = item.toLowerCase()
+        if (seen.has(l) || !l.includes(q)) continue
+        seen.add(l)
+        out.push(item)
+        if (out.length >= 6) break
+    }
+    return out
+})()
+$: if (searchSuggestIdx >= searchSuggestions.length) searchSuggestIdx = Math.max(0, searchSuggestions.length - 1)
+
+$: dedicateSuggestions = (() => {
+    if (!showDedicate) return [] as TagSuggestion[]
+    return rankTagSuggestions(dedicateTagInput, dedicatePool, { boardTags: dedicateTags, exclude: dedicateTags, limit: 8 })
+})()
+$: if (dedicateSuggestIdx >= dedicateSuggestions.length) dedicateSuggestIdx = Math.max(0, dedicateSuggestions.length - 1)
+$: islandChoices = ($gamificationStore.islands ?? []).filter((isl): isl is typeof isl & { focus: { kind: 'tag'; value: string } } => isl.focus?.kind === 'tag')
+$: derivedProjectTag = (() => {
+    const t = normalizeTag(projectDraft)
+    if (!t || dedicateTags.some((x) => x.toLowerCase() === t.toLowerCase())) return ''
+    return t
+})()
 
 // The card the timer is focused on, followed by its block id
 $: task = $tracker.task
@@ -110,7 +181,10 @@ $: ctx = {
     view,
     render: (text: string, el: HTMLElement) => view.renderMarkdown(text, el),
     staleDays: $settings.boardStaleDays ?? 5,
-    filterTag: (tag: string) => (query = tag.trim()),
+    filterTag: (tag: string) => {
+        const clean = tag.trim()
+        query = query.trim().toLowerCase() === clean.toLowerCase() ? '' : clean
+    },
     edit: (key: string) => (editingKey = key || null),
     cardMenu,
     toggleTimer: () => timer.toggleTimer(),
@@ -143,6 +217,7 @@ function cardMenu(card: BoardCard, e: MouseEvent) {
         menu.addItem((i) => i.setTitle('Make it the next focus').setIcon('target').setSection('focus').onClick(() => void view.focusCard(card.key, false)))
     }
     menu.addItem((i) => i.setTitle('Edit').setIcon('pencil').setSection('card').onClick(() => (editingKey = card.key)))
+    menu.addItem((i) => i.setTitle('Duplicate').setIcon('copy').setSection('card').onClick(() => view.duplicateCard(card.key)))
     menu.addItem((i) =>
         i
             .setTitle(done ? 'Open again' : 'Finish')
@@ -160,6 +235,7 @@ function cardMenu(card: BoardCard, e: MouseEvent) {
                 .onClick(() => view.moveCard({ lane: card.lane, index: card.index }, { lane: i, index: 0 })),
         )
     })
+    menu.addItem((i) => i.setTitle('Branch into sub-board').setIcon('git-branch').setSection('note').onClick(() => void view.branchCardToBoard(card.key)))
     menu.addItem((i) => i.setTitle('Open in the note').setIcon('file-text').setSection('note').onClick(() => void view.openCardInNote(card.key, e)))
     menu.addItem((i) => i.setTitle('Copy link to card').setIcon('link').setSection('note').onClick(() => void copyLink(card)))
     menu.addItem((i) => i.setTitle('Archive').setIcon('archive').setSection('danger').onClick(() => view.archiveCard(card.key)))
@@ -183,6 +259,7 @@ async function copyLink(card: BoardCard) {
 
 function boardMenu(e: MouseEvent) {
     const menu = new Menu()
+    menu.addItem((i) => i.setTitle('Dedicate to tag / project…').setIcon('tag').onClick(() => void openDedicate(true)))
     menu.addItem((i) => i.setTitle('Add a lane').setIcon('plus').onClick(() => void startLane()))
     menu.addItem((i) => i.setTitle('Archive finished cards').setIcon('archive').onClick(() => view.archiveFinished()))
     menu.addItem((i) => i.setTitle('Undo').setIcon('undo').setSection('history').onClick(() => view.undo()))
@@ -247,9 +324,104 @@ function showCard(blockId: string) {
 }
 
 function onSearchKey(e: KeyboardEvent) {
+    if (searchSuggestions.length > 0) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            searchSuggestIdx = (searchSuggestIdx + 1) % searchSuggestions.length
+            return
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            searchSuggestIdx = (searchSuggestIdx - 1 + searchSuggestions.length) % searchSuggestions.length
+            return
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault()
+            query = searchSuggestions[searchSuggestIdx]
+            searchFocused = false
+            return
+        }
+    }
     if (e.key === 'Escape') {
         query = ''
+        searchFocused = false
         searchEl?.blur()
+    }
+}
+
+async function openDedicate(forceOpen = false) {
+    if (showDedicate && !forceOpen) {
+        showDedicate = false
+        return
+    }
+    projectDraft = boardProject
+    dedicateTags = [...boardTags]
+    dedicateTagInput = ''
+    dedicatePool = view.getTagSuggestions()
+    dedicateSuggestIdx = 0
+    showDedicate = true
+    await tick()
+    dedicateTagEl?.focus()
+}
+
+function addDedicateTag(raw: string) {
+    const tag = normalizeTag(raw)
+    if (!tag) return
+    if (!dedicateTags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+        dedicateTags = [...dedicateTags, tag]
+    }
+    dedicateTagInput = ''
+    dedicateSuggestIdx = 0
+}
+
+function removeDedicateTag(tag: string) {
+    dedicateTags = dedicateTags.filter((t) => t.toLowerCase() !== tag.toLowerCase())
+}
+
+function saveDedication() {
+    if (dedicateTagInput.trim()) addDedicateTag(dedicateTagInput)
+    view.setDedication({ project: projectDraft.trim() || null, tags: dedicateTags })
+    showDedicate = false
+}
+
+function clearDedication() {
+    view.setDedication({ project: null, tags: [] })
+    showDedicate = false
+}
+
+function onDedicateKey(e: KeyboardEvent) {
+    if (e.isComposing) return
+    const list = dedicateSuggestions
+    if (list.length > 0 && dedicateTagInput.trim()) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            dedicateSuggestIdx = (dedicateSuggestIdx + 1) % list.length
+            return
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            dedicateSuggestIdx = (dedicateSuggestIdx - 1 + list.length) % list.length
+            return
+        }
+        if (e.key === 'Tab') {
+            e.preventDefault()
+            addDedicateTag(list[dedicateSuggestIdx].tag)
+            return
+        }
+    }
+    if (e.key === 'Enter') {
+        e.preventDefault()
+        if (dedicateTagInput.trim()) {
+            const exact = list.find((s) => s.tag.toLowerCase() === normalizeTag(dedicateTagInput).toLowerCase())
+            if (exact) addDedicateTag(exact.tag)
+            else if (list.length > 0 && dedicateTagInput.trim() === '#') addDedicateTag(list[dedicateSuggestIdx].tag)
+            else addDedicateTag(dedicateTagInput)
+        } else {
+            saveDedication()
+        }
+    } else if (e.key === 'Escape') {
+        e.preventDefault()
+        showDedicate = false
     }
 }
 
@@ -323,7 +495,35 @@ $: if (narrow && tabsEl) {
         </div>
     {:else}
         <header class="board-head">
-            <h1 title={path}>{$note.name}</h1>
+            <div class="title-row">
+                <h1 title={path}>{$note.name}</h1>
+                <button
+                    class="dedicate-chip"
+                    class:set={dedicated}
+                    class:open={showDedicate}
+                    title={dedicated
+                        ? 'Dedicated topic / project — focusing on any card here counts toward this too. Click to edit.'
+                        : 'Dedicate this board to a tag or project so every card inherits it'}
+                    on:click={() => void openDedicate()}
+                >
+                    {#if dedicated}
+                        {#if boardProject}
+                            <span class="proj-badge"><Icon name="folder" size={11} />{boardProject}</span>
+                        {/if}
+                        {#each boardTags as t (t)}
+                            <span class="tag-badge">{t}</span>
+                        {/each}
+                        {#if matchingIslands.length > 0}
+                            <span class="isle-badge" title="Builds {islandName(matchingIslands[0])}">🏝️ {islandName(matchingIslands[0])}</span>
+                        {:else if boardSpecies}
+                            <span class="flora-badge" title="Grows {boardSpecies.name}">🌱 {boardSpecies.name}</span>
+                        {/if}
+                    {:else}
+                        <Icon name="tag" size={11} />
+                        <span>Dedicate</span>
+                    {/if}
+                </button>
+            </div>
             <div class="summary">
                 <span class="counts">
                     <span><b>{counts.backlog}</b> to do</span>
@@ -342,7 +542,7 @@ $: if (narrow && tabsEl) {
                 {/if}
             </div>
             <div class="focus-slot">
-                <FocusPill {timer} {tracker} {path} onShowCard={showCard} compact={narrow} />
+                <FocusPill {timer} {tracker} {path} onShowCard={showCard} compact={narrow} {boardTags} {boardProject} />
             </div>
 
             <div class="today" title="Today, across all your boards and notes">
@@ -363,13 +563,44 @@ $: if (narrow && tabsEl) {
                 <span class="res streak" class:lit={$streak.current > 0} title="Focus streak · longest {$streak.longest} days">{@html ICONS.flame}<b>{$streak.current}</b></span>
             </div>
             <div class="tools">
-                <label class="search" class:on={!!query}>
-                    <Icon name="search" size={13} />
-                    <input bind:this={searchEl} bind:value={query} type="text" placeholder="Filter cards" aria-label="Filter cards" on:keydown={onSearchKey} />
-                    {#if query}
-                        <button class="clear" aria-label="Clear the filter" on:click={() => (query = '')}><Icon name="x" size={12} /></button>
+                <div class="search-wrap">
+                    <label class="search" class:on={!!query}>
+                        <Icon name="search" size={13} />
+                        <input
+                            bind:this={searchEl}
+                            bind:value={query}
+                            type="text"
+                            placeholder="Filter or #tag"
+                            aria-label="Filter cards"
+                            on:focus={() => (searchFocused = true)}
+                            on:blur={() => window.setTimeout(() => (searchFocused = false), 120)}
+                            on:keydown={onSearchKey}
+                        />
+                        {#if query}
+                            <button class="clear" aria-label="Clear the filter" on:click={() => (query = '')}><Icon name="x" size={12} /></button>
+                        {/if}
+                    </label>
+                    {#if searchSuggestions.length > 0}
+                        <div class="search-suggest" role="listbox" aria-label="Filter by tag">
+                            {#each searchSuggestions as tag, idx (tag)}
+                                <button
+                                    type="button"
+                                    role="option"
+                                    aria-selected={idx === searchSuggestIdx}
+                                    class="suggest-opt"
+                                    class:active={idx === searchSuggestIdx}
+                                    on:pointerdown|preventDefault
+                                    on:click={() => {
+                                        query = tag
+                                        searchFocused = false
+                                    }}
+                                >
+                                    {tag}
+                                </button>
+                            {/each}
+                        </div>
                     {/if}
-                </label>
+                </div>
                 <button class="tool" class:on={showStats} aria-pressed={showStats} title="Board statistics" aria-label="Board statistics" on:click={() => (showStats = !showStats)}>
                     <Icon name="chart" size={15} />
                 </button>
@@ -378,6 +609,140 @@ $: if (narrow && tabsEl) {
                 </button>
             </div>
         </header>
+
+        {#if showDedicate}
+            <section class="dedicate-panel" aria-label="Board topic and project dedication">
+                <div class="dedicate-head">
+                    <div>
+                        <strong>Dedicate board to a topic or project</strong>
+                        <p class="dedicate-sub">Focusing on any card here also counts toward these tags, so individual cards can branch off with their own sub-tags.</p>
+                    </div>
+                    <button type="button" class="tool" aria-label="Close" on:click={() => (showDedicate = false)}><Icon name="x" size={14} /></button>
+                </div>
+
+                <div class="dedicate-grid">
+                    <label class="dedicate-field">
+                        <span>Project name <small>(optional)</small></span>
+                        <input
+                            type="text"
+                            bind:value={projectDraft}
+                            placeholder="e.g. Thesis, Website Relaunch…"
+                            on:keydown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    saveDedication()
+                                } else if (e.key === 'Escape') {
+                                    showDedicate = false
+                                }
+                            }}
+                        />
+                    </label>
+                    <div class="dedicate-field">
+                        <span>Dedicated tags</span>
+                        <div class="dedicate-tags-box">
+                            {#each dedicateTags as t (t)}
+                                <span class="d-tag">
+                                    <span>{t}</span>
+                                    <button type="button" aria-label="Remove {t}" on:click={() => removeDedicateTag(t)}><Icon name="x" size={10} /></button>
+                                </span>
+                            {/each}
+                            <div class="d-input-wrap">
+                                <input
+                                    bind:this={dedicateTagEl}
+                                    bind:value={dedicateTagInput}
+                                    type="text"
+                                    placeholder={dedicateTags.length ? 'Add another #tag…' : 'Type #tag to autocomplete…'}
+                                    on:keydown={onDedicateKey}
+                                />
+                                {#if dedicateTagInput.trim() && dedicateSuggestions.length > 0}
+                                    <div class="d-suggest" role="listbox">
+                                        {#each dedicateSuggestions as s, idx (s.tag)}
+                                            <button
+                                                type="button"
+                                                role="option"
+                                                aria-selected={idx === dedicateSuggestIdx}
+                                                class="d-suggest-item"
+                                                class:active={idx === dedicateSuggestIdx}
+                                                on:pointerdown|preventDefault
+                                                on:click={() => addDedicateTag(s.tag)}
+                                            >
+                                                <span class="d-suggest-tag">{s.tag}</span>
+                                                {#if s.hint}<span class="d-suggest-hint">{s.hint}</span>{/if}
+                                            </button>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
+                            {#if dedicateTagInput.trim()}
+                                <button type="button" class="d-add" on:click={() => addDedicateTag(dedicateTagInput)}>Add</button>
+                            {/if}
+                        </div>
+                    </div>
+                </div>
+
+                {#if derivedProjectTag || islandChoices.length > 0 || dedicatePool.length > 0}
+                    <div class="dedicate-picks">
+                        {#if derivedProjectTag}
+                            <button type="button" class="pick-chip accent" on:click={() => addDedicateTag(derivedProjectTag)}>
+                                + Use {derivedProjectTag}
+                            </button>
+                        {/if}
+                        {#each islandChoices as isl (isl.id)}
+                            {@const active = dedicateTags.some((t) => t.toLowerCase() === isl.focus.value.toLowerCase())}
+                            <button
+                                type="button"
+                                class="pick-chip"
+                                class:on={active}
+                                title="Link this board to {islandName(isl)}"
+                                on:click={() => (active ? removeDedicateTag(isl.focus.value) : addDedicateTag(isl.focus.value))}
+                            >
+                                🏝️ {islandName(isl)} · {isl.focus.value}
+                            </button>
+                        {/each}
+                        {#each dedicatePool.filter((s) => !s.sources.includes('island')).slice(0, 8) as s (s.tag)}
+                            {@const active = dedicateTags.some((t) => t.toLowerCase() === s.tag.toLowerCase())}
+                            {#if !active}
+                                <button type="button" class="pick-chip" title={s.hint} on:click={() => addDedicateTag(s.tag)}>
+                                    {s.tag}
+                                </button>
+                            {/if}
+                        {/each}
+                    </div>
+                {/if}
+
+                <div class="dedicate-actions">
+                    {#if dedicated}
+                        <button type="button" class="d-clear" on:click={clearDedication}>Clear dedication</button>
+                    {/if}
+                    <span class="spacer"></span>
+                    <button type="button" on:click={() => (showDedicate = false)}>Cancel</button>
+                    <button type="button" class="mod-cta" on:click={saveDedication}>Save dedication</button>
+                </div>
+            </section>
+        {/if}
+
+        {#if boardCardTags.length > 0 && !(narrow && showStats)}
+            <div class="tag-strip" role="toolbar" aria-label="Filter cards by tag">
+                <button type="button" class="strip-pill" class:on={!needle} on:click={() => (query = '')}>
+                    All <span class="strip-n">{total}</span>
+                </button>
+                {#each boardCardTags as item (item.tag)}
+                    {@const on = needle === item.tag.toLowerCase()}
+                    <button
+                        type="button"
+                        class="strip-pill"
+                        class:on
+                        class:branch={item.branch}
+                        title={on ? 'Clear tag filter' : `Filter by ${item.tag}`}
+                        on:click={() => ctx.filterTag(item.tag)}
+                    >
+                        {#if item.branch}<Icon name="git-branch" size={10} />{/if}
+                        <span>{item.tag}</span>
+                        <span class="strip-n">{item.count}</span>
+                    </button>
+                {/each}
+            </div>
+        {/if}
 
         {#if narrow && lanes.length > 0 && !showStats}
             <nav class="lane-tabs" class:dragging={!!$drag} bind:this={tabsEl} aria-label="Lanes">
@@ -439,6 +804,8 @@ $: if (narrow && tabsEl) {
                     {composeAtTop}
                     {kanbanDates}
                     dateSettings={boardSettings}
+                    {boardTags}
+                    {activeTagFilter}
                     laneCount={lanes.length}
                 />
             {/each}
@@ -459,7 +826,7 @@ $: if (narrow && tabsEl) {
             {/if}
         </div>
         {#if matches}
-            <p class="filter-note">Showing cards that match “{query.trim()}”. Clear the filter to drag cards.</p>
+            <p class="filter-note">Showing {matchedCount} of {total} cards matching “{query.trim()}”. Clear the filter to drag cards.</p>
         {/if}
     {/if}
 </div>
@@ -502,8 +869,15 @@ $: if (narrow && tabsEl) {
     column-gap: 14px;
     padding: 14px 16px 12px;
 }
-h1 {
+.title-row {
     grid-area: title;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    min-width: 0;
+}
+h1 {
     margin: 0;
     font-size: 1.32rem;
     font-weight: 720;
@@ -512,6 +886,53 @@ h1 {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.dedicate-chip {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    height: auto;
+    min-height: 24px;
+    padding: 2px 9px;
+    border-radius: 99px;
+    border: 1px dashed var(--background-modifier-border);
+    box-shadow: none;
+    background: transparent;
+    color: var(--text-faint);
+    font-size: 0.71rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.14s, background-color 0.14s, color 0.14s;
+}
+.dedicate-chip:hover,
+.dedicate-chip.open {
+    border-style: solid;
+    border-color: var(--interactive-accent);
+    color: var(--text-normal);
+    background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+}
+.dedicate-chip.set {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--interactive-accent) 32%, var(--background-modifier-border));
+    background: color-mix(in srgb, var(--interactive-accent) 8%, var(--pf-card-bg));
+    color: var(--text-normal);
+}
+.proj-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 650;
+}
+.tag-badge {
+    color: var(--text-accent, var(--interactive-accent));
+    font-weight: 650;
+}
+.isle-badge,
+.flora-badge {
+    font-size: 0.67rem;
+    color: var(--text-muted);
+    font-weight: 500;
 }
 .summary {
     grid-area: summary;
@@ -666,11 +1087,48 @@ h1 {
     margin-top: 10px;
     justify-self: end;
 }
+.search-wrap {
+    position: relative;
+}
 .search {
     position: relative;
     display: flex;
     align-items: center;
     color: var(--text-faint);
+}
+.search-suggest {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    border-radius: 9px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.28);
+}
+.suggest-opt {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: auto;
+    padding: 5px 8px;
+    border: none;
+    border-radius: 6px;
+    box-shadow: none;
+    background: transparent;
+    color: var(--text-accent, var(--interactive-accent));
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+.suggest-opt.active,
+.suggest-opt:hover {
+    background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
 }
 .search > :global(.pf-icon) {
     position: absolute;
@@ -822,7 +1280,280 @@ h1 {
     cursor: grabbing !important;
 }
 
+.dedicate-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0 16px 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--pf-lane-bg);
+    border: 1px solid color-mix(in srgb, var(--interactive-accent) 32%, var(--pf-lane-border));
+    box-shadow: var(--pf-card-shadow);
+}
+.dedicate-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+.dedicate-head strong {
+    font-size: 0.84rem;
+}
+.dedicate-sub {
+    margin: 2px 0 0;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+.dedicate-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+    gap: 10px 14px;
+}
+.dedicate-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.dedicate-field small {
+    font-weight: 400;
+    color: var(--text-faint);
+}
+.dedicate-field input {
+    height: 30px;
+    font-size: 0.8rem;
+}
+.dedicate-tags-box {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    min-height: 32px;
+    padding: 3px 6px;
+    border-radius: 8px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+}
+.d-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 22px;
+    padding: 0 5px 0 8px;
+    border-radius: 99px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-accent, var(--interactive-accent));
+    background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+.d-tag button {
+    display: inline-grid;
+    place-items: center;
+    width: 15px;
+    height: 15px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    box-shadow: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+.d-input-wrap {
+    position: relative;
+    flex: 1 1 130px;
+    min-width: 110px;
+}
+.d-input-wrap input {
+    width: 100%;
+    height: 24px;
+    padding: 0 4px;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    font-size: 0.78rem;
+}
+.d-input-wrap input:focus {
+    box-shadow: none;
+}
+.d-add {
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    cursor: pointer;
+}
+.d-suggest {
+    position: absolute;
+    left: -6px;
+    right: -6px;
+    top: calc(100% + 6px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    max-height: 185px;
+    overflow-y: auto;
+    padding: 4px;
+    border-radius: 9px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.28);
+}
+.d-suggest-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    height: auto;
+    padding: 5px 8px;
+    border: none;
+    border-radius: 6px;
+    box-shadow: none;
+    background: transparent;
+    text-align: left;
+    font-size: 0.76rem;
+    cursor: pointer;
+}
+.d-suggest-item.active,
+.d-suggest-item:hover {
+    background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+.d-suggest-tag {
+    font-weight: 600;
+    color: var(--text-accent, var(--interactive-accent));
+}
+.d-suggest-hint {
+    font-size: 0.68rem;
+    color: var(--text-faint);
+}
+.dedicate-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.pick-chip {
+    height: auto;
+    padding: 3px 9px;
+    border-radius: 99px;
+    border: 1px solid var(--background-modifier-border);
+    box-shadow: none;
+    background: var(--pf-card-bg);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+.pick-chip:hover {
+    border-color: var(--interactive-accent);
+    color: var(--text-normal);
+}
+.pick-chip.on {
+    background: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+    color: var(--text-on-accent, #fff);
+}
+.pick-chip.accent {
+    border-style: dashed;
+    color: var(--text-accent, var(--interactive-accent));
+}
+.dedicate-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.dedicate-actions .spacer {
+    flex: 1;
+}
+.d-clear {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    cursor: pointer;
+}
+.d-clear:hover {
+    color: var(--color-red);
+}
+
+.tag-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 16px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.tag-strip::-webkit-scrollbar {
+    display: none;
+}
+.strip-pill {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 9px;
+    border-radius: 99px;
+    border: 1px solid var(--background-modifier-border);
+    box-shadow: none;
+    background: var(--pf-card-bg);
+    color: var(--text-muted);
+    font-size: 0.71rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.strip-pill:hover {
+    border-color: var(--interactive-accent);
+    color: var(--text-normal);
+}
+.strip-pill.branch:not(.on) {
+    border-color: color-mix(in srgb, var(--interactive-accent) 32%, var(--background-modifier-border));
+}
+.strip-pill.on {
+    background: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+    color: var(--text-on-accent, #fff);
+}
+.strip-n {
+    font-size: 0.65rem;
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
+}
+
 /* ---- Narrow: one lane fills the view, tabs switch between them ---- */
+.narrow .dedicate-grid {
+    grid-template-columns: 1fr;
+}
+.narrow .dedicate-panel {
+    margin: 0 12px 8px;
+}
+.narrow .tag-strip {
+    padding: 0 12px 6px;
+}
+:global(body.is-mobile) .dedicate-field input,
+:global(body.is-mobile) .d-input-wrap input,
+:global(body.is-mobile) .search input {
+    font-size: max(16px, 0.82rem);
+}
+:global(body.is-mobile) .d-suggest-item {
+    min-height: 36px;
+    font-size: 0.84rem;
+}
+:global(body.is-mobile) .strip-pill {
+    height: 28px;
+    font-size: 0.76rem;
+}
+:global(body.is-mobile) .dedicate-chip {
+    min-height: 28px;
+    font-size: 0.76rem;
+}
 .narrow .board-head {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:

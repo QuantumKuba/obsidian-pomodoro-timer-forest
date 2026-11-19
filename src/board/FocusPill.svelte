@@ -10,6 +10,8 @@ export let path: string
 export let onShowCard: (blockId: string) => void
 /** On a narrow board: the pill stretches across it and keeps its words short. */
 export let compact = false
+export let boardTags: string[] = []
+export let boardProject = ''
 
 const R = 9
 const C = 2 * Math.PI * R
@@ -22,6 +24,7 @@ $: time = t.remained.human.replace(/\s/g, '')
 $: here = !!task && task.path === path
 $: label = working ? task?.name || task?.description || 'Focus session' : 'Break'
 $: idle = !t.inSession
+$: topicText = [boardProject, ...boardTags].filter(Boolean).join(' · ')
 
 function showCard() {
     if (here && task?.blockLink) onShowCard(task.blockLink.trim().replace(/^\^/, ''))
@@ -30,8 +33,15 @@ function showCard() {
 
 <div class="pf-focus" class:idle class:break={!working} class:running={t.running} class:done={t.taskDone} class:compact>
     {#if idle && !task}
-        <span class="hint"><Icon name="target" size={13} />{compact ? 'Tap' : 'Press'} <Icon name="play" size={9} filled /> on a card to focus{compact ? '' : ' on it'}</span>
-        <button class="go" title="Start a focus session without a card" aria-label="Start a focus session" on:click={() => timer.start()}>
+        <span class="hint" title={topicText ? `Dedicated to ${topicText}` : undefined}>
+            <Icon name="target" size={13} />
+            {#if topicText && !compact}
+                <span>Focus on <b>{boardProject || boardTags[0]}</b></span>
+            {:else}
+                {compact ? 'Tap' : 'Press'} <Icon name="play" size={9} filled /> on a card to focus{compact ? '' : ' on it'}
+            {/if}
+        </span>
+        <button class="go" title={topicText ? `Start focusing on ${topicText}` : 'Start a focus session without a card'} aria-label="Start a focus session" on:click={() => timer.start()}>
             <Icon name="play" size={11} filled />
         </button>
     {:else}
@@ -40,8 +50,8 @@ function showCard() {
             <circle cx="12" cy="12" r={R} class="fill" stroke-dasharray={C} stroke-dashoffset={C * (1 - ratio)} transform="rotate(-90 12 12)" />
         </svg>
         <div class="body">
-            <span class="time">{idle ? `${working ? t.workLen : t.breakLen}:00` : time}</span>
-            <button class="label" class:link={here} title={here ? 'Show this card' : label} on:click={showCard}>
+            <span class="time">{idle ? `${working ? t.workLen : t.breakLen}:00` : time}{#if working && here && topicText && !compact}<span class="topic"> · {boardProject || boardTags[0]}</span>{/if}</span>
+            <button class="label" class:link={here} title={here ? `Show this card${topicText ? ` (${topicText})` : ''}` : label} on:click={showCard}>
                 {#if !working}Break{:else if idle}Next: {label}{:else}{label}{/if}
             </button>
         </div>
@@ -104,6 +114,14 @@ function showCard() {
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: var(--text-normal);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.topic {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-accent, var(--interactive-accent));
 }
 .label {
     max-width: 220px;

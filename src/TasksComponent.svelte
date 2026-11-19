@@ -9,7 +9,7 @@ import Pomodoros from './tasks/Pomodoros.svelte'
 import TaskRow from './tasks/TaskRow.svelte'
 import TaskEditor from './tasks/TaskEditor.svelte'
 import { describeDue, longDate } from './tasks/dates'
-import { ancestorsOf, nextStep, sameTask } from './tasks/hierarchy'
+import { ancestorsOf, focusTags, nextStep, sameTask } from './tasks/hierarchy'
 
 export let tasks: Tasks
 export let tracker: TaskTracker
@@ -83,6 +83,7 @@ $: anyTasks = groups.some((g) => g.tasks.length > 0)
 $: focus = $tracker.task
 $: focusLeft = focus && focus.expected > 0 ? Math.max(0, focus.expected - focus.actual) : 0
 $: focusDue = focus?.due ? describeDue(focus.due, focus.checked) : null
+$: activeTags = focusTags(focus)
 
 // The focused task among the listed ones, with its subtasks and the tasks it sits under
 $: list = $tasks?.list ?? []
@@ -228,6 +229,16 @@ const showTaskMenu = (item: TaskItem) => (e: MouseEvent) => {
                 {/if}
                 <span class="focus-from" title={focus.path}>{noteName(focus.fileName)}</span>
             </div>
+            {#if focus.project || activeTags.length > 0}
+                <div class="focus-topics">
+                    {#if focus.project}
+                        <span class="topic-pill proj"><Icon name="folder" size={10} />{focus.project}</span>
+                    {/if}
+                    {#each activeTags as t (t)}
+                        <span class="topic-pill">{t}</span>
+                    {/each}
+                </div>
+            {/if}
             {#if step.next}
                 <button class="up-next" on:click={() => step.next && select(step.next)} title="Focus on “{step.next.description}”">
                     <span class="up-label">{nextLabel}</span>
@@ -449,6 +460,27 @@ const showTaskMenu = (item: TaskItem) => (e: MouseEvent) => {
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-faint);
+}
+.focus-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+}
+.topic-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 99px;
+    font-size: 0.66rem;
+    font-weight: 600;
+    color: var(--text-accent, var(--interactive-accent));
+    background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+}
+.topic-pill.proj {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
 }
 .due-chip {
     display: inline-flex;
