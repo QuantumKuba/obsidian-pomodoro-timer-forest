@@ -28,6 +28,8 @@ export let collapsed = false
 export let composeAtTop = false
 export let kanbanDates = false
 export let dateSettings: Record<string, unknown> | undefined = undefined
+export let boardTags: string[] = []
+export let activeTagFilter = ''
 export let laneCount = 1
 
 let composing = false
@@ -154,7 +156,7 @@ function onTitleKey(e: KeyboardEvent) {
 
         {#if composing && composeAtTop}
             <div class="composer top">
-                <CardEditor {ctx} {kanbanDates} {dateSettings} keepOpen onSave={(t) => ctx.view.addCard(lane.index, t, 'top')} onClose={() => (composing = false)} />
+                <CardEditor {ctx} {kanbanDates} {dateSettings} {boardTags} {activeTagFilter} keepOpen onSave={(t) => ctx.view.addCard(lane.index, t, 'top')} onClose={() => (composing = false)} />
             </div>
         {/if}
 
@@ -165,7 +167,7 @@ function onTitleKey(e: KeyboardEvent) {
                         <div class="placeholder" style="height:{drag?.height ?? 40}px"></div>
                     {/if}
                     {#if editingKey === card.key}
-                        <CardEditor {card} {ctx} {kanbanDates} {dateSettings} onSave={(t) => ctx.view.updateCard(card.key, t)} onClose={() => ctx.edit('')} />
+                        <CardEditor {card} {ctx} {kanbanDates} {dateSettings} {boardTags} {activeTagFilter} onSave={(t) => ctx.view.updateCard(card.key, t)} onClose={() => ctx.edit('')} />
                     {:else}
                         <Card
                             {card}
@@ -194,7 +196,7 @@ function onTitleKey(e: KeyboardEvent) {
 
         {#if composing && !composeAtTop}
             <div class="composer">
-                <CardEditor {ctx} {kanbanDates} {dateSettings} keepOpen onSave={(t) => ctx.view.addCard(lane.index, t, 'bottom')} onClose={() => (composing = false)} />
+                <CardEditor {ctx} {kanbanDates} {dateSettings} {boardTags} {activeTagFilter} keepOpen onSave={(t) => ctx.view.addCard(lane.index, t, 'bottom')} onClose={() => (composing = false)} />
             </div>
         {/if}
         <footer class="lane-foot">

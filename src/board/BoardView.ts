@@ -1,4 +1,4 @@
-import { Component, Keymap, MarkdownRenderer, Menu, Modal, Notice, Platform, requireApiVersion, Scope, Setting, TextFileView, TFile, WorkspaceLeaf } from 'obsidian'
+import { Component, Keymap, MarkdownRenderer, Menu, Modal, normalizePath, Notice, Platform, requireApiVersion, Scope, Setting, TextFileView, TFile, WorkspaceLeaf } from 'obsidian'
 import { get, writable } from 'svelte/store'
 import type PomodoroTimerPlugin from '../main'
 import type { BoardLaneRole } from '../types/forest'
@@ -7,6 +7,7 @@ import * as Board from './BoardModel'
 import type { BoardCard, BoardDoc, BoardLane } from './BoardModel'
 import { VIEW_TYPE_BOARD } from './BoardOpening'
 import { boardUsesKanbanDates, cardDueDate, cardIndent, cardToTask, kanbanPluginEnabled, newBlockId, obsidianLanguage, withDue, withEstimate } from './cards'
+import { collectBoardTags, toggleTagInCardText, withPriority, type TagSuggestion } from './tags'
 
 const PRIORITY_RANK: Record<Board.Priority, number> = { highest: 0, high: 1, medium: 2, low: 3, lowest: 4, '': 5 }
 
@@ -309,6 +310,88 @@ export class BoardView extends TextFileView {
                 }),
             ),
         )
+    }
+
+    public setPriority(key: string, priority: Board.Priority): void {
+        const format = this.plugin.getSettings().taskFormat
+        this.onCard(key, (doc, card) => Board.replaceCardLine(doc, card, withPriority(doc.lines[card.start], priority, format)))
+    }
+
+    public toggleCardTag(key: string, tag: string): void {
+        this.onCard(key, (doc, card) => Board.updateCardText(doc, card, toggleTagInCardText(card.text, tag), this.editOptions))
+    }
+
+    public duplicateCard(key: string): void {
+        this.onCard(key, (doc, card) => Board.duplicateCard(doc, card, this.editOptions))
+    }
+
+    /** Updates the board's dedicated tag(s) and/or project in YAML frontmatter. */
+    public setDedication(opts: { tags?: string[]; project?: string | null }): void {
+        this.edit((doc) => Board.setBoardDedication(doc, opts))
+        // Keep a focused card from this board in sync right away
+        const file = this.file
+        const tracker = this.plugin.tracker
+        const current = tracker?.task
+        if (file && tracker && current?.path === file.path) {
+            const doc = get(this.doc)
+            const id = current.blockLink.trim().replace(/^\^/, '')
+            const card = doc.lanes.flatMap((l) => l.cards).find((c) => (id ? c.blockId === id : c.meta.label === current.description))
+            if (card) void tracker.active(cardToTask(file, doc, card, this.plugin.getSettings().taskFormat))
+        }
+    }
+
+    /** Tags available for autocomplete and quick selection on this board. */
+    public getTagSuggestions(): TagSuggestion[] {
+        return collectBoardTags(this.app, this.getDoc(), this.plugin.storageManager?.getGamification())
+    }
+
+    /**
+     * Branches a card off into its own sub-board, inheriting this board's dedicated tags and
+     * project (together with the card's own tags) and linking the card to the new board.
+     */
+    public async branchCardToBoard(key: string): Promise<void> {
+        const file = this.file
+        if (!file) return
+        const doc = get(this.doc)
+        const card = this.card(key)
+        if (!card || card.lane < 0) return
+
+        // If the card already links to a board, just open it
+        const existingLink = card.text.match(/\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/)
+        if (existingLink) {
+            const dest = this.app.metadataCache.getFirstLinkpathDest(existingLink[1], file.path)
+            if (dest instanceof TFile && this.plugin.boardOpening?.isBoardPath(dest.path)) {
+                await this.plugin.openBoard(dest)
+                return
+            }
+        }
+
+        const rawName = card.meta.label.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim() || 'Sub-board'
+        const folder = file.parent && !file.parent.isRoot() ? `${file.parent.path}/` : ''
+        let targetPath = normalizePath(`${folder}${rawName}.md`)
+        for (let n = 1; this.app.vault.getAbstractFileByPath(targetPath); n++) {
+            targetPath = normalizePath(`${folder}${rawName} ${n}.md`)
+        }
+
+        const inheritedTags = [...new Set([...doc.tags, ...card.meta.tags])]
+        const project = doc.project || file.basename
+        const subText = Board.newBoardText(DEFAULT_LANES, obsidianLanguage(), { tags: inheritedTags, project })
+        try {
+            const created = await this.app.vault.create(targetPath, subText)
+            const firstLine = card.text.split('\n')[0] ?? ''
+            if (!firstLine.includes(`[[${created.basename}]]`)) {
+                this.onCard(key, (d, c) => {
+                    const lines = c.text.split('\n')
+                    lines[0] = `[[${created.basename}]] ${lines[0]}`.replace(/\s{2,}/g, ' ').trim()
+                    return Board.updateCardText(d, c, lines.join('\n'), this.editOptions)
+                })
+            }
+            await this.flush()
+            await this.plugin.boardOpening?.openAsBoard(this.app.workspace.getLeaf('tab'), created)
+        } catch (err) {
+            console.error('[Pomodoro Timer Forest] Failed to branch board', err)
+            new Notice(`Could not create sub-board: ${err instanceof Error ? err.message : String(err)}`)
+        }
     }
 
     /**
