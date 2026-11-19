@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-pomodoro-timer",
-	"version": "1.6.0",
+	"version": "1.6.1",
 	"description": "ADHD-friendly, gamified Pomodoro focus timer for Obsidian with village building and hyperfocus support",
 	"main": "main.js",
 	"scripts": {
