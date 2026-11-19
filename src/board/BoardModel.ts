@@ -108,6 +108,10 @@ export interface BoardDoc {
     /** The frontmatter has the `kanban-plugin` key. */
     isBoard: boolean
     frontmatter: { start: number; end: number } | null
+    /** Board-level dedicated tags from frontmatter (`#tag`), inherited by every card when focusing. */
+    tags: string[]
+    /** Optional overarching project name or link from frontmatter (`project`). */
+    project: string
     lanes: BoardLane[]
     archive: BoardArchive | null
     settings: BoardSettingsBlock | null
@@ -341,6 +345,87 @@ function findFrontmatter(lines: string[]): { start: number; end: number } | null
     return null
 }
 
+/** Normalizes a tag to `#name` (preserving case); empty if invalid or all digits. */
+export function normalizeBoardTag(raw: string): string {
+    const cleaned = raw
+        .trim()
+        .replace(/^#+/, '')
+        .replace(/\s+/g, '-')
+        .replace(/[!@#$%^&*(),.?":{}|<>[\]\\]/g, '')
+        .replace(/\/+$/, '')
+        .replace(/^\/+/, '')
+    if (!cleaned || /^\d+$/.test(cleaned)) return ''
+    return `#${cleaned}`
+}
+
+const unquoteYaml = (raw: string): string => {
+    const t = raw.trim()
+    if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+        return t.slice(1, -1).replace(/\\(["'])/g, '$1').trim()
+    }
+    return t
+}
+
+const quoteYaml = (raw: string): string => {
+    const t = raw.trim()
+    if (/[:#[\]{}&*!|>'"]/.test(t) || /^\s|\s$/.test(t)) return JSON.stringify(t)
+    return t
+}
+
+function addUniqueTag(out: string[], seen: Set<string>, raw: string): void {
+    const tag = normalizeBoardTag(raw)
+    if (!tag) return
+    const key = tag.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(tag)
+}
+
+function findYamlKeySpan(lines: string[], fm: { start: number; end: number }, keys: string[]): { start: number; end: number } | null {
+    const re = new RegExp(`^(${keys.map(escapeRegex).join('|')})\\s*:(.*)$`)
+    for (let i = fm.start + 1; i < fm.end; i++) {
+        if (!re.test(lines[i])) continue
+        let end = i + 1
+        while (end < fm.end && /^\s+(-|\S|$)/.test(lines[end]) && !/^[a-zA-Z0-9_-]+\s*:/.test(lines[end])) {
+            if (lines[end].trim() === '') break
+            end++
+        }
+        return { start: i, end }
+    }
+    return null
+}
+
+function readFrontmatterMeta(lines: string[], fm: { start: number; end: number } | null): { tags: string[]; project: string } {
+    const tags: string[] = []
+    const seen = new Set<string>()
+    let project = ''
+    if (!fm) return { tags, project }
+
+    for (let i = fm.start + 1; i < fm.end; i++) {
+        const line = lines[i]
+        const tagMatch = line.match(/^tags?\s*:(.*)$/)
+        if (tagMatch) {
+            const rest = tagMatch[1].trim()
+            if (rest.startsWith('[') && rest.endsWith(']')) {
+                for (const part of rest.slice(1, -1).split(',')) addUniqueTag(tags, seen, unquoteYaml(part))
+            } else if (rest) {
+                for (const part of rest.split(',')) addUniqueTag(tags, seen, unquoteYaml(part))
+            } else {
+                while (i + 1 < fm.end && /^\s*-\s+/.test(lines[i + 1])) {
+                    i++
+                    addUniqueTag(tags, seen, unquoteYaml(lines[i].replace(/^\s*-\s+/, '')))
+                }
+            }
+            continue
+        }
+        const projMatch = line.match(/^project\s*:(.*)$/)
+        if (projMatch && !project) {
+            project = unquoteYaml(projMatch[1])
+        }
+    }
+    return { tags, project }
+}
+
 function findSettings(lines: string[], from: number): BoardSettingsBlock | null {
     for (let i = lines.length - 1; i >= from; i--) {
         if (!lines[i].trim().startsWith('%% kanban:settings')) continue
@@ -444,6 +529,7 @@ export function parseBoard(text: string): BoardDoc {
     const { lines, eol } = splitLines(text)
     const frontmatter = findFrontmatter(lines)
     const isBoard = !!frontmatter && lines.slice(frontmatter.start + 1, frontmatter.end).some((l) => /^kanban-plugin\s*:\s*\S/.test(l))
+    const { tags, project } = readFrontmatterMeta(lines, frontmatter)
     const bodyStart = frontmatter ? frontmatter.end + 1 : 0
     const settings = findSettings(lines, bodyStart)
     const bodyEnd = settings ? settings.start : lines.length
@@ -532,7 +618,7 @@ export function parseBoard(text: string): BoardDoc {
     for (const lane of lanes) for (const card of lane.cards) card.key = keyOf(card)
     if (archive) for (const card of archive.cards) card.key = keyOf(card)
 
-    return { lines, eol, isBoard, frontmatter, lanes, archive, settings, bodyStart, lanesEnd }
+    return { lines, eol, isBoard, frontmatter, tags, project, lanes, archive, settings, bodyStart, lanesEnd }
 }
 
 // ---------------------------------------------------------------------------
@@ -641,6 +727,13 @@ export function addCard(doc: BoardDoc, laneIndex: number, text: string, opts: Ed
     if (!lane || !text.trim()) return join(doc, doc.lines)
     const block = formatCard(text, lane.complete ? 'x' : ' ', '', opts.indent)
     return insertIntoLane(doc, laneIndex, opts.position === 'top' ? 0 : lane.cards.length, block)
+}
+
+/** Duplicates a card right after itself in the same lane, without copying its block id. */
+export function duplicateCard(doc: BoardDoc, card: BoardCard, opts: EditOptions = {}): string {
+    if (card.lane < 0 || !doc.lanes[card.lane]) return join(doc, doc.lines)
+    const block = formatCard(card.text, card.checkChar, '', opts.indent)
+    return insertIntoLane(doc, card.lane, card.index + 1, block)
 }
 
 /**
@@ -816,9 +909,67 @@ export function setBoardSetting(doc: BoardDoc, key: string, value: unknown): str
     return join(doc, lines)
 }
 
+/**
+ * Updates the board's dedicated tags and/or project in YAML frontmatter, preserving all other
+ * frontmatter keys and the rest of the note.
+ */
+export function setBoardDedication(doc: BoardDoc, opts: { tags?: string[]; project?: string | null }): string {
+    const baseText = doc.frontmatter ? join(doc, doc.lines) : makeBoard(join(doc, doc.lines))
+    const { lines, eol } = splitLines(baseText)
+    let fm = findFrontmatter(lines)!
+
+    const insertPos = () => {
+        let pos = fm.end
+        while (pos > fm.start + 1 && isBlank(lines[pos - 1])) pos--
+        return pos
+    }
+
+    if (opts.project !== undefined) {
+        const clean = (opts.project ?? '').trim()
+        const span = findYamlKeySpan(lines, fm, ['project'])
+        const nextLines = clean ? [`project: ${quoteYaml(clean)}`] : []
+        if (span) {
+            lines.splice(span.start, span.end - span.start, ...nextLines)
+        } else if (nextLines.length) {
+            lines.splice(insertPos(), 0, ...nextLines)
+        }
+        fm = findFrontmatter(lines)!
+    }
+
+    if (opts.tags !== undefined) {
+        const cleanTags: string[] = []
+        const seen = new Set<string>()
+        for (const raw of opts.tags) addUniqueTag(cleanTags, seen, raw)
+        const span = findYamlKeySpan(lines, fm, ['tags', 'tag'])
+        const nextLines = cleanTags.length ? ['tags:', ...cleanTags.map((t) => `  - ${t.slice(1)}`)] : []
+        if (span) {
+            lines.splice(span.start, span.end - span.start, ...nextLines)
+        } else if (nextLines.length) {
+            lines.splice(insertPos(), 0, ...nextLines)
+        }
+    }
+
+    return lines.join(eol)
+}
+
 /** The text of a new board with these lanes; the last one is a Complete lane. */
-export function newBoardText(lanes: { title: string; maxItems?: number; complete?: boolean }[], language = 'en'): string {
-    const out = ['---', '', `${BOARD_FRONTMATTER_KEY}: board`, '', '---', '']
+export function newBoardText(
+    lanes: { title: string; maxItems?: number; complete?: boolean }[],
+    language = 'en',
+    opts: { tags?: string[]; project?: string } = {},
+): string {
+    const fm = ['---', '', `${BOARD_FRONTMATTER_KEY}: board`]
+    if (opts.project?.trim()) fm.push(`project: ${quoteYaml(opts.project)}`)
+    const cleanTags: string[] = []
+    const seen = new Set<string>()
+    for (const raw of opts.tags ?? []) addUniqueTag(cleanTags, seen, raw)
+    if (cleanTags.length) {
+        fm.push('tags:')
+        for (const t of cleanTags) fm.push(`  - ${t.slice(1)}`)
+    }
+    fm.push('', '---', '')
+
+    const out = [...fm]
     for (const lane of lanes) {
         out.push(laneHeading(lane.title, lane.maxItems ?? 0), '')
         if (lane.complete) out.push(completeMarker(language))
